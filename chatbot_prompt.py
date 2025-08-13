@@ -200,7 +200,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         chat_history: str, 
         user_message: str, 
         health_status: str, 
-        summarized_history: Optional[str] = None
+        summarized_histories: Optional[str] = None
     ) -> str:
         """
         Get main chatbot response from SangJai
@@ -209,7 +209,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             chat_history: Previous conversation history
             user_message: Current user message
             health_status: User's health status information
-            summarized_history: Optional summarized conversation history
+            summarized_histories: Optional summarized conversation history
             
         Returns:
             SangJai's response
@@ -222,7 +222,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             inputs = f"""- Chat history: {chat_history}
 - Current user message: {user_message}
 - User's health status: {health_status}
-- Summarized history: {summarized_history}"""
+- Summarized history: {summarized_histories}"""
             
             specific_content = """
 **Your Task:**
@@ -261,14 +261,14 @@ Analyze the chat history and current message to provide health guidance. Only gr
     def get_followup_response(
         self, 
         chat_history: str, 
-        summarized_history: Optional[str] = None
+        summarized_histories: Optional[str] = None
     ) -> str:
         """
         Get follow-up response to check patient progress
         
         Args:
             chat_history: Previous conversation history
-            summarized_history: Optional summarized conversation history
+            summarized_histories: Optional summarized conversation history
             
         Returns:
             SangJai's follow-up response
@@ -277,7 +277,7 @@ Analyze the chat history and current message to provide health guidance. Only gr
         
         try:
             inputs = f"""- Chat history: {chat_history} (for context)
-- Summarized history: {summarized_history}"""
+- Summarized history: {summarized_histories}"""
             
             specific_content = """
 **Your Task:**
@@ -384,7 +384,7 @@ if __name__ == "__main__":
             chat_history="",
             user_message="สวัสดีค่ะ ฉันมีปัญหาเรื่องนอนไม่หลับ",
             health_status="มีปัญหานอนไม่หลับ, ความดันโลหิตสูง",
-            summarized_history=None
+            summarized_histories=None
         )
         
         print(f"SangJai Response: {response}")

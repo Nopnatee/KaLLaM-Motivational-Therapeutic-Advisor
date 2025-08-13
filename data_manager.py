@@ -56,7 +56,6 @@ class ChatbotManager:
                     total_messages INTEGER DEFAULT 0,
                     total_summaries INTEGER DEFAULT 0,
                     model_used TEXT DEFAULT 'gemini-pro',
-                    summarized_history TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1
                 )
@@ -159,6 +158,9 @@ class ChatbotManager:
 
                 # Get chat history
                 chat_history = self._get_chat_history(session_id)
+                summarized_histories = self._get_chat_summaries(session_id)
+                print(f"Chat history for session {session_id}: {chat_history}")
+                print(f"Summarized histories for session {session_id}: {summarized_histories}")
 
                 # Generate response
                 start_time = time.time()
@@ -166,7 +168,7 @@ class ChatbotManager:
                     chat_history,
                     user_message=user_message,
                     health_status=health_status or session.get("condition"),
-                    summarized_history=session.get("summarized_history")
+                    summarized_histories=summarized_histories
                 )
                 latency_ms = int((time.time() - start_time) * 1000)
 
@@ -208,6 +210,21 @@ class ChatbotManager:
                 {"role": row["role"], "content": row["content"]}
                 for row in conn.execute(query, params)
             ]
+    
+    def _get_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
+        """Get chat summaries for a session."""
+        with self._get_connection() as conn:
+            query = "SELECT timestamp, summary FROM summaries WHERE session_id=? ORDER BY id"
+            params = [session_id]
+
+            if limit:
+                query += " LIMIT ?"
+                params.append(limit)
+
+            return [
+                {"timestamp": row["timestamp"], "summary": row["summary"]}
+                for row in conn.execute(query, params)
+            ]
 
     def _add_message_to_conn(self, conn, session_id: str, role: str, content: str, latency_ms: Optional[int] = None):
         """Add message using existing connection."""
@@ -241,10 +258,9 @@ class ChatbotManager:
                     conn.execute("""
                         UPDATE sessions
                         SET total_summaries = total_summaries + 1,
-                            summarized_history = ?,
                             last_activity = ?
                         WHERE session_id = ?
-                    """, (summary, datetime.now().isoformat(), session_id))
+                    """, (datetime.now().isoformat(), session_id))
                     conn.execute(
                         "INSERT INTO summaries (session_id, timestamp, summary) VALUES (?, ?, ?)",
                         (session_id, datetime.now().isoformat(), summary)
