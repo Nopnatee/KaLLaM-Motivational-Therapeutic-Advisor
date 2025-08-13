@@ -472,10 +472,10 @@ if __name__ == "__main__":
         
         # Initialize chatbot with SEA-Lion
         print("Testing KaLLaM chatbot with SEA-Lion...")
-        chatbot_sealion = KaLLaMChatbot(api_provider="sea_lion")
+        chatbot = KaLLaMChatbot(api_provider="sea_lion")
         
         # Or initialize with Gemini
-        # chatbot_gemini = KaLLaMChatbot(api_provider="gemini")
+        # chatbot = KaLLaMChatbot(api_provider="gemini")
 
         # Example conversation
         response = chatbot.get_chatbot_response(
