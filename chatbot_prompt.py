@@ -1,30 +1,37 @@
 import os
 import json
 import logging
+import requests
 from google import genai
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 
-class SangJaiChatbot:
+class KaLLaMChatbot:
     """
-    SangJai - Thai AI Doctor Chatbot for health guidance and patient care
+    KaLLaM - Thai AI Doctor Chatbot for health guidance and patient care
     """
     
     def __init__(self, api_key: Optional[str] = None, log_level: int = logging.INFO):
         """
-        Initialize SangJai chatbot
+        Initialize KaLLaM chatbot
         
         Args:
-            api_key: Gemini API key (if None, will try to get from environment)
+            api_provider: Which API to use - "sea_lion" or "gemini" (default: "sea_lion")
+            sea_lion_api_key: SEA-Lion API key (if None, will try to get from environment)
+            gemini_api_key: Gemini API key (if None, will try to get from environment)
             log_level: Logging level (default: INFO)
         """
+        if api_provider not in ["sea_lion", "gemini"]:
+            raise ValueError("api_provider must be either 'sea_lion' or 'gemini'")
+        
+        self.api_provider = api_provider
         self._setup_logging(log_level)
-        self._setup_api_client(api_key)
+        self._setup_api_clients(sea_lion_api_key, gemini_api_key)
         self._setup_base_config()
         
-        self.logger.info("SangJai chatbot initialized successfully")
+        self.logger.info(f"KaLLaM chatbot initialized successfully using {self.api_provider} API")
     
     def _setup_logging(self, log_level: int) -> None:
         """Setup logging configuration"""
@@ -33,7 +40,7 @@ class SangJaiChatbot:
         log_dir.mkdir(exist_ok=True)
         
         # Setup logger
-        self.logger = logging.getLogger(f"{__name__}.SangJaiChatbot")
+        self.logger = logging.getLogger(f"{__name__}.KaLLaMChatbot")
         self.logger.setLevel(log_level)
         
         # Remove existing handlers to avoid duplicates
@@ -42,7 +49,7 @@ class SangJaiChatbot:
         
         # File handler for detailed logs
         file_handler = logging.FileHandler(
-            log_dir / f"sangjai_{datetime.now().strftime('%Y%m%d')}.log",
+            log_dir / f"kallam_{datetime.now().strftime('%Y%m%d')}.log",
             encoding='utf-8'
         )
         file_handler.setLevel(logging.DEBUG)
@@ -62,29 +69,39 @@ class SangJaiChatbot:
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
     
-    def _setup_api_client(self, api_key: Optional[str]) -> None:
-        """Setup Gemini API client"""
+    def _setup_api_clients(self, sea_lion_api_key: Optional[str], gemini_api_key: Optional[str]) -> None:
+        """Setup the selected API client based on api_provider"""
         try:
-            # Get API key from parameter or environment
-            self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-            
-            if not self.api_key:
-                raise ValueError("GEMINI_API_KEY not provided and not found in environment variables")
-            
-            self.client = genai.Client(api_key=self.api_key)
-            self.model_name = "gemini-2.5-flash-preview-05-20"
-            
-            self.logger.info(f"Gemini API client initialized with model: {self.model_name}")
-            
+            if self.api_provider == "sea_lion":
+                # Setup SEA-Lion API only
+                self.sea_lion_api_key = sea_lion_api_key or os.getenv("SEA_LION_API_KEY")
+                self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+                
+                if not self.sea_lion_api_key:
+                    raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+                
+                self.logger.info("SEA-Lion API client initialized")
+                
+            elif self.api_provider == "gemini":
+                # Setup Gemini API only
+                self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
+                
+                if not self.gemini_api_key:
+                    raise ValueError("GEMINI_API_KEY not provided and not found in environment variables")
+                
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+                self.gemini_model_name = "gemini-2.5-flash-preview-05-20"
+                self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
+                
         except Exception as e:
-            self.logger.error(f"Failed to initialize Gemini API client: {str(e)}")
+            self.logger.error(f"Failed to initialize {self.api_provider} API client: {str(e)}")
             raise
     
     def _setup_base_config(self) -> None:
-        """Setup base configuration for SangJai"""
+        """Setup base configuration for KaLLaM"""
         self.base_config = {
             "character": """
-**Your Name:** "SangJai" or "แสงใจ"
+**Your Name:** "KaLLaM" or "คัลลาม"
 
 **Your Role:**
 You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. Your goal is to provide actionable guidance that motivates patients to take better care of themselves.
@@ -137,9 +154,66 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         
         self.logger.debug("Base configuration loaded successfully")
     
-    def _generate_feedback(self, prompt: str) -> str:
+    def _generate_feedback_sea_lion(self, prompt: str) -> str:
         """
-        Generate feedback using Gemini API
+        Generate feedback using SEA-Lion API
+        
+        Args:
+            prompt: The prompt to send to the API
+            
+        Returns:
+            Generated response text
+        """
+        try:
+            self.logger.debug(f"Sending prompt to SEA-Lion API (length: {len(prompt)} chars)")
+            
+            headers = {
+                "Authorization": f"Bearer {self.sea_lion_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "sea-lion-7b-instruct",  # Adjust model name as needed
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.7
+            }
+            
+            response = requests.post(
+                f"{self.sea_lion_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            
+            response_data = response.json()
+            response_text = response_data["choices"][0]["message"]["content"]
+            
+            self.logger.info(f"Received response from SEA-Lion API (length: {len(response_text)} chars)")
+            self.logger.debug(f"SEA-Lion Response: {response_text[:200]}..." if len(response_text) > 200 else f"SEA-Lion Response: {response_text}")
+            
+            return response_text
+            
+        except Exception as e:
+            self.logger.error(f"Error generating feedback from Gemini API: {str(e)}")
+            raise
+        except KeyError as e:
+            self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
+            raise
+
+    def _generate_feedback_gemini(self, prompt: str) -> str:
+        """
+        Generate feedback using Gemini API (fallback)
         
         Args:
             prompt: The prompt to send to the API
@@ -150,14 +224,14 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         try:
             self.logger.debug(f"Sending prompt to Gemini API (length: {len(prompt)} chars)")
             
-            response = self.client.models.generate_content(
-                model=self.model_name,
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_name,
                 contents=[prompt],
             )
             
             response_text = response.text
             self.logger.info(f"Received response from Gemini API (length: {len(response_text)} chars)")
-            self.logger.debug(f"API Response: {response_text[:200]}..." if len(response_text) > 200 else f"API Response: {response_text}")
+            self.logger.debug(f"Gemini Response: {response_text[:200]}..." if len(response_text) > 200 else f"Gemini Response: {response_text}")
             
             return response_text
             
@@ -165,6 +239,23 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             self.logger.error(f"Error generating feedback from Gemini API: {str(e)}")
             raise
     
+    def _generate_feedback(self, prompt: str) -> str:
+        """
+        Generate feedback using the selected API provider
+        
+        Args:
+            prompt: The prompt to send to the API
+            
+        Returns:
+            Generated response text
+        """
+        if self.api_provider == "sea_lion":
+            return self._generate_feedback_sea_lion(prompt)
+        elif self.api_provider == "gemini":
+            return self._generate_feedback_gemini(prompt)
+        else:
+            raise ValueError(f"Unknown API provider: {self.api_provider}")
+          
     def _build_prompt(self, specific_content: str, inputs: str) -> str:
         """
         Build a complete prompt with shared base config and specific content
@@ -203,7 +294,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         summarized_histories: Optional[str] = None
     ) -> str:
         """
-        Get main chatbot response from SangJai
+        Get main chatbot response from KaLLaM
         
         Args:
             chat_history: Previous conversation history
@@ -212,7 +303,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             summarized_histories: Optional summarized conversation history
             
         Returns:
-            SangJai's response
+            KaLLaM's response
         """
         self.logger.info("Processing chatbot response request")
         self.logger.debug(f"User message: {user_message}")
@@ -271,7 +362,7 @@ Analyze the chat history and current message to provide health guidance. Only gr
             summarized_histories: Optional summarized conversation history
             
         Returns:
-            SangJai's follow-up response
+            KaLLaM's follow-up response
         """
         self.logger.info("Processing follow-up response request")
         
@@ -359,8 +450,10 @@ Summarize the given chat history into a short paragraph including key events.
         """
         status = {
             "status": "healthy",
-            "model": self.model_name,
-            "api_key_configured": bool(self.api_key),
+            "api_provider": self.api_provider,
+            "sea_lion_configured": self.api_provider == "sea_lion" and hasattr(self, 'sea_lion_api_key'),
+            "gemini_configured": self.api_provider == "gemini" and hasattr(self, 'gemini_api_key'),
+            "active_model": getattr(self, 'gemini_model_name', None) if self.api_provider == "gemini" else "sea-lion-7b-instruct",
             "timestamp": datetime.now().isoformat(),
             "logging_enabled": True,
             "log_level": self.logger.level
@@ -373,12 +466,14 @@ Summarize the given chat history into a short paragraph including key events.
 # Example usage and testing
 if __name__ == "__main__":
     try:
-        # Initialize chatbot
-        chatbot = SangJaiChatbot()
         
-        # Test basic functionality
-        print("Testing SangJai chatbot...")
+        # Initialize chatbot with SEA-Lion
+        print("Testing KaLLaM chatbot with SEA-Lion...")
+        chatbot_sealion = KaLLaMChatbot(api_provider="sea_lion")
         
+        # Or initialize with Gemini
+        # chatbot_gemini = KaLLaMChatbot(api_provider="gemini")
+
         # Example conversation
         response = chatbot.get_chatbot_response(
             chat_history="",
@@ -387,7 +482,7 @@ if __name__ == "__main__":
             summarized_histories=None
         )
         
-        print(f"SangJai Response: {response}")
+        print(f"KaLLaM Response: {response}")
         
         # Check health status
         status = chatbot.get_health_status()
