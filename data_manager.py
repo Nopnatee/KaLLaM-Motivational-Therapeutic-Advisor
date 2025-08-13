@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 
 # Import your prompt.py functions
-from chatbot_prompt import SangJaiChatbot
+from chatbot_prompt import KaLLaMChatbot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +21,7 @@ EXPORT_FOLDER = "exported_sessions"
 
 class ChatbotManager:
     def __init__(self, db_path: str = "chatbot_data.db"):
-        self.chatbot = SangJaiChatbot()
+        self.chatbot = KaLLaMChatbot()
         self.db_path = Path(db_path)
         self.lock = threading.Lock()
         self._create_tables()
