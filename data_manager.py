@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 EXPORT_FOLDER = "exported_sessions"
 
 class ChatbotManager:
-    def __init__(self, db_path: str = "chatbot_data.db"):
-        self.chatbot = KaLLaMChatbot(api_provider="sea_lion")
+    def __init__(self, db_path: str = "chatbot_data.db", api_provider: Optional[str] = "sea_lion"):
+        self.chatbot = KaLLaMChatbot(api_provider=api_provider)
         self.db_path = Path(db_path)
         self.lock = threading.Lock()
         self._create_tables()

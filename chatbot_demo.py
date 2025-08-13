@@ -6,7 +6,7 @@ from typing import List, Tuple, Optional, Dict, Any
 from data_manager import ChatbotManager
 
 # Initialize the chatbot manager
-chatbot_manager = ChatbotManager()
+chatbot_manager = ChatbotManager(api_provider="sea_lion")
 current_session_id = None
 
 # Configure logging
