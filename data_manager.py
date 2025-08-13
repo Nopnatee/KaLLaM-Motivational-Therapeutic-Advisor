@@ -8,11 +8,12 @@ import time
 import threading
 from typing import Optional, Dict, List, Any
 from contextlib import contextmanager
+from datetime import timedelta
 
 # Import your prompt.py functions
-from prompts.chatbot_prompt import (chatbot_response, 
-                                    chatbot_followup, 
-                                    summarize_history)
+from chatbot_prompt import (chatbot_response, 
+                            chatbot_followup, 
+                            summarize_history)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -332,7 +333,7 @@ class ChatbotManager:
     def cleanup_old_sessions(self, days_old: int = 30):
         """Clean up sessions older than specified days."""
         cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_old)
+        cutoff_date = datetime.now() - timedelta(days=days_old)
         
         with self._get_connection() as conn:
             result = conn.execute("""
