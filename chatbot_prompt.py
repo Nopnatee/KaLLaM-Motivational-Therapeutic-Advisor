@@ -7,13 +7,16 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
 
 class KaLLaMChatbot:
     """
     KaLLaM - Thai AI Doctor Chatbot for health guidance and patient care
     """
     
-    def __init__(self, api_key: Optional[str] = None, log_level: int = logging.INFO):
+    def __init__(self, api_provider: Optional[str] = None, log_level: int = logging.INFO):
         """
         Initialize KaLLaM chatbot
         
@@ -28,7 +31,7 @@ class KaLLaMChatbot:
         
         self.api_provider = api_provider
         self._setup_logging(log_level)
-        self._setup_api_clients(sea_lion_api_key, gemini_api_key)
+        self._setup_api_clients()
         self._setup_base_config()
         
         self.logger.info(f"KaLLaM chatbot initialized successfully using {self.api_provider} API")
@@ -69,12 +72,12 @@ class KaLLaMChatbot:
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
     
-    def _setup_api_clients(self, sea_lion_api_key: Optional[str], gemini_api_key: Optional[str]) -> None:
+    def _setup_api_clients(self) -> None:
         """Setup the selected API client based on api_provider"""
         try:
             if self.api_provider == "sea_lion":
                 # Setup SEA-Lion API only
-                self.sea_lion_api_key = sea_lion_api_key or os.getenv("SEA_LION_API_KEY")
+                self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
                 self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
                 
                 if not self.sea_lion_api_key:
@@ -84,7 +87,7 @@ class KaLLaMChatbot:
                 
             elif self.api_provider == "gemini":
                 # Setup Gemini API only
-                self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
+                self.gemini_api_key = os.getenv("GEMINI_API_KEY")
                 
                 if not self.gemini_api_key:
                     raise ValueError("GEMINI_API_KEY not provided and not found in environment variables")

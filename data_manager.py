@@ -21,7 +21,7 @@ EXPORT_FOLDER = "exported_sessions"
 
 class ChatbotManager:
     def __init__(self, db_path: str = "chatbot_data.db"):
-        self.chatbot = KaLLaMChatbot()
+        self.chatbot = KaLLaMChatbot(api_provider="sea_lion")
         self.db_path = Path(db_path)
         self.lock = threading.Lock()
         self._create_tables()
