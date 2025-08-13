@@ -17,6 +17,8 @@ from chatbot_prompt import SangJaiChatbot
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+EXPORT_FOLDER = "exported_sessions"
+
 class ChatbotManager:
     def __init__(self, db_path: str = "chatbot_data.db"):
         self.chatbot = SangJaiChatbot()
@@ -343,7 +345,7 @@ class ChatbotManager:
 
         data = {
             "session_info": dict(session_row),
-            "summaries": summaries,  # <--- all summaries, not just the latest
+            "summaries": summaries,
             "chat_history": messages,
             "export_metadata": {
                 "exported_at": datetime.now().isoformat(),
@@ -353,7 +355,18 @@ class ChatbotManager:
             }
         }
 
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        # Ensure folder exists
+        export_folder = Path(EXPORT_FOLDER)
+        export_folder.mkdir(exist_ok=True)
+
+        # Create file path (session_id.json)
+        export_path = export_folder / f"{session_id}.json"
+
+        # Save to file
+        with open(export_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return str(export_path)  # Return the path to the saved file
 
     def cleanup_old_sessions(self, days_old: int = 30):
         """Clean up sessions older than specified days."""
