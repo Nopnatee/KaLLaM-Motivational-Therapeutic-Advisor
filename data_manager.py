@@ -11,9 +11,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 
 # Import your prompt.py functions
-from chatbot_prompt import (chatbot_response, 
-                            chatbot_followup, 
-                            summarize_history)
+from chatbot_prompt import SangJaiChatbot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class ChatbotManager:
     def __init__(self, db_path: str = "chatbot_data.db"):
+        self.chatbot = SangJaiChatbot()
         self.db_path = Path(db_path)
         self.lock = threading.Lock()
         self._create_tables()
@@ -75,12 +74,23 @@ class ChatbotManager:
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+                )
+            """)
             
             # Create indexes for better performance
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity)")
-            
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_summaries_session_id ON summaries(session_id)")
+
             conn.commit()
 
     def _validate_inputs(self, **kwargs):
@@ -150,7 +160,7 @@ class ChatbotManager:
 
                 # Generate response
                 start_time = time.time()
-                bot_reply = chatbot_response(
+                bot_reply = self.chatbot.get_chatbot_response(
                     chat_history,
                     user_message=user_message,
                     health_status=health_status or session.get("condition"),
@@ -223,7 +233,7 @@ class ChatbotManager:
                 if not chat_history:
                     raise ValueError("No chat history found for session")
 
-                summary = summarize_history(chat_history)
+                summary = self.chatbot.summarize_history(chat_history)
 
                 with self._get_connection() as conn:
                     conn.execute("""
@@ -233,6 +243,10 @@ class ChatbotManager:
                             last_activity = ?
                         WHERE session_id = ?
                     """, (summary, datetime.now().isoformat(), session_id))
+                    conn.execute(
+                        "INSERT INTO summaries (session_id, timestamp, summary) VALUES (?, ?, ?)",
+                        (session_id, datetime.now().isoformat(), summary)
+                    )
                     conn.commit()
 
                 logger.info(f"Summarized session {session_id}")
@@ -306,28 +320,39 @@ class ChatbotManager:
             }
 
     def export_session_json(self, session_id: str) -> str:
-        """Export session data as JSON."""
-        session_stats = self.get_session_stats(session_id)
-        
+        """Export full session data as JSON."""
         with self._get_connection() as conn:
+            session_row = conn.execute(
+                "SELECT * FROM sessions WHERE session_id = ?",
+                (session_id,)
+            ).fetchone()
+
             messages = [
-                dict(row) for row in conn.execute("""
-                    SELECT message_id, timestamp, role, content, tokens_input, tokens_output, latency_ms
-                    FROM messages WHERE session_id=? ORDER BY id
-                """, (session_id,))
+                dict(row) for row in conn.execute(
+                    "SELECT * FROM messages WHERE session_id = ? ORDER BY id",
+                    (session_id,)
+                )
+            ]
+
+            summaries = [
+                dict(row) for row in conn.execute(
+                    "SELECT * FROM summaries WHERE session_id = ? ORDER BY id",
+                    (session_id,)
+                )
             ]
 
         data = {
-            "session_info": {k: v for k, v in session_stats.items() if k != "stats"},
-            "statistics": session_stats["stats"],
+            "session_info": dict(session_row),
+            "summaries": summaries,  # <--- all summaries, not just the latest
             "chat_history": messages,
             "export_metadata": {
                 "exported_at": datetime.now().isoformat(),
                 "total_messages": len(messages),
+                "total_summaries": len(summaries),
                 "export_version": "2.0"
             }
         }
-        
+
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     def cleanup_old_sessions(self, days_old: int = 30):
