@@ -401,12 +401,15 @@ def export_session() -> str:
 def create_app() -> gr.Blocks:
     """Create the Gradio application."""
     custom_css = """
+    :root {
+        --kallam: #659435;
+    }
     .gradio-container {
         max-width: 1400px !important;
         margin: 0 auto !important;
     }
     .tab-nav {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(90deg, var(--kallam) 0%, #4ba296 100%);
     }
     .chat-container {
         border-radius: 10px;
@@ -417,14 +420,14 @@ def create_app() -> gr.Blocks:
         border-radius: 8px;
         padding: 15px;
         margin: 10px 0;
-        background: #f8f9fa;
-        border-left: 4px solid #667eea;
+        background: #000000;
+        border-left: 4px solid var(--kallam);
     }
     .session-info {
         border-radius: 8px;
         padding: 15px;
         margin: 10px 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, var(--kallam) 0%, #764ba2 100%);
         color: white;
         font-weight: 500;
     }
@@ -443,14 +446,15 @@ def create_app() -> gr.Blocks:
     }
     """
 
+
     with gr.Blocks(
-        title="🌟 ระบบการให้คำแนะนำทางสุขภาพ - Enhanced AI Chatbot",
-        theme=gr.themes.Soft(),
+        title="🥬 KaLLaM - Thai Motivational Therapeutic Advisor",
+        theme=gr.themes.Default(primary_hue="green", secondary_hue="cyan"),
         css=custom_css,
     ) as app:
 
         gr.Markdown("""
-        # 🌟 ระบบการให้คำแนะนำทางสุขภาพ (Enhanced AI Chatbot)
+        # 🥬 KaLLaM - Thai Motivational Therapeutic Advisor
         
         ระบบนี้ใช้เทคโนโลยี AI ขั้นสูงในการให้คำแนะนำด้านสุขภาพและการบำบัดพฤติกรรม พร้อมคุณสมบัติ:
         
