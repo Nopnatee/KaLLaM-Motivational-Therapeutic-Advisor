@@ -38,6 +38,7 @@ class ChatbotManager:
         conn = None
         try:
             conn = sqlite3.connect(self.db_path)
+            conn.execute("PRAGMA foreign_keys = ON;")  # Enforce cascade deletes
             conn.row_factory = sqlite3.Row  # Enable column access by name
             yield conn
         except sqlite3.Error as e:
@@ -119,7 +120,7 @@ class ChatbotManager:
         if text_hash in self._token_cache:
             return self._token_cache[text_hash]
         
-        # Simple approximation - replace with tiktoken or similar
+        # Simple approximation - should replace with tiktoken or similar
         token_count = len(text.split())
         self._token_cache[text_hash] = token_count
         
@@ -163,10 +164,6 @@ class ChatbotManager:
 
                 # Get chat history
                 chat_history = self._get_chat_history(session_id)
-                if chat_history and len(chat_history) % self.summarize_every_n_messages == 0:
-                    self.summarize_session(session_id)
-                    logger.info(f"Chat history reached threshold (every {self.summarize_every_n_messages}) new summary has been created")
-
                 summarized_histories = self._get_chat_summaries(session_id)
                 logger.info(f"Chat history for session {session_id}: {chat_history}")
                 logger.info(f"Summarized histories for session {session_id}: {summarized_histories}")
@@ -199,6 +196,12 @@ class ChatbotManager:
                     conn.commit()
 
                 logger.info(f"Processed message for session {session_id} in {latency_ms}ms")
+
+                # Auto summarize if needed
+                if chat_history and len(chat_history) % self.summarize_every_n_messages == 0:
+                    self.summarize_session(session_id)
+                    logger.info(f"Chat history reached threshold (every {self.summarize_every_n_messages}) new summary has been created.")
+
                 return bot_reply
 
             except Exception as e:
@@ -214,12 +217,11 @@ class ChatbotManager:
             if limit:
                 query += " LIMIT ?"
                 params.append(limit)
-                
-            return [
-                {"role": row["role"], "content": row["content"]}
-                for row in conn.execute(query, params)
-            ]
+            
+            history = [{"role": row["role"], "content": row["content"]} for row in conn.execute(query, params)]
     
+            return history
+        
     def _get_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """Get chat summaries for a session."""
         with self._get_connection() as conn:
@@ -396,8 +398,9 @@ class ChatbotManager:
 
     def cleanup_old_sessions(self, days_old: int = 30):
         """Clean up sessions older than specified days."""
-        cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff_date = datetime.now() - timedelta(days=days_old)
+        cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        cutoff_date = (datetime.now() - timedelta(days=days_old)).replace(hour=0, minute=0, second=0, microsecond=0)
+
         
         with self._get_connection() as conn:
             result = conn.execute("""
