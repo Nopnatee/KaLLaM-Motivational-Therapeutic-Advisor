@@ -5,6 +5,13 @@ from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
 from data_manager import ChatbotManager
 
+# key improvement: - delete notification
+# key improvement: - color
+# key improvement: - language
+# key improvement: - UI
+# key improvement: - ease of usage
+# key improvement: - loading bar (indicator)
+
 # Initialize the chatbot manager
 chatbot_manager = ChatbotManager(api_provider="sea_lion")
 current_session_id = None
@@ -18,8 +25,8 @@ class AppState:
     def __init__(self):
         self.current_session_id = None
         self.message_count = 0
-        self.auto_summary_threshold = 5
-        self.auto_notification_threshold = 10
+        # self.auto_summary_threshold = 5
+        # self.auto_notification_threshold = 10
     
     def reset(self):
         self.current_session_id = None
@@ -27,6 +34,7 @@ class AppState:
 
 app_state = AppState()
 
+# fine
 def get_current_session_status() -> str:
     """Get current session status information."""
     if not app_state.current_session_id:
@@ -57,6 +65,7 @@ def get_current_session_status() -> str:
         logger.error(f"Error getting session status: {e}")
         return f"❌ **Error:** ไม่สามารถโหลดข้อมูล Session {app_state.current_session_id}"
 
+# fine
 def get_session_list() -> List[str]:
     """Get list of all active sessions with metadata."""
     try:
@@ -388,6 +397,7 @@ def export_session() -> str:
         logger.error(f"Error exporting session: {e}")
         return f"❌ **ไม่สามารถส่งออกข้อมูล:** {str(e)}"
 
+# UI Visual
 def create_app() -> gr.Blocks:
     """Create the Gradio application."""
     custom_css = """
