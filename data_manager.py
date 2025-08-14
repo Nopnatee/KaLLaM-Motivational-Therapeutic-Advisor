@@ -28,7 +28,7 @@ class ChatbotManager:
         self.chatbot = KaLLaMChatbot(api_provider=api_provider)
         self.summarize_every_n_messages = summarize_every_n_messages  # Summarize every n messages
         self.db_path = Path(db_path)
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self._create_tables()
         logger.info(f"ChatbotManager initialized with database: {self.db_path}")
 
@@ -60,6 +60,8 @@ class ChatbotManager:
                     last_activity TEXT NOT NULL,
                     condition TEXT,
                     total_messages INTEGER DEFAULT 0,
+                    total_user_messages INTEGER DEFAULT 0,
+                    total_assistant_messages INTEGER DEFAULT 0,
                     total_summaries INTEGER DEFAULT 0,
                     model_used TEXT DEFAULT 'gemini-pro',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -108,7 +110,7 @@ class ChatbotManager:
             if key == 'session_id' and not value:
                 raise ValueError("Session ID is required")
 
-    def _count_tokens(self, text: str) -> int:
+    def _count_tokens(self, text: str, cache_limit: Optional[int] = 1000) -> int:
         """
         Improved token counting with caching.
         Replace with actual tokenizer for production use.
@@ -125,10 +127,11 @@ class ChatbotManager:
         self._token_cache[text_hash] = token_count
         
         # Limit cache size
-        if len(self._token_cache) > 1000:
+        if len(self._token_cache) > cache_limit:
             # Remove oldest half of entries
             items = list(self._token_cache.items())
-            self._token_cache = dict(items[500:])
+            half_cache_size = cache_limit // 2
+            self._token_cache = dict(items[half_cache_size:])
         
         return token_count
 
@@ -165,8 +168,8 @@ class ChatbotManager:
                 # Get chat history
                 chat_history = self._get_chat_history(session_id)
                 summarized_histories = self._get_chat_summaries(session_id)
-                logger.info(f"Chat history for session {session_id}: {chat_history}")
-                logger.info(f"Summarized histories for session {session_id}: {summarized_histories}")
+                logger.debug(f"Fetched {len(chat_history)} messages for session {session_id}")
+                logger.debug(f"Fetched {len(summarized_histories)} summaries for session {session_id}")
 
                 # Generate response
                 start_time = time.time()
@@ -185,22 +188,14 @@ class ChatbotManager:
                     # Store bot reply
                     self._add_message_to_conn(conn, session_id, "assistant", bot_reply, latency_ms)
                     
-                    # Update session stats
-                    conn.execute("""
-                        UPDATE sessions
-                        SET total_messages = total_messages + 2,
-                            last_activity = ?
-                        WHERE session_id = ?
-                    """, (datetime.now().isoformat(), session_id))
-                    
                     conn.commit()
 
-                logger.info(f"Processed message for session {session_id} in {latency_ms}ms")
+                logger.info("Processed message", extra={"session_id": session_id, "latency_ms": latency_ms})
 
-                # Auto summarize if needed
-                if chat_history and len(chat_history) % self.summarize_every_n_messages == 0:
+                # Re-fetch updated session counts after storing messages and check for summarization
+                updated_session = self.get_session(session_id)
+                if updated_session["total_user_messages"] % self.summarize_every_n_messages == 0:
                     self.summarize_session(session_id)
-                    logger.info(f"Chat history reached threshold (every {self.summarize_every_n_messages}) new summary has been created.")
 
                 return bot_reply
 
@@ -253,6 +248,31 @@ class ChatbotManager:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (session_id, message_id, now, role, content, tokens_in, tokens_out, latency_ms))
 
+        # Additionally store messages count in session
+        if role == "user":
+            conn.execute("""
+                            UPDATE sessions
+                            SET total_messages = total_messages + 1,
+                                total_user_messages = COALESCE(total_user_messages, 0) + 1,
+                                last_activity = ?
+                            WHERE session_id = ?
+                        """, (datetime.now().isoformat(), session_id))
+        elif role == "assistant":
+            conn.execute("""
+                            UPDATE sessions
+                            SET total_messages = total_messages + 1,
+                                total_assistant_messages = COALESCE(total_assistant_messages, 0) + 1,
+                                last_activity = ?
+                            WHERE session_id = ?
+                        """, (datetime.now().isoformat(), session_id))
+        else:
+            conn.execute("""
+                UPDATE sessions
+                SET total_messages = total_messages + 1,
+                    last_activity = ?
+                WHERE session_id = ?
+            """, (datetime.now().isoformat(), session_id))
+
     def summarize_session(self, session_id: str) -> str:
         """Summarize session chat history."""
         self._validate_inputs(session_id=session_id)
@@ -282,7 +302,7 @@ class ChatbotManager:
                 return summary
 
             except Exception as e:
-                logger.error(f"Error summarizing session {session_id}: {e}")
+                logger.exception(f"Error summarizing session {session_id}: {e}")
                 raise
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -303,7 +323,7 @@ class ChatbotManager:
             query += " ORDER BY last_activity DESC LIMIT ?"
             params.append(limit)
             rows = [dict(row) for row in conn.execute(query, params)]
-            print(rows)
+            logger.debug(rows)
             return rows
 
     def close_session(self, session_id: str):
@@ -350,57 +370,68 @@ class ChatbotManager:
             }
 
     def export_session_json(self, session_id: str) -> str:
-        """Export full session data as JSON."""
-        with self._get_connection() as conn:
-            session_row = conn.execute(
-                "SELECT * FROM sessions WHERE session_id = ?",
-                (session_id,)
-            ).fetchone()
-
-            messages = [
-                dict(row) for row in conn.execute(
-                    "SELECT * FROM messages WHERE session_id = ? ORDER BY id",
+        """Export full session data as JSON with error handling and debug logs."""
+        try:
+            with self._get_connection() as conn:
+                session_row = conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ?",
                     (session_id,)
-                )
-            ]
+                ).fetchone()
 
-            summaries = [
-                dict(row) for row in conn.execute(
-                    "SELECT * FROM summaries WHERE session_id = ? ORDER BY id",
-                    (session_id,)
-                )
-            ]
+                if not session_row:
+                    logger.debug(f"No session found with ID: {session_id}")
+                    raise ValueError(f"Session {session_id} does not exist")
 
-        data = {
-            "session_info": dict(session_row),
-            "summaries": summaries,
-            "chat_history": messages,
-            "export_metadata": {
-                "exported_at": datetime.now().isoformat(),
-                "total_messages": len(messages),
-                "total_summaries": len(summaries),
-                "export_version": "2.0"
+                messages = [
+                    dict(row) for row in conn.execute(
+                        "SELECT * FROM messages WHERE session_id = ? ORDER BY id",
+                        (session_id,)
+                    )
+                ]
+
+                summaries = [
+                    dict(row) for row in conn.execute(
+                        "SELECT * FROM summaries WHERE session_id = ? ORDER BY id",
+                        (session_id,)
+                    )
+                ]
+
+            data = {
+                "session_info": dict(session_row),
+                "summaries": summaries,
+                "chat_history": messages,
+                "export_metadata": {
+                    "exported_at": datetime.now().isoformat(),
+                    "total_messages": len(messages),
+                    "total_summaries": len(summaries),
+                    "export_version": "2.0"
+                }
             }
-        }
 
-        # Ensure folder exists
-        export_folder = Path(EXPORT_FOLDER)
-        export_folder.mkdir(exist_ok=True)
+            # Ensure folder exists
+            export_folder = Path(EXPORT_FOLDER)
+            export_folder.mkdir(parents=True, exist_ok=True)
 
-        # Create file path (session_id.json)
-        export_path = export_folder / f"{session_id}.json"
+            # Create file path (session_id.json)
+            export_path = export_folder / f"{session_id}.json"
 
-        # Save to file
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            try:
+                with open(export_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                logger.debug(f"Session exported successfully: {export_path}")
+            except Exception as e:
+                logger.exception(f"Failed to write session JSON file: {e}")
+                raise
 
-        return str(export_path)  # Return the path to the saved file
+            return str(export_path)
+
+        except Exception as e:
+            logger.exception(f"Error exporting session {session_id}: {e}")
+            raise
 
     def cleanup_old_sessions(self, days_old: int = 30):
         """Clean up sessions older than specified days."""
-        cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         cutoff_date = (datetime.now() - timedelta(days=days_old)).replace(hour=0, minute=0, second=0, microsecond=0)
-
         
         with self._get_connection() as conn:
             result = conn.execute("""
