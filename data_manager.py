@@ -20,8 +20,13 @@ logger = logging.getLogger(__name__)
 EXPORT_FOLDER = "exported_sessions"
 
 class ChatbotManager:
-    def __init__(self, db_path: str = "chatbot_data.db", api_provider: Optional[str] = "sea_lion"):
+    def __init__(self, 
+                 db_path: str = "chatbot_data.db", 
+                 api_provider: Optional[str] = "sea_lion", 
+                 summarize_every_n_messages: Optional[int] = 10
+                 ):
         self.chatbot = KaLLaMChatbot(api_provider=api_provider)
+        self.summarize_every_n_messages = summarize_every_n_messages  # Summarize every n messages
         self.db_path = Path(db_path)
         self.lock = threading.Lock()
         self._create_tables()
@@ -158,9 +163,13 @@ class ChatbotManager:
 
                 # Get chat history
                 chat_history = self._get_chat_history(session_id)
+                if chat_history and len(chat_history) % self.summarize_every_n_messages == 0:
+                    self.summarize_session(session_id)
+                    logger.info(f"Chat history reached threshold (every {self.summarize_every_n_messages}) new summary has been created")
+
                 summarized_histories = self._get_chat_summaries(session_id)
-                print(f"Chat history for session {session_id}: {chat_history}")
-                print(f"Summarized histories for session {session_id}: {summarized_histories}")
+                logger.info(f"Chat history for session {session_id}: {chat_history}")
+                logger.info(f"Summarized histories for session {session_id}: {summarized_histories}")
 
                 # Generate response
                 start_time = time.time()
@@ -291,8 +300,9 @@ class ChatbotManager:
             
             query += " ORDER BY last_activity DESC LIMIT ?"
             params.append(limit)
-            print([dict(row) for row in conn.execute(query, params)])
-            return [dict(row) for row in conn.execute(query, params)]
+            rows = [dict(row) for row in conn.execute(query, params)]
+            print(rows)
+            return rows
 
     def close_session(self, session_id: str):
         """Mark session as inactive."""
