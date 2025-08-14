@@ -114,6 +114,13 @@ class ChatbotManager:
         """
         Improved token counting with caching.
         Replace with actual tokenizer for production use.
+
+        Args:
+            text (str): The text to count tokens for.
+            cache_limit (Optional[int]): Maximum number of items to store in the cache. Defaults to 1000.
+
+        Returns:
+            int: Number of tokens estimated in the text.
         """
         if not hasattr(self, '_token_cache'):
             self._token_cache = {}
@@ -136,7 +143,16 @@ class ChatbotManager:
         return token_count
 
     def start_session(self, condition: Optional[str] = None, model_used: str = "gemini-pro") -> str:
-        """Start a new chatbot session."""
+        """
+        Start a new chatbot session.
+
+        Args:
+            condition (Optional[str]): Optional health condition or context for the session.
+            model_used (str): The model name to use for the session. Defaults to "gemini-pro".
+
+        Returns:
+            str: The newly created session ID.
+        """
         session_id = f"ID-{uuid.uuid4().hex[:8].upper()}"
         now = datetime.now().isoformat()
         
@@ -156,7 +172,17 @@ class ChatbotManager:
             raise
 
     def handle_message(self, session_id: str, user_message: str, health_status: Optional[str] = None) -> str:
-        """Handle user message and generate bot response."""
+        """
+        Handle user message and generate bot response.
+
+        Args:
+            session_id (str): ID of the session.
+            user_message (str): Message text from the user.
+            health_status (Optional[str]): Optional current health status for context.
+
+        Returns:
+            str: The chatbot's response.
+        """
         self._validate_inputs(session_id=session_id, user_message=user_message)
         
         with self.lock:
@@ -204,7 +230,16 @@ class ChatbotManager:
                 raise
 
     def _get_chat_history(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
-        """Get chat history for a session."""
+        """
+        Get chat history for a session.
+
+        Args:
+            session_id (str): ID of the session.
+            limit (Optional[int]): Maximum number of messages to fetch. Defaults to None (all).
+
+        Returns:
+            List[Dict[str, str]]: List of messages with role and content.
+        """
         with self._get_connection() as conn:
             query = "SELECT role, content FROM messages WHERE session_id=? ORDER BY id"
             params = [session_id]
@@ -218,7 +253,16 @@ class ChatbotManager:
             return history
         
     def _get_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
-        """Get chat summaries for a session."""
+        """
+        Get chat summaries for a session.
+
+        Args:
+            session_id (str): ID of the session.
+            limit (Optional[int]): Maximum number of summaries to fetch. Defaults to None (all).
+
+        Returns:
+            List[Dict[str, str]]: List of summaries with timestamp and summary text.
+        """
         with self._get_connection() as conn:
             query = "SELECT timestamp, summary FROM summaries WHERE session_id=? ORDER BY id"
             params = [session_id]
@@ -233,7 +277,16 @@ class ChatbotManager:
             ]
 
     def _add_message_to_conn(self, conn, session_id: str, role: str, content: str, latency_ms: Optional[int] = None):
-        """Add message using existing connection."""
+        """
+        Add message using existing database connection.
+
+        Args:
+            conn: Active SQLite connection.
+            session_id (str): Session ID to which the message belongs.
+            role (str): Role of the message sender ("user", "assistant", "system").
+            content (str): Message content.
+            latency_ms (Optional[int]): Optional latency in milliseconds for the assistant response.
+        """
         tokens_count = self._count_tokens(content)
         tokens_in = tokens_count if role == "user" else 0
         tokens_out = tokens_count if role == "assistant" else 0
@@ -274,7 +327,15 @@ class ChatbotManager:
             """, (datetime.now().isoformat(), session_id))
 
     def summarize_session(self, session_id: str) -> str:
-        """Summarize session chat history."""
+        """
+        Summarize session chat history.
+
+        Args:
+            session_id (str): ID of the session to summarize.
+
+        Returns:
+            str: Generated summary text.
+        """
         self._validate_inputs(session_id=session_id)
         
         with self.lock:
@@ -306,13 +367,30 @@ class ChatbotManager:
                 raise
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get session information."""
+        """
+        Get session information.
+
+        Args:
+            session_id (str): ID of the session.
+
+        Returns:
+            Optional[Dict[str, Any]]: Session data or None if not found.
+        """
         with self._get_connection() as conn:
             row = conn.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).fetchone()
             return dict(row) if row else None
 
     def list_sessions(self, active_only: bool = True, limit: int = 50) -> List[Dict[str, Any]]:
-        """List sessions with optional filtering."""
+        """
+        List sessions with optional filtering.
+
+        Args:
+            active_only (bool): Whether to return only active sessions. Defaults to True.
+            limit (int): Maximum number of sessions to return. Defaults to 50.
+
+        Returns:
+            List[Dict[str, Any]]: List of session dictionaries.
+        """
         with self._get_connection() as conn:
             query = "SELECT * FROM sessions"
             params = []
@@ -327,7 +405,12 @@ class ChatbotManager:
             return rows
 
     def close_session(self, session_id: str):
-        """Mark session as inactive."""
+        """
+        Mark session as inactive.
+
+        Args:
+            session_id (str): ID of the session to close.
+        """
         with self._get_connection() as conn:
             conn.execute("""
                 UPDATE sessions 
@@ -339,7 +422,12 @@ class ChatbotManager:
         logger.info(f"Closed session {session_id}")
 
     def delete_session(self, session_id: str):
-        """Delete session and all associated messages."""
+        """
+        Delete session and all associated messages.
+
+        Args:
+            session_id (str): ID of the session to delete.
+        """
         with self._get_connection() as conn:
             conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
             conn.commit()
@@ -347,7 +435,15 @@ class ChatbotManager:
         logger.info(f"Deleted session {session_id}")
 
     def get_session_stats(self, session_id: str) -> Dict[str, Any]:
-        """Get detailed session statistics."""
+        """
+        Get detailed session statistics.
+
+        Args:
+            session_id (str): ID of the session.
+
+        Returns:
+            Dict[str, Any]: Session data with statistics.
+        """
         with self._get_connection() as conn:
             session = conn.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).fetchone()
             if not session:
@@ -370,7 +466,15 @@ class ChatbotManager:
             }
 
     def export_session_json(self, session_id: str) -> str:
-        """Export full session data as JSON with error handling and debug logs."""
+        """
+        Export full session data as JSON with error handling and debug logs.
+
+        Args:
+            session_id (str): ID of the session to export.
+
+        Returns:
+            str: Path to the exported JSON file.
+        """
         try:
             with self._get_connection() as conn:
                 session_row = conn.execute(
@@ -430,7 +534,15 @@ class ChatbotManager:
             raise
 
     def cleanup_old_sessions(self, days_old: int = 30):
-        """Clean up sessions older than specified days."""
+        """
+        Clean up sessions older than specified days.
+
+        Args:
+            days_old (int): Number of days; sessions older than this will be deleted. Defaults to 30.
+
+        Returns:
+            int: Number of sessions deleted.
+        """
         cutoff_date = (datetime.now() - timedelta(days=days_old)).replace(hour=0, minute=0, second=0, microsecond=0)
         
         with self._get_connection() as conn:
