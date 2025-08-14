@@ -16,7 +16,7 @@ class KaLLaMChatbot:
     KaLLaM - Thai AI Doctor Chatbot for health guidance and patient care
     """
     
-    def __init__(self, api_provider: Optional[str] = None, log_level: int = logging.INFO):
+    def __init__(self, api_provider: Optional[str] = None, max_messages: Optional [int] = 10, log_level: int = logging.INFO):
         """
         Initialize KaLLaM chatbot
         
@@ -30,6 +30,7 @@ class KaLLaMChatbot:
             raise ValueError("api_provider must be either 'sea_lion' or 'gemini'")
         
         self.api_provider = api_provider
+        self.max_messages = max_messages
         self._setup_logging(log_level)
         self._setup_api_clients()
         self._setup_base_config()
@@ -255,22 +256,58 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             return self._generate_feedback_gemini(prompt)
         else:
             raise ValueError(f"Unknown API provider: {self.api_provider}")
-          
-    def _build_prompt(self, specific_content: str, inputs: str) -> str:
+
+    def _truncate_history(self, chat_history: list, max_messages: int = 20) -> list:
         """
-        Build a complete prompt with shared base config and specific content
+        Keep only the last few messages from chat history to reduce prompt size.
         
         Args:
-            specific_content: Task-specific content and instructions
-            inputs: Context inputs (chat history, user message, etc.)
-            
+            chat_history: List of message dictionaries, e.g. [{"role": "user", "content": "..."}, ...]
+            max_messages: Number of recent messages to keep
+        
         Returns:
-            Complete formatted prompt
+            Truncated chat history (list of dicts)
         """
+        if len(chat_history) <= max_messages:
+            return chat_history
+        else:
+            truncated = chat_history[-max_messages:]
+            self.logger.debug(f"Truncated chat history from {len(chat_history)} to {max_messages} messages")
+            return truncated
+
+    def _build_prompt(
+        self,
+        specific_content: str,
+        chat_history: list,
+        user_message: str,
+        health_status: str,
+        summarized_histories: Optional[list] = None
+    ) -> str:
+        """
+        Build a complete prompt with truncated chat history and base config
+        """
+        # Truncate chat history list
+        truncated_history = self._truncate_history(chat_history, max_messages=5)
+        
+        # Convert history dicts into readable text
+        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in truncated_history])
+        
+        # Convert summarized history if available
+        summarized_text = ""
+        if summarized_histories:
+            summarized_text = "\n".join([f"{m['role']}: {m['content']}" for m in summarized_histories])
+        
         now = datetime.now()
         
+        inputs = f"""- Chat history (truncated): 
+    {history_text}
+
+    - Current user message: {user_message}
+    - User's health status: {health_status}
+    - Summarized history: {summarized_text if summarized_text else "N/A"}"""
+        
         base_prompt = f"""
-{self.base_config['character']}
+    {self.base_config['character']}
 
 **Current Context:**
 - Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
@@ -288,10 +325,10 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
     
     def get_chatbot_response(
         self, 
-        chat_history: str, 
+        chat_history: list, 
         user_message: str, 
         health_status: str, 
-        summarized_histories: Optional[str] = None
+        summarized_histories: Optional[list] = None
     ) -> str:
         """
         Get main chatbot response from KaLLaM
@@ -334,7 +371,7 @@ Analyze the chat history and current message to provide health guidance. Only gr
 - **If patient resists change**: Present medical facts, statistics, and consequences to motivate action
 """
             
-            prompt = self._build_prompt(specific_content, inputs)
+            prompt = self._build_prompt(specific_content, chat_history, user_message, health_status, summarized_histories)
             response = self._generate_feedback(prompt)
             
             self.logger.info("Successfully generated chatbot response")
