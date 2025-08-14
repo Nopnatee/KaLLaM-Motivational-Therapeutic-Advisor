@@ -39,7 +39,7 @@ class ChatbotManager:
         Initialize the ChatbotManager.
 
         Args:
-            db_path (str): Path to the SQLite database file.
+            db_path (str): Path to the SQLite database file. Defaults to "chatbot_data.db".
             api_provider (Optional[str]): API provider for KaLLaMChatbot. Defaults to "sea_lion".
             summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
         """
