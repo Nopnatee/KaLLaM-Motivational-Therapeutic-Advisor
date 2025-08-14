@@ -20,11 +20,29 @@ logger = logging.getLogger(__name__)
 EXPORT_FOLDER = "exported_sessions"
 
 class ChatbotManager:
+    """
+    ChatbotManager handles chatbot sessions, message storage, summaries,
+    and exports using a SQLite database.
+
+    Attributes:
+        chatbot (KaLLaMChatbot): The chatbot instance to generate responses.
+        summarize_every_n_messages (int): How often to summarize chat history.
+        db_path (Path): Path to the SQLite database file.
+        lock (RLock): Thread-safe lock for concurrent access.
+    """
     def __init__(self, 
                  db_path: str = "chatbot_data.db", 
                  api_provider: Optional[str] = "sea_lion", 
                  summarize_every_n_messages: Optional[int] = 10
                  ):
+        """
+        Initialize the ChatbotManager.
+
+        Args:
+            db_path (str): Path to the SQLite database file.
+            api_provider (Optional[str]): API provider for KaLLaMChatbot. Defaults to "sea_lion".
+            summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
+        """
         self.chatbot = KaLLaMChatbot(api_provider=api_provider)
         self.summarize_every_n_messages = summarize_every_n_messages  # Summarize every n messages
         self.db_path = Path(db_path)
@@ -34,8 +52,12 @@ class ChatbotManager:
 
     @contextmanager
     def _get_connection(self):
-        """Context manager for database connections with proper error handling."""
-        conn = None
+        """
+        Context manager for database connections with proper error handling.
+
+        Yields:
+            sqlite3.Connection: An active SQLite connection.
+        """
         try:
             conn = sqlite3.connect(self.db_path)
             conn.execute("PRAGMA foreign_keys = ON;")  # Enforce cascade deletes
@@ -51,7 +73,10 @@ class ChatbotManager:
                 conn.close()
 
     def _create_tables(self):
-        """Create database tables with improved schema."""
+        """
+        Create necessary database tables (sessions, messages, summaries)
+        and indexes if they do not exist.
+        """
         with self._get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -103,7 +128,15 @@ class ChatbotManager:
             conn.commit()
 
     def _validate_inputs(self, **kwargs):
-        """Validate input parameters."""
+        """
+        Validate input parameters for various methods.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments, e.g., session_id, user_message.
+
+        Raises:
+            ValueError: If required arguments are missing or empty.
+        """
         for key, value in kwargs.items():
             if key == 'user_message' and (not value or not value.strip()):
                 raise ValueError("User message cannot be empty")
