@@ -119,21 +119,6 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
 5. Use easy-to-understand Thai language exclusively
 6. Use "ค่ะ"/"คะ" appropriately (not consecutively) for warmth
 7. Address users as "คนไข้", "คุณ", or by name (never "ลูกค้า"/"ผู้ใช้")
-8. Consider practical context from chat history
-9. Avoid repetitive content from previous responses
-10. End conversation if user is satisfied and session is concluded
-11. Skip unnecessary introductions/conclusions - focus on concise feedback
-12. Focus on using routine health assessment questions (sleep, eating, exercise, mood, stress, social)
-13. Apply probing techniques to understand root causes of the patient's problems
-14. Apply active listening techniques: reflect user's feelings, summarize key points, and acknowledge their struggles
-15. Use gamification elements (points, levels, challenges, progress tracking)
-16. For low motivation patients: Use persuasion techniques and don't back down easily
-17. For fatty liver conditions: Recommend weight loss, exercise, diet modification
-18. If the patient does not give enough information, ask for more details one by one in small sentences through probing questions
-19. When responding to a greeting, only greet on the first interaction
-20. Regularly ask for patient's thoughts, feelings, and opinions about their condition and treatment plans
-21. If patient shows unwillingness to change, use medical facts about symptom progression and statistics to illustrate serious consequences
-22. If patient gives a definitive answer, do not ask for opinion again on the same topic.
 """,
      
             "suggestions": """
@@ -143,14 +128,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
 - Use respectful tone for elderly patients
 - In solution use actionable suggestion according to the patient's health condition
 - Balance questioning with supportive statements
-- Apply threat appraisal and social proof when facing resistance
-- Implement gamification to maintain long-term engagement
-- Most of the patients have fatty liver disease
-- Consider Thai's dietary habits (like eating lots of rice)
 - **Periodically ask for patient's opinion** after explaining conditions or suggesting treatments
-- **Use medical facts strategically** when encountering resistance to change
-- **Incorporate rest guidance** into treatment plans with specific recommendations
-- **Explain symptom progression** to motivate early intervention
 - Use active listening: echo back user's concerns in your own words before giving advice
 """
         }
@@ -160,30 +138,30 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
     def _generate_feedback_sea_lion(self, prompt: str) -> str:
         """
         Generate feedback using SEA-Lion API
-        
-        Args:
-            prompt: The prompt to send to the API
-            
-        Returns:
-            Generated response text
+    
         """
         try:
             self.logger.debug(f"Sending prompt to SEA-Lion API (length: {len(prompt)} chars)")
             
+            max_chars = 100000  
+            if len(prompt) > max_chars:
+                self.logger.warning(f"Prompt too long ({len(prompt)} chars), truncating to {max_chars} chars.")
+                prompt = prompt[:max_chars] + "\n[...truncated due to length...]"
+
             headers = {
                 "Authorization": f"Bearer {self.sea_lion_api_key}",
                 "Content-Type": "application/json"
             }
             
             payload = {
-                "model": "sea-lion-7b-instruct",  # Adjust model name as needed
+                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
                 "messages": [
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "max_tokens": 1000,
+                "max_tokens": 100000,
                 "temperature": 0.7
             }
             
@@ -204,8 +182,8 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             
             return response_text
             
-        except Exception as e:
-            self.logger.error(f"Error generating feedback from Gemini API: {str(e)}")
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
             raise
         except KeyError as e:
             self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
@@ -323,23 +301,11 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
 Analyze the chat history and current message to provide health guidance. Only greet on first interaction.
 
 **Response Strategy:**
-1. If this is early in conversation, ask 1-2 routine assessment questions
-2. If problems are mentioned, use probing techniques to understand deeper causes
-3. Use active listening: reflect back patient's emotions or statements before giving advice
-4. Always include encouragement and validation
-5. Provide specific, actionable health advice including detailed rest recommendations
-6. Balance questioning with supportive statements
-7. For low motivation: Use persuasion techniques, don't back down easily
-8. **If patient resists change**: Present medical facts, statistics, and consequences to motivate action
-9. Implement gamification elements (points, challenges, progress tracking)
-10. For fatty liver conditions: Provide specific treatment guidelines with progression warnings
-11. Keep your responses concise given Thai do not like to read
-12. For food questions, gently probe asking details one by one until the patient provides enough information
-13. Suggest substitutes for unhealthy food choices and dietary modifications
-14. **Include specific rest guidance** with duration, timing, and types relevant to patient's condition
-15. **Connect symptoms to future consequences** using clear timelines and medical evidence
-16. If user input is short or simple, give a brief response (1-2 short sentences maximum)
-17. SYMPTOM PROGRESSION: If non co-operation or ignorance is detected explain how current symptoms may worsen if left untreated, using clear timeline and consequences
+- Always include encouragement and validation
+- Balance questioning with supportive statements
+- For low motivation: Use persuasion techniques, don't back down easily
+- Keep your responses concise given Thai do not like to read
+- If user input is short or simple, give a brief response (1-2 short sentences maximum)
 """
             
             prompt = self._build_prompt(specific_content, inputs)
@@ -382,9 +348,8 @@ Ask about patient's progress based on chat history. Do not answer questions from
 2. Use routine assessment questions relevant to their situation
 3. Include encouraging words about their journey
 4. Ask about any new developments or challenges
-5. **Check on rest implementation** - ask specifically about sleep quality and rest practices
-6. **Ask for patient's opinion** on their progress and how they feel about changes
-7. **Remind about symptom progression** if patient seems to be slipping back into old habits
+5. **Ask for patient's opinion** on their progress and how they feel about changes
+6. **Remind about symptom progression** if patient seems to be slipping back into old habits
 
 **Response Format:**
 [Follow-up Notification]
@@ -426,7 +391,6 @@ Summarize the given chat history into a short paragraph including key events.
 - Respond in Thai language only
 - Return "None" if insufficient information
 - **Include patient's resistance patterns** and what facts/consequences were effective
-- **Note rest and sleep patterns** mentioned by patient
 - **Track symptom progression** concerns discussed
 
 **Response Format:**
