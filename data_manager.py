@@ -556,7 +556,7 @@ class ChatbotManager:
             try:
                 with open(export_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
-                logger.debug(f"Session exported successfully: {export_path}")
+                logger.info(f"Session exported successfully: {export_path}")
             except Exception as e:
                 logger.exception(f"Failed to write session JSON file: {e}")
                 raise
