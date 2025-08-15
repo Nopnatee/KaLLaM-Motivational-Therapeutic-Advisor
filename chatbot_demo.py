@@ -783,6 +783,15 @@ def create_app() -> gr.Blocks:
                         send_btn = gr.Button("📤 Send Message", variant="primary")
 
             # Event Handlers
+            def set_button_loading():
+                return gr.update(value="⏳ ประมวลผล...", variant="secondary")
+            def reset_send_button():
+                return gr.update(value="📤 ส่งข้อความ", variant="primary")
+            def reset_followup_button():
+                return gr.update(value="🔔 สร้างการวิเคราะห์บทสนทนา", variant="secondary")
+            def reset_update_summary_button():
+                return gr.update(value="📋 บังคับสรุปแชท (dev)", variant="secondary")
+
             refresh_btn.click(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
@@ -903,12 +912,18 @@ def create_app() -> gr.Blocks:
             )
 
             send_btn.click(
+                fn=set_button_loading,
+                outputs=[send_btn]
+            ).then(
                 fn=process_chat_message,
                 inputs=[msg, chatbot, health_context],
                 outputs=[chatbot, msg]
             ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
+            ).then(
+                fn=reset_send_button,
+                outputs=[send_btn]
             )
 
             msg.submit(
