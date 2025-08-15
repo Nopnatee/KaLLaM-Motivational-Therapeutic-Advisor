@@ -389,11 +389,6 @@ def export_session() -> str:
     try:
         json_data = chatbot_manager.export_session_json(app_state.current_session_id)
         
-        # Save to file
-        filename = f"session_{app_state.current_session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(json_data)
-        
         return f"✅ **Export successful!**\n\n📁 **File:** `{filename}`"
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
