@@ -398,7 +398,6 @@ def export_session() -> str:
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
         return f"❌ **Could not export data:** {str(e)}"
-    
 
 def show_buttons():
     # Make the hidden buttons visible
@@ -407,6 +406,23 @@ def show_buttons():
 def hide_buttons():
     # Make the visible buttons hidden
     return gr.update(visible=False)
+
+def clear_all_buttons():
+    
+    return [
+        gr.update(visible=False),  # button1
+        gr.update(visible=False),  # button2
+        gr.update(visible=False)   # textbox
+    ]
+
+def set_button_loading():
+    return gr.update(value="⏳ ประมวลผล...", variant="stop")
+def reset_send_button():
+    return gr.update(value="📤 ส่งข้อความ", variant="primary")
+def reset_followup_button():
+    return gr.update(value="🔔 สร้างการวิเคราะห์บทสนทนา", variant="secondary")
+def reset_update_summary_button():
+    return gr.update(value="📋 บังคับสรุปแชท (dev)", variant="secondary")
 
 # UI Visual
 def create_app() -> gr.Blocks:
@@ -483,14 +499,22 @@ def create_app() -> gr.Blocks:
                         )
             with gr.Sidebar():
                 with gr.Column():
-                    new_session_btn = gr.Button("➕ Session ใหม่", variant="secondary")
+                    new_session_btn = gr.Button("➕ Session ใหม่", variant="primary")
                     manage_session_btn = gr.Button("🗂️ จัดการ Session", variant="secondary")
                     edit_profile_btn = gr.Button("✏️ แก้ไขข้อมูลสุขภาพ", variant="secondary")
+                    update_summary_btn = gr.Button("📋 บังคับสรุปแชท (dev)", variant="secondary")
+                    
                 # Session Details Accordion
                 session_result = gr.Markdown(
                     value="**กำลังรอการอัปเดต...**", 
                     elem_classes=["summary-box"],
                 )
+            with gr.Column(visible=False) as summary_page:
+                        back_btn = gr.Button("⏪ กลับไปยังแชท", variant="primary")
+                        summary_result = gr.Markdown(
+                            value="**กำลังรอคำสั่งสรุปแชท...**", 
+                            elem_classes=["summary-box"],
+                        )
             with gr.Row(visible=False) as session_management:
                 with gr.Column(scale=3):
                     gr.Markdown("### 🗂️ การจัดการ Session")
@@ -510,7 +534,7 @@ def create_app() -> gr.Blocks:
                         with gr.Row():
                             clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
-                        close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="secondary")
+                        close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
 
             # Health Management Section
             with gr.Column(visible=False) as health_management:
@@ -563,6 +587,16 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
+            back_btn.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[summary_page]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            )
+
             new_session_btn.click(
                 fn=create_new_session,
                 inputs=[health_context],
@@ -573,60 +607,32 @@ def create_app() -> gr.Blocks:
             )
 
             edit_profile_btn.click( 
-                fn=hide_buttons,
+                fn=clear_all_buttons,
                 inputs=None,
-                outputs=[chatbot_window]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
+                outputs=[chatbot_window,session_management,summary_page]
             ).then( 
                 fn=show_buttons,
                 inputs=None,
                 outputs=[health_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[update_condition_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[session_management]
             ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
             )
 
             manage_session_btn.click( 
-                fn=hide_buttons,
+                fn=clear_all_buttons,
                 inputs=None,
-                outputs=[update_condition_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
+                outputs=[chatbot_window,health_management,summary_page]
             ).then( 
                 fn=show_buttons,
                 inputs=None,
                 outputs=[session_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
             ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
             )
 
             close_management_btn.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
-            ).then( 
                 fn=hide_buttons,
                 inputs=None,
                 outputs=[session_management]
@@ -647,268 +653,35 @@ def create_app() -> gr.Blocks:
                 fn=show_buttons,
                 inputs=None,
                 outputs=[chatbot_window]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[update_condition_btn]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[edit_profile_btn]
             ).then( 
                 fn=hide_buttons,
                 inputs=None,
                 outputs=[health_management]
             ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[manage_session_btn]
-            ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
             )
 
-            send_btn.click(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
+            update_summary_btn.click(
+                fn=set_button_loading,
+                outputs=[update_summary_btn]
             ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            msg.submit(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            clear_chat_btn.click(
-                fn=clear_session,
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            clear_summary_btn.click(
-                fn=clear_summary, 
-                outputs=[session_result]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-        with gr.Tab("Main App (English Ver.)"):
-            # Session Status Display
-            with gr.Column(
-                elem_classes=["session-info"]
-            ):
-                gr.Markdown(
-                    value="## User Profile",
-                )
-                with gr.Row():
-                    with gr.Column():
-                        session_status = gr.Markdown(
-                            value=get_current_session_status(), 
-                        )
-            with gr.Sidebar():
-                with gr.Column():
-                    new_session_btn = gr.Button("➕ New Session", variant="secondary")
-                    manage_session_btn = gr.Button("🗂️ Manage Session", variant="secondary")
-                    edit_profile_btn = gr.Button("✏️ Edit Health Profile", variant="secondary")
-                # Session Details Accordion
-                session_result = gr.Markdown(
-                    value="**Waiting for update...**", 
-                    elem_classes=["summary-box"],
-                )
-            with gr.Row(visible=False) as session_management:
-                with gr.Column(scale=3):
-                    gr.Markdown("### 🗂️ Session Management")
-                    session_ids = get_session_list()
-                    initial_session = session_ids[0] if session_ids else None
-
-                    session_dropdown = gr.Dropdown(
-                        choices=session_ids,
-                        value=initial_session,
-                        label="🗒️ Select Session",
-                        info="Select the session you want to switch to",
-                    )
-                    with gr.Column():
-                        with gr.Row():
-                            switch_btn = gr.Button("🔀 Load Session", variant="secondary")
-                            refresh_btn = gr.Button("🔄 Refresh", variant="primary")
-                        with gr.Row():
-                            clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
-                            clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
-                        close_management_btn = gr.Button("❌ Close Session Management", variant="secondary")
-
-            # Health Management Section
-            with gr.Column(visible=False) as health_management:
-                health_context = gr.Textbox(
-                    label="🏥 Patient's Health Information",
-                    placeholder="e.g., Patient's name, age, high blood pressure, diabetes, sleep issues, stress level...",
-                    value="",
-                    max_lines=5,
-                    lines=3,
-                    info="This information will be saved in the session and used to personalize advice",
-                    elem_classes=["condition-box"]
-                )
-                update_condition_btn = gr.Button("💾 Update Health Information", variant="primary")
-
-            with gr.Column() as chatbot_window:
-                # Chat Interface Section
-                gr.Markdown("## 💬 Health Consultation Chatbot")
-
-                chatbot = gr.Chatbot(
-                    label="💭 Chat with KaLLaM",
-                    height=300,
-                    show_label=True,
-                    type="messages",
-                    elem_classes=["chat-container"],
-                )
-
-                with gr.Row():
-                    with gr.Column(scale=4):
-                        msg = gr.Textbox(
-                            label="💬 Type your message",
-                            placeholder="Type your question or health information...",
-                            lines=2,
-                            max_lines=8,
-                        )
-                    with gr.Column(scale=1):
-                        send_btn = gr.Button("📤 Send Message", variant="primary")
-
-            # Event Handlers
-            def set_button_loading():
-                return gr.update(value="⏳ ประมวลผล...", variant="secondary")
-            def reset_send_button():
-                return gr.update(value="📤 ส่งข้อความ", variant="primary")
-            def reset_followup_button():
-                return gr.update(value="🔔 สร้างการวิเคราะห์บทสนทนา", variant="secondary")
-            def reset_update_summary_button():
-                return gr.update(value="📋 บังคับสรุปแชท (dev)", variant="secondary")
-
-            refresh_btn.click(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            switch_btn.click(
-                fn=switch_session,
-                inputs=[session_dropdown],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            new_session_btn.click(
-                fn=create_new_session,
-                inputs=[health_context],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            edit_profile_btn.click( 
-                fn=hide_buttons,
+                fn=clear_all_buttons,
                 inputs=None,
-                outputs=[chatbot_window]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[update_condition_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            manage_session_btn.click( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[update_condition_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            close_management_btn.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[close_management_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[session_management]
+                outputs=[chatbot_window,health_management,session_management]
             ).then(
                 fn=show_buttons,
                 inputs=None,
-                outputs=[chatbot_window]
+                outputs=[summary_page]
+            ).then(
+                fn=force_update_summary, 
+                outputs=[summary_result]
             ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
-            )
-
-            update_condition_btn.click(
-                fn=update_medical_condition,
-                inputs=[health_context],
-                outputs=[session_status, session_result]
             ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[update_condition_btn]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[edit_profile_btn]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[manage_session_btn]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
+                fn=reset_update_summary_button,
+                outputs=[update_summary_btn]
             )
 
             send_btn.click(
@@ -951,6 +724,245 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
+        with gr.Tab("Main App (English Ver.)"):
+            # Session Status Display
+            with gr.Column(
+                elem_classes=["session-info"]
+            ):
+                gr.Markdown(
+                    value="## User Profile",
+                )
+                with gr.Row():
+                    with gr.Column():
+                        session_status = gr.Markdown(
+                            value=get_current_session_status(), 
+                        )
+            with gr.Sidebar():
+                with gr.Column():
+                    new_session_btn = gr.Button("➕ New Session", variant="primary")
+                    manage_session_btn = gr.Button("🗂️ Manage Session", variant="secondary")
+                    edit_profile_btn = gr.Button("✏️ Edit Health Profile", variant="secondary")
+                    update_summary_btn = gr.Button("📋 Force Chat Summary (dev)", variant="secondary")
+                    
+                # Session Details Accordion
+                session_result = gr.Markdown(
+                    value="**Waiting for update...**", 
+                    elem_classes=["summary-box"],
+                )
+            with gr.Column(visible=False) as summary_page:
+                        back_btn = gr.Button("⏪ Back to Chat", variant="primary")
+                        summary_result = gr.Markdown(
+                            value="**Waiting for summary command...**", 
+                            elem_classes=["summary-box"],
+                        )
+            with gr.Row(visible=False) as session_management:
+                with gr.Column(scale=3):
+                    gr.Markdown("### 🗂️ Session Management")
+                    session_ids = get_session_list()
+                    initial_session = session_ids[0] if session_ids else None
+
+                    session_dropdown = gr.Dropdown(
+                        choices=session_ids,
+                        value=initial_session,
+                        label="🗒️ Select Session",
+                        info="Select the session you want to switch to",
+                    )
+                    with gr.Column():
+                        with gr.Row():
+                            switch_btn = gr.Button("🔀 Load Session", variant="secondary")
+                            refresh_btn = gr.Button("🔄 Refresh", variant="primary")
+                        with gr.Row():
+                            clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
+                            clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
+                        close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
+
+            # Health Management Section
+            with gr.Column(visible=False) as health_management:
+                health_context = gr.Textbox(
+                    label="🏥 Patient's Health Information",
+                    placeholder="e.g., Patient's name, age, high blood pressure, diabetes, sleep issues, stress level...",
+                    value="",
+                    max_lines=5,
+                    lines=3,
+                    info="This information will be saved in the session and used to personalize advice",
+                    elem_classes=["condition-box"]
+                )
+                update_condition_btn = gr.Button("💾 Update Health Information", variant="primary")
+
+            with gr.Column() as chatbot_window:
+                # Chat Interface Section
+                gr.Markdown("## 💬 Health Consultation Chatbot")
+
+                chatbot = gr.Chatbot(
+                    label="💭 Chat with KaLLaM",
+                    height=300,
+                    show_label=True,
+                    type="messages",
+                    elem_classes=["chat-container"],
+                )
+
+                with gr.Row():
+                    with gr.Column(scale=4):
+                        msg = gr.Textbox(
+                            label="💬 Type your message",
+                            placeholder="Type your question or health information...",
+                            lines=2,
+                            max_lines=8,
+                        )
+                    with gr.Column(scale=1):
+                        send_btn = gr.Button("📤 Send Message", variant="primary")
+
+            # Event Handlers
+            refresh_btn.click(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            switch_btn.click(
+                fn=switch_session,
+                inputs=[session_dropdown],
+                outputs=[chatbot, msg, session_result, session_status, health_context]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            back_btn.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[summary_page]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            )
+
+            new_session_btn.click(
+                fn=create_new_session,
+                inputs=[health_context],
+                outputs=[chatbot, msg, session_result, session_status, health_context]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            edit_profile_btn.click( 
+                fn=clear_all_buttons,
+                inputs=None,
+                outputs=[chatbot_window,session_management,summary_page]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[health_management]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            manage_session_btn.click( 
+                fn=clear_all_buttons,
+                inputs=None,
+                outputs=[chatbot_window,health_management,summary_page]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[session_management]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            close_management_btn.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[session_management]
+            ).then(
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            update_condition_btn.click(
+                fn=update_medical_condition,
+                inputs=[health_context],
+                outputs=[session_status, session_result]
+            ).then(
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            ).then( 
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[health_management]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            update_summary_btn.click(
+                fn=set_button_loading,
+                outputs=[update_summary_btn]
+            ).then(
+                fn=clear_all_buttons,
+                inputs=None,
+                outputs=[chatbot_window,health_management,session_management]
+            ).then(
+                fn=show_buttons,
+                inputs=None,
+                outputs=[summary_page]
+            ).then(
+                fn=force_update_summary, 
+                outputs=[summary_result]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            ).then(
+                fn=reset_update_summary_button,
+                outputs=[update_summary_btn]
+            )
+
+            send_btn.click(
+                fn=set_button_loading,
+                outputs=[send_btn]
+            ).then(
+                fn=process_chat_message,
+                inputs=[msg, chatbot, health_context],
+                outputs=[chatbot, msg]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            ).then(
+                fn=reset_send_button,
+                outputs=[send_btn]
+            )
+
+            msg.submit(
+                fn=process_chat_message,
+                inputs=[msg, chatbot, health_context],
+                outputs=[chatbot, msg]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            clear_chat_btn.click(
+                fn=clear_session,
+                outputs=[chatbot, msg, session_result, session_status, health_context]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
+
+            clear_summary_btn.click(
+                fn=clear_summary, 
+                outputs=[session_result]
+            ).then(
+                fn=refresh_session_list, 
+                outputs=[session_dropdown]
+            )
         with gr.Tab("READ ME"):
             gr.Markdown("""
             ### 🧪 **Note for Proof of Concept (POC)**
