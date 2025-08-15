@@ -510,7 +510,7 @@ def create_app() -> gr.Blocks:
                     elem_classes=["summary-box"],
                 )
             with gr.Column(visible=False) as summary_page:
-                        back_btn = gr.Button("⏪ กลับไปยังแชท", variant="primary")
+                        back_btn_2 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
                         summary_result = gr.Markdown(
                             value="**กำลังรอคำสั่งสรุปแชท...**", 
                             elem_classes=["summary-box"],
@@ -532,6 +532,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
                         with gr.Row():
+                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
                         close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
@@ -548,6 +549,7 @@ def create_app() -> gr.Blocks:
                     elem_classes=["condition-box"]
                 )
                 update_condition_btn = gr.Button("💾 อัปเดตข้อมูลสุขภาพ", variant="primary")
+                back_btn_1 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
 
             with gr.Column() as chatbot_window:
                 # Chat Interface Section
@@ -587,7 +589,17 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            back_btn.click(
+            back_btn_1.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[health_management]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            )
+
+            back_btn_2.click(
                 fn=hide_buttons,
                 inputs=None,
                 outputs=[summary_page]
@@ -724,6 +736,11 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
+            export_btn.click(
+                fn=export_session, 
+                outputs=[session_result]
+            ) 
+
         with gr.Tab("Main App (English Ver.)"):
             # Session Status Display
             with gr.Column(
@@ -750,7 +767,7 @@ def create_app() -> gr.Blocks:
                     elem_classes=["summary-box"],
                 )
             with gr.Column(visible=False) as summary_page:
-                        back_btn = gr.Button("⏪ Back to Chat", variant="primary")
+                        back_btn_2 = gr.Button("⏪ Back to Chat", variant="primary")
                         summary_result = gr.Markdown(
                             value="**Waiting for summary command...**", 
                             elem_classes=["summary-box"],
@@ -772,6 +789,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 Load Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 Refresh", variant="primary")
                         with gr.Row():
+                            export_btn = gr.Button("📤 Export Session", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
                         close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
@@ -788,7 +806,7 @@ def create_app() -> gr.Blocks:
                     elem_classes=["condition-box"]
                 )
                 update_condition_btn = gr.Button("💾 Update Health Information", variant="primary")
-
+                back_btn_1 = gr.Button("⏪ Back to Chat", variant="primary")
             with gr.Column() as chatbot_window:
                 # Chat Interface Section
                 gr.Markdown("## 💬 Health Consultation Chatbot")
@@ -827,7 +845,17 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            back_btn.click(
+            back_btn_1.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[health_management]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            )
+
+            back_btn_2.click(
                 fn=hide_buttons,
                 inputs=None,
                 outputs=[summary_page]
@@ -962,6 +990,26 @@ def create_app() -> gr.Blocks:
             ).then(
                 fn=refresh_session_list, 
                 outputs=[session_dropdown]
+            )
+
+            back_btn_1.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[health_management]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
+            )
+
+            back_btn_2.click(
+                fn=hide_buttons,
+                inputs=None,
+                outputs=[summary_page]
+            ).then( 
+                fn=show_buttons,
+                inputs=None,
+                outputs=[chatbot_window]
             )
         with gr.Tab("READ ME"):
             gr.Markdown("""
