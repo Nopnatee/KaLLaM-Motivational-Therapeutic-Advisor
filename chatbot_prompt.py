@@ -113,7 +113,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             
             "core_rules": """
 **Core Rules:**
-- only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
+- only greet on first interaction (with the user saying greetings or the user's first message)
 - Provide specific, actionable health improvement feedback
 - Focus on patient motivation for self-care
 - Keep responses concise, practical, and culturally appropriate
@@ -157,65 +157,29 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         self.logger.debug("Base configuration loaded successfully")
     
     def _generate_feedback_sea_lion(self, prompt: str) -> str:
-        """
-        Generate feedback using SEA-Lion API
-    
-        """
-        try:
-            self.logger.debug(f"Sending prompt to SEA-Lion API (length: {len(prompt)} chars)")
-            
-            max_chars = 100000  
-            if len(prompt) > max_chars:
-                self.logger.warning(f"Prompt too long ({len(prompt)} chars), truncating to {max_chars} chars.")
-                prompt = prompt[:max_chars] + "\n[...truncated due to length...]"
+        # Append the new user message to stored history
+        self.chat_history.append({"role": "user", "content": prompt})
 
-            headers = {
-                "Authorization": f"Bearer {self.sea_lion_api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt + "\n\nPlease show reasoning as:\n```thinking\n...reasoning...\n```\n" +
-                                "and final answer as:\n```answer\n...answer...\n```"
-                    }
-                ],
-                "chat_template_kwargs": {
-                    "thinking_mode": "on"
-                },
-                "max_tokens": 100000,
-                "temperature": 0.7
-            }
-            
-            response = requests.post(
-                f"{self.sea_lion_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            response.raise_for_status()
-            
-            response_data = response.json()
-            response_text = response_data["choices"][0]["message"]["content"]
-            
-            self.logger.info(f"Received response from SEA-Lion API (length: {len(response_text)} chars)")
-            self.logger.debug(f"SEA-Lion Response: {response_text[:200]}..." if len(response_text) > 200 else f"SEA-Lion Response: {response_text}")
-            
-            return response_text
-            
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-            raise
-        except KeyError as e:
-            self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
-            raise
-        except Exception as e:
-            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-            raise
+        payload = {
+            "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+            "messages": self.chat_history,  
+            "chat_template_kwargs": {"thinking_mode": "on"},
+            "max_tokens": 2000,
+            "temperature": 0.7
+        }
+
+        response = requests.post(
+            "https://api.sea-lion.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json=payload
+        )
+        result = response.json()
+        reply = result["choices"][0]["message"]["content"]
+
+        # Append assistant reply to history
+        self.chat_history.append({"role": "assistant", "content": reply})
+
+        return reply
 
     def _generate_feedback_gemini(self, prompt: str) -> str:
         """
