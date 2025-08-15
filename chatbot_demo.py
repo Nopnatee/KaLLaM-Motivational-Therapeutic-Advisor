@@ -12,6 +12,30 @@ from data_manager import ChatbotManager
 # key improvement: - ease of usage
 # key improvement: - loading bar (indicator)
 
+# INLINE SVG for icons
+CABBAGE_SVG = """
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-label="cabbage">
+  <defs>
+    <linearGradient id="leaf" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#9be58b"/>
+      <stop offset="100%" stop-color="#5cc46a"/>
+    </linearGradient>
+  </defs>
+  <g fill="none">
+    <circle cx="32" cy="32" r="26" fill="url(#leaf)"/>
+    <path d="M12,34 C18,28 22,26 28,27 C34,28 38,32 44,30 C48,29 52,26 56,22"
+          stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>
+    <path d="M10,40 C18,36 22,42 28,42 C34,42 38,38 44,40 C50,42 54,40 58,36"
+          stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>
+    <path d="M24 24 C28 20 36 20 40 24 C44 28 44 36 32 38 C20 36 20 28 24 24 Z"
+          fill="#bff5b6"/>
+  </g>
+</svg>
+"""
+
+
+
 # Initialize the chatbot manager
 chatbot_manager = ChatbotManager(api_provider="sea_lion")
 current_session_id = None
@@ -53,11 +77,11 @@ def get_current_session_status() -> str:
         condition_str = condition if condition else 'ไม่ได้ระบุ'
         
         return f"""
+### 🏥 **สภาวะสุขภาพ:** {condition_str}  
 🟢 **Session ปัจจุบัน:** `{app_state.current_session_id}`  
 📅 **สร้างเมื่อ:** {session_info.get('timestamp', 'N/A')}  
 💬 **จำนวนข้อความ:** {stats.get('message_count', 0) or 0} ข้อความ  
 📋 **จำนวนสรุป:** {session_info.get('total_summaries', 0) or 0} ครั้ง  
-🏥 **สภาวะสุขภาพ:** {condition_str}  
 ⚡ **Latency เฉลี่ย:** {latency_str} ms  
 🔧 **Model:** {session_info.get('model_used', 'N/A')}
         """.strip()
@@ -396,6 +420,15 @@ def export_session() -> str:
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
         return f"❌ **ไม่สามารถส่งออกข้อมูล:** {str(e)}"
+    
+
+def show_buttons():
+    # Make the hidden buttons visible
+    return gr.update(visible=True)
+
+def hide_buttons():
+    # Make the visible buttons hidden
+    return gr.update(visible=False)
 
 # UI Visual
 def create_app() -> gr.Blocks:
@@ -405,11 +438,12 @@ def create_app() -> gr.Blocks:
         --kallam: #659435;
     }
     .gradio-container {
-        max-width: 1400px !important;
+        max-width: 100% !important;
+        width: 100% !important;
         margin: 0 auto !important;
     }
     .tab-nav {
-        background: linear-gradient(90deg, var(--kallam) 0%, #4ba296 100%);
+        background: linear-gradient(90deg,rgba(111, 198, 232, 1) 0%, rgba(87, 199, 133, 1) 50%, rgba(237, 221, 83, 1) 100%);
     }
     .chat-container {
         border-radius: 10px;
@@ -420,14 +454,15 @@ def create_app() -> gr.Blocks:
         border-radius: 8px;
         padding: 15px;
         margin: 10px 0;
-        background: #000000;
-        border-left: 4px solid var(--kallam);
+        border: 4px solid var(--kallam);
+        bottom: 0;
     }
     .session-info {
         border-radius: 8px;
         padding: 15px;
         margin: 10px 0;
-        background: linear-gradient(135deg, var(--kallam) 0%, #764ba2 100%);
+        background: linear-gradient(90deg,rgba(111, 198, 232, 1) 0%, rgba(87, 199, 133, 1) 50%, rgba(237, 221, 83, 1) 100%);
+    }
         color: white;
         font-weight: 500;
     }
@@ -448,119 +483,185 @@ def create_app() -> gr.Blocks:
 
 
     with gr.Blocks(
-        title="🥬 KaLLaM - Thai Motivational Therapeutic Advisor",
+        title="🥬 KaLLaM",
         theme=gr.themes.Default(primary_hue="green", secondary_hue="cyan"),
         css=custom_css,
     ) as app:
-
-        gr.Markdown("""
-        # 🥬 KaLLaM - Thai Motivational Therapeutic Advisor
-        
-        ระบบนี้ใช้เทคโนโลยี AI ขั้นสูงในการให้คำแนะนำด้านสุขภาพและการบำบัดพฤติกรรม พร้อมคุณสมบัติ:
-        
-        🔄 **ระบบสรุปอัตโนมัติ:** สรุปการสนทนาทุก 5 ข้อความ  
-        🔔 **การแจ้งเตือนอัตโนมัติ:** แจ้งเตือนสุขภาพทุก 10 ข้อความ  
-        💾 **Session Management:** จัดเก็บและจัดการ session การสนทนา  
-        🏥 **Medical Tracking:** ติดตามสภาวะสุขภาพแต่ละ session  
-        📊 **Analytics:** วิเคราะห์สถิติการใช้งานอย่างละเอียด
-        """)
-
-        # Session Status Display
-        session_status = gr.Markdown(
-            value=get_current_session_status(), 
-            elem_classes=["session-info"]
-        )
-
-        # Session Management Section
-        gr.Markdown("## 🗂️ การจัดการ Session")
-
-        with gr.Row():
-            with gr.Column(scale=3):
-                session_ids = get_session_list()
-                initial_session = session_ids[0] if session_ids else None
-
-                session_dropdown = gr.Dropdown(
-                    choices=session_ids,
-                    value=initial_session,
-                    label="🗒️ เลือก Session",
-                    info="เลือก session ที่ต้องการเปลี่ยนไป",
+        gr.HTML(f"""      
+            <h1>{CABBAGE_SVG} KaLLaM - Thai Motivational Therapeutic Advisor</h1>
+            """)
+        with gr.Tab("Main App (Thai Ver.)"):
+            with gr.Sidebar():
+                # Session Status Display
+                with gr.Column(
+                    elem_classes=["session-info"]
+                ):
+                    gr.Markdown(
+                        value="## ประวัติของผู้ใช้งาน",
+                    )
+                    with gr.Row():
+                        with gr.Column():
+                            session_status = gr.Markdown(
+                                value=get_current_session_status(), 
+                            )
+                with gr.Column():
+                    manage_session_btn = gr.Button("🗂️ จัดการ Session", variant="secondary")
+                    edit_profile_btn = gr.Button("✏️ แก้ไขข้อมูลสุขภาพ", variant="secondary")
+                # Session Details Accordion
+                session_result = gr.Markdown(
+                    value="**กำลังรอการอัปเดต...**", 
+                    elem_classes=["summary-box"],
                 )
-            with gr.Column(scale=1):
-                refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
-                switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
-                new_session_btn = gr.Button("➕ Session ใหม่", variant="secondary")
+            with gr.Row(visible=False) as session_management:
+                with gr.Column(scale=3):
+                    gr.Markdown("### 🗂️ การจัดการ Session")
+                    session_ids = get_session_list()
+                    initial_session = session_ids[0] if session_ids else None
 
-        with gr.Row():
-            session_info_btn = gr.Button("👀 ข้อมูล Session", variant="secondary")
-            all_sessions_btn = gr.Button("📁 ดู Session ทั้งหมด", variant="secondary")
-            export_btn = gr.Button("📤 ส่งออกข้อมูล", variant="secondary")
+                    session_dropdown = gr.Dropdown(
+                        choices=session_ids,
+                        value=initial_session,
+                        label="🗒️ เลือก Session",
+                        info="เลือก session ที่ต้องการเปลี่ยนไป",
+                    )
+                    with gr.Column():
+                        with gr.Row():
+                            new_session_btn = gr.Button("➕ Session ใหม่", variant="secondary")
+                            switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
+                            refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
+                        with gr.Row():
+                            clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
+                            clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
+                        close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="secondary")
 
-        # Session Details Accordion
-        with gr.Accordion("📊 ข้อมูลรายละเอียด Session", open=False):
-            session_result = gr.Markdown(
-                value="**กำลังรอการอัปเดต...**", 
-                elem_classes=["summary-box"]
-            )
-            session_info_display = gr.Markdown(
-                value="", 
-                elem_classes=["summary-box"]
-            )
-
-        gr.Markdown("---")
-
-        # Health Management Section
-        gr.Markdown("## 🏥 การจัดการสภาวะสุขภาพ")
-
-        with gr.Row():
-            health_context = gr.Textbox(
-                label="🏥 ข้อมูลสุขภาพของผู้ป่วย",
-                placeholder="เช่น: ชื่อผู้ป่วย, อายุ, ความดันโลหิตสูง, เบาหวาน, ปัญหาการนอน, ระดับความเครียด...",
-                value="",
-                max_lines=5,
-                lines=3,
-                info="ข้อมูลนี้จะถูกเก็บใน session และใช้ปรับแต่งคำแนะนำ",
-                elem_classes=["condition-box"]
-            )
-            update_condition_btn = gr.Button("💾 อัปเดตข้อมูลสุขภาพ", variant="primary")
-
-        gr.Markdown("---")
-
-        # Chat Interface Section
-        gr.Markdown("## 💬 แชทบอทให้คำปรึกษาสุขภาพ")
-        
-        gr.Markdown("""
-        **🔔 วิธีใช้การแจ้งเตือน:**
-        - พิมพ์ "แจ้งเตือนสุขภาพ" หรือ "สร้างการแจ้งเตือน" เพื่อขอการแจ้งเตือนทันที
-        - ระบบจะแจ้งเตือนอัตโนมัติทุก 10 ข้อความ
-        - ใช้ปุ่ม "🔔 สร้างการแจ้งเตือน" เพื่อสร้างการแจ้งเตือนแบบ manual
-        """)
-
-        chatbot = gr.Chatbot(
-            label="💭 การสนทนากับ AI",
-            height=500,
-            show_label=True,
-            type="messages",
-            elem_classes=["chat-container"],
-            avatar_images=("👤", "🤖")
-        )
-
-        with gr.Row():
-            with gr.Column(scale=4):
-                msg = gr.Textbox(
-                    label="💬 พิมพ์ข้อความของคุณ",
-                    placeholder="พิมพ์คำถามหรือข้อมูลสุขภาพ... (พิมพ์ 'แจ้งเตือนสุขภาพ' เพื่อขอการแจ้งเตือน)",
-                    lines=2,
-                    max_lines=8,
+            # Health Management Section
+            with gr.Column(visible=False) as health_management:
+                health_context = gr.Textbox(
+                    label="🏥 ข้อมูลสุขภาพของผู้ป่วย",
+                    placeholder="เช่น: ชื่อผู้ป่วย, อายุ, ความดันโลหิตสูง, เบาหวาน, ปัญหาการนอน, ระดับความเครียด...",
+                    value="",
+                    max_lines=5,
+                    lines=3,
+                    info="ข้อมูลนี้จะถูกเก็บใน session และใช้ปรับแต่งคำแนะนำ",
+                    elem_classes=["condition-box"]
                 )
-            with gr.Column(scale=1):
-                send_btn = gr.Button("📤 ส่งข้อความ", variant="primary")
-                notification_btn = gr.Button("🔔 สร้างการแจ้งเตือน", variant="secondary")
-                update_summary_btn = gr.Button("📋 บังคับสรุปแชท", variant="secondary")
+                update_condition_btn = gr.Button("💾 อัปเดตข้อมูลสุขภาพ", variant="primary")
+            
+            with gr.Column() as chatbot_window:
+                # Chat Interface Section
+                gr.Markdown("## 💬 แชทบอทให้คำปรึกษาสุขภาพ")
 
-        # Control Buttons
-        with gr.Row():
-            clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
-            clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
+                chatbot = gr.Chatbot(
+                    label="💭 พูดคุยกับ KaLLaM",
+                    height=300,
+                    show_label=True,
+                    type="messages",
+                    elem_classes=["chat-container"],
+                )
+
+                with gr.Row():
+                    with gr.Column(scale=4):
+                        msg = gr.Textbox(
+                            label="💬 พิมพ์ข้อความของคุณ",
+                            placeholder="พิมพ์คำถามหรือข้อมูลสุขภาพ...",
+                            lines=2,
+                            max_lines=8,
+                        )
+                    with gr.Column(scale=1):
+                        send_btn = gr.Button("📤 ส่งข้อความ", variant="primary")
+        with gr.Tab("Main App (English Ver.)"):
+            with gr.Sidebar():
+                # Session Status Display
+                with gr.Column(
+                    elem_classes=["session-info"]
+                ):
+                    gr.Markdown(
+                        value="## User Profile",
+                    )
+                    with gr.Row():
+                        with gr.Column():
+                            session_status = gr.Markdown(
+                                value=get_current_session_status(), 
+                            )
+                with gr.Column():
+                    manage_session_btn = gr.Button("🗂️ Manage Session", variant="secondary")
+                    edit_profile_btn = gr.Button("✏️ Edit Health Profile", variant="secondary")
+                # Session Details Accordion
+                session_result = gr.Markdown(
+                    value="**Waiting for update...**", 
+                    elem_classes=["summary-box"],
+                )
+            with gr.Row(visible=False) as session_management:
+                with gr.Column(scale=3):
+                    gr.Markdown("### 🗂️ Session Management")
+                    session_ids = get_session_list()
+                    initial_session = session_ids[0] if session_ids else None
+
+                    session_dropdown = gr.Dropdown(
+                        choices=session_ids,
+                        value=initial_session,
+                        label="🗒️ Select Session",
+                        info="Select the session you want to switch to",
+                    )
+                    with gr.Column():
+                        with gr.Row():
+                            new_session_btn = gr.Button("➕ New Session", variant="secondary")
+                            switch_btn = gr.Button("🔀 Load Session", variant="secondary")
+                            refresh_btn = gr.Button("🔄 Refresh", variant="primary")
+                        with gr.Row():
+                            clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
+                            clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
+                        close_management_btn = gr.Button("❌ Close Session Management", variant="secondary")
+
+            # Health Management Section
+            with gr.Column(visible=False) as health_management:
+                health_context = gr.Textbox(
+                    label="🏥 Patient's Health Information",
+                    placeholder="e.g., Patient's name, age, high blood pressure, diabetes, sleep issues, stress level...",
+                    value="",
+                    max_lines=5,
+                    lines=3,
+                    info="This information will be saved in the session and used to personalize advice",
+                    elem_classes=["condition-box"]
+                )
+                update_condition_btn = gr.Button("💾 Update Health Information", variant="primary")
+            
+            with gr.Column() as chatbot_window:
+                # Chat Interface Section
+                gr.Markdown("## 💬 Health Consultation Chatbot")
+
+                chatbot = gr.Chatbot(
+                    label="💭 Chat with KaLLaM",
+                    height=300,
+                    show_label=True,
+                    type="messages",
+                    elem_classes=["chat-container"],
+                )
+
+                with gr.Row():
+                    with gr.Column(scale=4):
+                        msg = gr.Textbox(
+                            label="💬 Type your message",
+                            placeholder="Type your question or health information...",
+                            lines=2,
+                            max_lines=8,
+                        )
+                    with gr.Column(scale=1):
+                        send_btn = gr.Button("📤 Send Message", variant="primary")
+
+        with gr.Tab("READ ME"):
+            gr.Markdown("""
+            ### 🧪 **Note for Proof of Concept (POC)**
+            * **Future Vision:** We aim for a fully localized Thai user interface (UI). 🇹🇭
+            * **Current Version:** For this POC, the UI has two versions. The fully Thai one and the partially English one to make it easier for judges to visualize and evaluate. 👀
+                        
+
+            ### ⚙️ **Key Features**
+            This system uses advanced AI to provide health advice and behavioral therapy, with the following features:
+            * **🔄 Auto-Summary:** Summarizes the conversation every 5 messages.
+            * **💾 Session Management:** Stores and manages conversation sessions.
+            * **🏥 Medical Tracking:** Tracks health conditions across sessions.
+            * **📊 Analytics:** Provides detailed usage statistics.""")
 
         # Event Handlers
         refresh_btn.click(
@@ -580,20 +681,84 @@ def create_app() -> gr.Blocks:
             outputs=[chatbot, msg, session_result, session_status, health_context]
         )
 
-        session_info_btn.click(
-            fn=get_session_info, 
-            outputs=[session_info_display]
+        edit_profile_btn.click( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        ).then(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[close_management_btn]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[update_condition_btn]
         )
 
-        all_sessions_btn.click(
-            fn=get_all_sessions_info, 
-            outputs=[session_info_display]
+        manage_session_btn.click( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[update_condition_btn]
+        ).then( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[session_management]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[close_management_btn]
+        )
+
+        close_management_btn.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[close_management_btn]
+        ).then( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[session_management]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
         )
 
         update_condition_btn.click(
             fn=update_medical_condition,
             inputs=[health_context],
             outputs=[session_status, session_result]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        ).then(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[update_condition_btn]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[edit_profile_btn]
+        ).then( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[manage_session_btn]
         )
 
         send_btn.click(
@@ -608,17 +773,6 @@ def create_app() -> gr.Blocks:
             outputs=[chatbot, msg]
         )
 
-        notification_btn.click(
-            fn=generate_manual_notification, 
-            inputs=[chatbot], 
-            outputs=[chatbot]
-        )
-
-        update_summary_btn.click(
-            fn=force_update_summary, 
-            outputs=[session_result]
-        )
-
         clear_chat_btn.click(
             fn=clear_session,
             outputs=[chatbot, msg, session_result, session_status, health_context]
@@ -628,12 +782,6 @@ def create_app() -> gr.Blocks:
             fn=clear_summary, 
             outputs=[session_result]
         )
-
-        export_btn.click(
-            fn=export_session, 
-            outputs=[session_result]
-        )
-
     return app
 
 
