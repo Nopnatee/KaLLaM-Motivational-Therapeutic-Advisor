@@ -49,8 +49,6 @@ class AppState:
     def __init__(self):
         self.current_session_id = None
         self.message_count = 0
-        # self.auto_summary_threshold = 5
-        # self.auto_notification_threshold = 10
     
     def reset(self):
         self.current_session_id = None
@@ -306,25 +304,6 @@ def process_chat_message(message: str, history: List, health_context: str) -> Tu
         
         # Update message count
         app_state.message_count += 2
-        
-        # Auto-summary check
-        if app_state.message_count % app_state.auto_summary_threshold == 0:
-            try:
-                summary = chatbot_manager.summarize_session(app_state.current_session_id)
-                history.append({
-                    "role": "assistant", 
-                    "content": f"📋 **สรุปอัตโนมัติ:** {summary}"
-                })
-            except Exception as e:
-                logger.error(f"Auto-summary error: {e}")
-        
-        # Auto-notification check
-        if app_state.message_count % app_state.auto_notification_threshold == 0:
-            notification = generate_health_notification(history)
-            history.append({
-                "role": "assistant", 
-                "content": f"🔔 **การแจ้งเตือนอัตโนมัติ:** {notification}"
-            })
         
         return history, ""
     except Exception as e:
@@ -898,7 +877,7 @@ def create_app() -> gr.Blocks:
 
             ### ⚙️ **Key Features**
             This system uses advanced AI to provide health advice and behavioral therapy, with the following features:
-            * **🔄 Auto-Summary:** Summarizes the conversation every 5 messages.
+            * **🔄 Auto-Summary:** Summarizes the conversation every 10 messages.
             * **💾 Session Management:** Stores and manages conversation sessions.
             * **🏥 Medical Tracking:** Tracks health conditions across sessions.
             * **📊 Analytics:** Provides detailed usage statistics.""")
