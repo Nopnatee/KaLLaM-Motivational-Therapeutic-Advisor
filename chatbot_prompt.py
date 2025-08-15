@@ -178,9 +178,13 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
                 "messages": [
                     {
                         "role": "user",
-                        "content": prompt
+                        "content": prompt + "\n\nPlease show reasoning as:\n```thinking\n...reasoning...\n```\n" +
+                                "and final answer as:\n```answer\n...answer...\n```"
                     }
                 ],
+                "chat_template_kwargs": {
+                    "thinking_mode": "on"
+                },
                 "max_tokens": 100000,
                 "temperature": 0.7
             }
