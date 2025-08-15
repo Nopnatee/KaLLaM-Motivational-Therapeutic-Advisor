@@ -527,7 +527,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
                         with gr.Row():
-                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session", variant="secondary")
+                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session (dev)", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
                         close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
@@ -784,7 +784,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 Load Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 Refresh", variant="primary")
                         with gr.Row():
-                            export_btn = gr.Button("📤 Export Session", variant="secondary")
+                            export_btn = gr.Button("📤 Export Session (dev)", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
                         close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
