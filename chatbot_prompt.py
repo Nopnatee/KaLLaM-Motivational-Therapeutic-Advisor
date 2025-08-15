@@ -113,7 +113,7 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
             
             "core_rules": """
 **Core Rules:**
-- ONLY GREET ON FIRST INTERACTION (with the user saying greetings or the user's first message)
+- only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
 - Provide specific, actionable health improvement feedback
 - Focus on patient motivation for self-care
 - Keep responses concise, practical, and culturally appropriate
@@ -307,9 +307,9 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         inputs = f"""- Chat history (truncated): 
     {history_text}
 
-    - Current user message: {user_message}
-    - User's health status: {health_status}
-    - Summarized history: {summarized_text if summarized_text else "N/A"}"""
+    - current_user_message: {user_message}
+    - user_health_status: {health_status}
+    - summarized_history: {summarized_text if summarized_text else "N/A"}"""
         
         base_prompt = f"""
     {self.base_config['character']}
@@ -353,9 +353,9 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         
         try:
             inputs = f"""- Chat history: {chat_history}
-- Current user message: {user_message}
-- User's health status: {health_status}
-- Summarized history: {summarized_histories}"""
+- current_user_message: {user_message}
+- user_health_status: {health_status}
+- summarized_history: {summarized_histories}"""
             
             specific_content = """
 **Your Task:**
@@ -405,7 +405,7 @@ Analyze the chat history and current message to provide health guidance. Only gr
         
         try:
             inputs = f"""- Chat history: {chat_history} (for context)
-- Summarized history: {summarized_histories}"""
+- summarized_history: {summarized_histories}"""
             
             specific_content = """
 **Your Task:**
