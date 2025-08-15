@@ -31,6 +31,7 @@ class KaLLaMChatbot:
         
         self.api_provider = api_provider
         self.max_messages = max_messages
+        self.chat_history = []
         self._setup_logging(log_level)
         self._setup_api_clients()
         self._setup_base_config()
@@ -171,12 +172,12 @@ You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializi
         response = requests.post(
             "https://api.sea-lion.ai/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
-            json=payload
+            json=payload,
+            timeout=30
         )
-        result = response.json()
-        reply = result["choices"][0]["message"]["content"]
+        response.raise_for_status()
 
-        # Append assistant reply to history
+        reply = response.json()["choices"][0]["message"]["content"]
         self.chat_history.append({"role": "assistant", "content": reply})
 
         return reply
