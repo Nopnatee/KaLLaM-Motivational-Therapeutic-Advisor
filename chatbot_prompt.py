@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+import re
 from google import genai
 from pathlib import Path
 from datetime import datetime
@@ -209,13 +210,13 @@ class KaLLaMChatbot:
 
     def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]]) -> str:
         """
-        Generate feedback using SEA-Lion API with proper message formatting
+        Generate feedback using SEA-Lion API with proper message formatting and thinking/answer parsing
         
         Args:
             messages: Properly formatted messages for the API
             
         Returns:
-            Generated response text
+            Generated response text (only the answer portion)
         """
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
@@ -225,13 +226,24 @@ class KaLLaMChatbot:
                 "Content-Type": "application/json"
             }
             
+            if messages and messages[-1]["role"] == "user":
+                messages[-1]["content"] += (
+                    "\n\nPlease output in the following format:\n"
+                    "```thinking\n{your step-by-step reasoning in ENGLISH - analyze the patient's condition, symptoms, emotional state, and determine the best approach}\n```\n"
+                    "```answer\n{your final response in THAI only - warm, empathetic, and actionable guidance}\n```\n\n"
+                    "**Important**: Think through the medical and psychological aspects in English for better reasoning, then provide your patient response in Thai."
+                )
+            
             payload = {
                 "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
                 "messages": messages,
-                "max_tokens": 1000,  # Reduced for more focused responses
+                "chat_template_kwargs": {
+                    "thinking_mode": "on"
+                },
+                "max_tokens": 2000,  # for thinking and answering
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "frequency_penalty": 0.1,  # Help prevent repetition
+                "frequency_penalty": 0.1,  # prevent repetition
                 "presence_penalty": 0.1    # Encourage new topics
             }
             
@@ -255,21 +267,35 @@ class KaLLaMChatbot:
                 self.logger.error(f"Unexpected message structure: {choice}")
                 return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
                 
-            response_text = choice["message"]["content"]
+            raw_content = choice["message"]["content"]
             
             # Check if response is None or empty
-            if response_text is None:
+            if raw_content is None:
                 self.logger.error("SEA-Lion API returned None content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            if isinstance(response_text, str) and response_text.strip() == "":
+            if isinstance(raw_content, str) and raw_content.strip() == "":
                 self.logger.error("SEA-Lion API returned empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            self.logger.info(f"Received response from SEA-Lion API (length: {len(response_text)} chars)")
-            self.logger.debug(f"SEA-Lion Response: {response_text[:200]}..." if len(response_text) > 200 else f"SEA-Lion Response: {response_text}")
+            # Extract reasoning and answer blocks
+            thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
+            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
             
-            return str(response_text).strip()
+            reasoning = thinking_match.group(1).strip() if thinking_match else None
+            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            
+            # Log reasoning privately for debugging
+            if reasoning:
+                self.logger.debug(f"SEA-Lion reasoning:\n{reasoning}")
+            else:
+                self.logger.debug("No thinking block found in response")
+            
+            # Log response information
+            self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
+            self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
+            
+            return final_answer
             
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
