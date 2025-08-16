@@ -389,12 +389,7 @@ def export_session() -> str:
     try:
         json_data = chatbot_manager.export_session_json(app_state.current_session_id)
         
-        # Save to file
-        filename = f"session_{app_state.current_session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(json_data)
-        
-        return f"✅ **Export successful!**\n\n📁 **File:** `{filename}`"
+        return f"✅ **Export successful!**`"
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
         return f"❌ **Could not export data:** {str(e)}"
@@ -532,7 +527,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
                         with gr.Row():
-                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session", variant="secondary")
+                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session (dev)", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
                         close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
@@ -789,7 +784,7 @@ def create_app() -> gr.Blocks:
                             switch_btn = gr.Button("🔀 Load Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 Refresh", variant="primary")
                         with gr.Row():
-                            export_btn = gr.Button("📤 Export Session", variant="secondary")
+                            export_btn = gr.Button("📤 Export Session (dev)", variant="secondary")
                             clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
                             clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
                         close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
