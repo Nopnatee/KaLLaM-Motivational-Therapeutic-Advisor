@@ -17,7 +17,7 @@ class KaLLaMChatbot:
     KaLLaM - Thai AI Doctor Chatbot for health guidance and patient care
     """
 
-    def __init__(self, api_provider: Optional[str] = None, max_messages: Optional[int] = 10, log_level: int = logging.INFO):
+    def __init__(self, api_provider: Optional[str] = None, log_level: int = logging.INFO):
         """
         Initialize KaLLaM chatbot
         
@@ -30,7 +30,6 @@ class KaLLaMChatbot:
             raise ValueError("api_provider must be either 'sea_lion' or 'gemini'")
             
         self.api_provider = api_provider
-        self.max_messages = max_messages
         self._setup_logging(log_level)
         self._setup_api_clients()
         self._setup_base_config()
@@ -111,6 +110,7 @@ class KaLLaMChatbot:
             "core_rules": """
 **Core Rules:**
 - only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
+- When starting a conversation go slow and try to understand the patient's condition, don't rush to give solutions
 - Provide specific, actionable health improvement feedback
 - Focus on patient motivation for self-care
 - Keep responses concise, practical, and culturally appropriate
@@ -433,24 +433,6 @@ class KaLLaMChatbot:
         
         return base_prompt
 
-    def _truncate_history(self, chat_history: List[Dict[str, str]], max_messages: int = 20) -> List[Dict[str, str]]:
-        """
-        Keep only the last few messages from chat history to reduce prompt size.
-        
-        Args:
-            chat_history: List of message dictionaries
-            max_messages: Number of recent messages to keep
-            
-        Returns:
-            Truncated chat history
-        """
-        if len(chat_history) <= max_messages:
-            return chat_history
-        else:
-            truncated = chat_history[-max_messages:]
-            self.logger.debug(f"Truncated chat history from {len(chat_history)} to {max_messages} messages")
-            return truncated
-
     def get_chatbot_response(
         self, 
         chat_history: List[Dict[str, str]], 
@@ -528,26 +510,7 @@ class KaLLaMChatbot:
         self.logger.info("Processing history summarization request")
         self.logger.debug(f"Chat history length: {len(response_history)} items")
         
-        try:
-
-            history_text = ""
-            for msg in response_history:
-                role = msg.get('role', 'unknown')
-                content = msg.get('content', '')
-                if role == 'user':
-                    history_text += f"ผู้ป่วย: {content}\n"
-                elif role == 'assistant':
-                    history_text += f"หมอ: {content}\n"
-            
-            # Convert previous summaries to text
-            previous_summaries = ""
-            if summarized_histories:
-                for summary in summarized_histories:
-                    timestamp = summary.get('timestamp', '')
-                    summary_text = summary.get('summary', '')
-                    previous_summaries += f"สรุปเมื่อ {timestamp}: {summary_text}\n"
-
-            # Build the summary prompt
+        try:         
             summary_prompt = f"""
     Your Task:
     Summarize the given chat history into a short paragraph including all key events.
@@ -564,6 +527,9 @@ class KaLLaMChatbot:
     - Summarize in Thai language only
     - Return "None" if insufficient information
     - Track patient's progress and health concerns
+    - Do not summarize the summarized_histories, only use it for repetitive context
+    - Do not include repetitive information accordding to summarized_histories.
+    - Incase of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons.
 
     Response Format:
     [Summarized content in Thai]
