@@ -371,14 +371,20 @@ class ChatbotManager:
             str: Generated summary text.
         """
         self._validate_inputs(session_id=session_id)
-        
+
         with self.lock:
             try:
-                chat_history = self._get_chat_history(session_id)
-                if not chat_history:
+                response_history = self._get_chat_history(session_id)
+                if not response_history:
                     raise ValueError("No chat history found for session")
+                summarized_histories = self._get_chat_summaries(session_id)
+                if not response_history:
+                    raise ValueError("No messages found in session history")
+                logger.debug(f"Fetched {len(response_history)} messages for session {session_id}")
+                logger.debug(f"Fetched {len(summarized_histories)} summaries for session {session_id}")
 
-                summary = self.chatbot.summarize_history(chat_history)
+
+                summary = self.chatbot.summarize_history(response_history=response_history, summarized_histories=summarized_histories)
 
                 with self._get_connection() as conn:
                     conn.execute("""

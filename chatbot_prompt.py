@@ -514,42 +514,44 @@ class KaLLaMChatbot:
             self.logger.error(f"Error generating follow-up response: {str(e)}")
             raise
 
-    def summarize_history(self, chat_history: List[Dict[str, str]]) -> str:
+    def summarize_history(self, response_history: List, summarized_histories: List) -> str:
         """
         Summarize chat history into concise paragraph
-        
+
         Args:
-            chat_history: Full conversation history to summarize
-            
+            response_history: Full conversation history to summarize
+            summarized_histories: Previous summarized histories
+
         Returns:
             Summarized conversation history
         """
         self.logger.info("Processing history summarization request")
-        self.logger.debug(f"Chat history length: {len(chat_history)} messages")
+        self.logger.debug(f"Chat history length: {len(response_history)} items")
         
         try:
-            # Convert chat history to text for summarization
-            history_text = "\n".join([f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" for msg in chat_history])
-            
+            # Build the summary prompt
             summary_prompt = f"""
-Summarize the given chat history into a short paragraph including key events.
+    Your Task:
+    Summarize the given chat history into a short paragraph including all key events.
 
-**Input:** {history_text}
+    Input Format:
+    chat_history (For content): {response_history}
+    summarized_history (For repetitive context): {summarized_histories}
+    current_time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-**Requirements:**
-- Keep summary concise with key events and important details
-- Include time/date references (group close dates/times together)
-- Use timeline format if history is very long
-- Respond in Thai language only
-- Return "None" if insufficient information
-- **Include patient's resistance patterns** and what facts/consequences were effective
-- **Note rest and sleep patterns** mentioned by patient
-- **Track symptom progression** concerns discussed
+    Requirements:
+    - Keep summary concise with all key events and important details
+    - Include time/date references (group close dates/times together)
+    - Use timeline format if history is very long
+    - Summarize in Thai language only
+    - Return "None" if insufficient information
+    - Track patient's progress and health concerns
 
-**Response Format:** [Summarized content]
-"""
-            
-            # Use summarization as a special case
+    Response Format:
+    [Summarized content in Thai]
+    """
+
+            # Use the appropriate API to generate summary
             if self.api_provider == "sea_lion":
                 messages = [{
                     "role": "system",
@@ -559,12 +561,16 @@ Summarize the given chat history into a short paragraph including key events.
                     "content": summary_prompt
                 }]
                 result = self._generate_feedback_sea_lion(messages)
-            else:
+            else:  # gemini
                 result = self._generate_feedback_gemini(summary_prompt)
             
             self.logger.info("Successfully generated history summary")
             self.logger.debug(f"Summary result: {result}")
             return result
+            
+        except Exception as e:
+            self.logger.error(f"Error summarizing history: {str(e)}")
+            raise
             
         except Exception as e:
             self.logger.error(f"Error summarizing history: {str(e)}")
