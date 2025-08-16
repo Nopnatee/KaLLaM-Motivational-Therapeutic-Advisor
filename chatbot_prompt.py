@@ -529,6 +529,24 @@ class KaLLaMChatbot:
         self.logger.debug(f"Chat history length: {len(response_history)} items")
         
         try:
+
+            history_text = ""
+            for msg in response_history:
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                if role == 'user':
+                    history_text += f"ผู้ป่วย: {content}\n"
+                elif role == 'assistant':
+                    history_text += f"หมอ: {content}\n"
+            
+            # Convert previous summaries to text
+            previous_summaries = ""
+            if summarized_histories:
+                for summary in summarized_histories:
+                    timestamp = summary.get('timestamp', '')
+                    summary_text = summary.get('summary', '')
+                    previous_summaries += f"สรุปเมื่อ {timestamp}: {summary_text}\n"
+
             # Build the summary prompt
             summary_prompt = f"""
     Your Task:
@@ -565,7 +583,7 @@ class KaLLaMChatbot:
                 result = self._generate_feedback_gemini(summary_prompt)
             
             self.logger.info("Successfully generated history summary")
-            self.logger.debug(f"Summary result: {result}")
+            self.logger.debug(f"Summary result: {result[:200]}..." if len(result) > 200 else f"Summary result: {result}")
             return result
             
         except Exception as e:
