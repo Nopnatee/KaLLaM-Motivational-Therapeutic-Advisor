@@ -34,7 +34,7 @@ class KaLLaMChatbot:
         self._setup_api_clients()
         self._setup_base_config()
         
-        self.logger.info(f"KaLLaM chatbot initialized successfully using {self.api_provider} API")
+        self.logger.info(f"KaLLaM chatbot initialized successfully using {self.api_provider} API for main chat, Gemini for summarization")
 
     def _setup_logging(self, log_level: int) -> None:
         """Setup logging configuration"""
@@ -73,31 +73,29 @@ class KaLLaMChatbot:
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
-        """Setup the selected API client based on api_provider"""
+        """Setup API clients - always setup both for mixed usage"""
         try:
-            if self.api_provider == "sea_lion":
-                # Setup SEA-Lion API only
-                self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-                self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            # Setup SEA-Lion API (for main chat)
+            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
+            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            
+            if not self.sea_lion_api_key:
+                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
                 
-                if not self.sea_lion_api_key:
-                    raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
-                    
-                self.logger.info("SEA-Lion API client initialized")
+            self.logger.info("SEA-Lion API client initialized")
+            
+            # Setup Gemini API (for summarization only)
+            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+            
+            if not self.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY not provided and not found in environment variables - required for summarization")
                 
-            elif self.api_provider == "gemini":
-                # Setup Gemini API only
-                self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-                
-                if not self.gemini_api_key:
-                    raise ValueError("GEMINI_API_KEY not provided and not found in environment variables")
-                    
-                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-                self.gemini_model_name = "gemini-2.5-flash-preview-05-20"
-                self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
+            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+            self.gemini_model_name = "gemini-2.5-flash-preview-05-20"
+            self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
                 
         except Exception as e:
-            self.logger.error(f"Failed to initialize {self.api_provider} API client: {str(e)}")
+            self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
 
     def _setup_base_config(self) -> None:
@@ -309,7 +307,7 @@ class KaLLaMChatbot:
 
     def _generate_feedback_gemini(self, prompt: str) -> str:
         """
-        Generate feedback using Gemini API (fallback)
+        Generate feedback using Gemini API
         
         Args:
             prompt: The prompt to send to the API
@@ -433,6 +431,22 @@ class KaLLaMChatbot:
         
         return base_prompt
 
+    def _truncate_history(self, chat_history: List[Dict[str, str]], max_messages: int) -> List[Dict[str, str]]:
+        """
+        Truncate chat history to keep only recent messages
+        
+        Args:
+            chat_history: Full chat history
+            max_messages: Maximum number of messages to keep
+            
+        Returns:
+            Truncated chat history
+        """
+        if len(chat_history) <= max_messages:
+            return chat_history
+        
+        return chat_history[-max_messages:]
+
     def get_chatbot_response(
         self, 
         chat_history: List[Dict[str, str]], 
@@ -498,66 +512,53 @@ class KaLLaMChatbot:
 
     def summarize_history(self, response_history: List, summarized_histories: List) -> str:
         """
-        Summarize chat history into concise paragraph
-
+        Summarize chat history into concise paragraph using Gemini API
+        
         Args:
             response_history: Full conversation history to summarize
             summarized_histories: Previous summarized histories
-
+            
         Returns:
             Summarized conversation history
         """
-        self.logger.info("Processing history summarization request")
-        self.logger.debug(f"Chat history length: {len(response_history)} items")
-        
+        self.logger.info("Processing history summarization request using Gemini API")
+        self.logger.debug(f"Chat history length: {len(response_history)} characters")
+
         try:         
             summary_prompt = f"""
-    Your Task:
-    Summarize the given chat history into a short paragraph including all key events.
+Your Task:
+Summarize the given chat history into a short paragraph including all key events.
 
-    Input Format:
-    chat_history (For content): {response_history}
-    summarized_history (For repetitive context): {summarized_histories}
-    current_time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Input Format:
+-chat_history (For content): {response_history}
+-summarized_history (For repetitive context): {summarized_histories}
+-current_time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-    Requirements:
-    - Keep summary concise with all key events and important details
-    - Include time/date references (group close dates/times together)
-    - Use timeline format if history is very long
-    - Summarize in Thai language only
-    - Return "None" if insufficient information
-    - Track patient's progress and health concerns
-    - Do not summarize the summarized_histories, only use it for repetitive context
-    - Do not include repetitive information accordding to summarized_histories.
-    - Incase of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons.
+Requirements:
+- Keep summary concise with all key events and important details
+- Include time/date references (group close dates/times together)
+- Use timeline format if history is very long
+- Summarize in Thai language only
+- Return "None" if insufficient information
+- Track patient's progress and health concerns
+- Do not summarize the summarized_histories, only use it for repetitive context
+- Do not include repetitive information according to summarized_histories.
+- In case of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons.
 
-    Response Format:
-    [Summarized content in Thai]
-    """
+Response Format:
+[Summarized content in Thai]
+"""
 
-            # Use the appropriate API to generate summary
-            if self.api_provider == "sea_lion":
-                messages = [{
-                    "role": "system",
-                    "content": "You are a medical assistant that summarizes patient conversations concisely in Thai."
-                }, {
-                    "role": "user", 
-                    "content": summary_prompt
-                }]
-                result = self._generate_feedback_sea_lion(messages)
-            else:  # gemini
-                result = self._generate_feedback_gemini(summary_prompt)
+            # Always use Gemini API for summarization
+            self.logger.debug("Using Gemini API for history summarization")
+            result = self._generate_feedback_gemini(summary_prompt)
             
             self.logger.info("Successfully generated history summary")
-            self.logger.debug(f"Summary result: {result[:200]}..." if len(result) > 200 else f"Summary result: {result}")
+            self.logger.debug(f"Summary result: {result}")
             return result
             
         except Exception as e:
-            self.logger.error(f"Error summarizing history: {str(e)}")
-            raise
-            
-        except Exception as e:
-            self.logger.error(f"Error summarizing history: {str(e)}")
+            self.logger.error(f"Error summarizing history with Gemini API: {str(e)}")
             raise
 
     def get_health_status(self) -> Dict[str, Any]:
@@ -570,9 +571,12 @@ class KaLLaMChatbot:
         status = {
             "status": "healthy",
             "api_provider": self.api_provider,
-            "sea_lion_configured": self.api_provider == "sea_lion" and hasattr(self, 'sea_lion_api_key'),
-            "gemini_configured": self.api_provider == "gemini" and hasattr(self, 'gemini_api_key'),
+            "main_chat_api": self.api_provider,
+            "summarization_api": "gemini",
+            "sea_lion_configured": hasattr(self, 'sea_lion_api_key') and self.sea_lion_api_key,
+            "gemini_configured": hasattr(self, 'gemini_api_key') and self.gemini_api_key,
             "active_model": getattr(self, 'gemini_model_name', None) if self.api_provider == "gemini" else "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+            "gemini_model": self.gemini_model_name,
             "timestamp": datetime.now().isoformat(),
             "logging_enabled": True,
             "log_level": self.logger.level
