@@ -411,9 +411,9 @@ def clear_all_buttons():
     ]
 
 def set_button_loading():
-    return gr.update(value="⏳ ประมวลผล...", variant="stop")
+    return gr.update(value="⏳ processing...", variant="stop")
 def reset_send_button():
-    return gr.update(value="📤 ส่งข้อความ", variant="primary")
+    return gr.update(value="📤 send", variant="primary")
 def reset_followup_button():
     return gr.update(value="🔔 สร้างการวิเคราะห์บทสนทนา", variant="secondary")
 def reset_update_summary_button():
