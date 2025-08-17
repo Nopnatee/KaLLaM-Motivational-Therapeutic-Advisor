@@ -23,7 +23,6 @@ class KaLLaMChatbot:
         
         Args:
             api_provider: Which API to use - "sea_lion" or "gemini" (default: "sea_lion")
-            max_messages: Maximum number of messages to keep in history
             log_level: Logging level (default: INFO)
         """
         if api_provider not in ["sea_lion", "gemini"]:
@@ -107,7 +106,8 @@ class KaLLaMChatbot:
 """,
             "core_rules": """
 **Core Rules:**
-- only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
+- Always and only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
+- On first interaction, always introduce yourself as "KaLLaM" or "กะหล่ำ" and your role as a friendly Thai doctor chatbot
 - When starting a conversation go slow and try to understand the patient's condition, don't rush to give solutions
 - Provide specific, actionable health improvement feedback
 - Focus on patient motivation for self-care
@@ -184,10 +184,8 @@ class KaLLaMChatbot:
         # Format messages
         messages = [system_message]
         
-        # Add truncated chat history
-        truncated_history = self._truncate_history(chat_history, max_messages=self.max_messages)
-        
-        for msg in truncated_history:
+        # Add full chat history (no truncation)
+        for msg in chat_history:
             # Ensure proper role mapping
             role = msg.get('role', 'user')
             if role not in ['user', 'assistant', 'system']:
@@ -381,9 +379,8 @@ class KaLLaMChatbot:
         """
         Build prompt for Gemini API (keeping original approach)
         """
-        # Convert history dicts into readable text
-        truncated_history = self._truncate_history(chat_history, max_messages=5)
-        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in truncated_history])
+        # Convert history dicts into readable text - use full history
+        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history])
         
         # Convert summarized history if available
         summarized_text = ""
@@ -392,7 +389,7 @@ class KaLLaMChatbot:
         
         now = datetime.now()
         
-        inputs = f"""- Chat history (truncated): {history_text}
+        inputs = f"""- Chat history (full): {history_text}
 - current_user_message: {user_message}
 - user_health_status: {health_status}
 - summarized_history: {summarized_text if summarized_text else "N/A"}"""
@@ -430,22 +427,6 @@ class KaLLaMChatbot:
 """
         
         return base_prompt
-
-    def _truncate_history(self, chat_history: List[Dict[str, str]], max_messages: int) -> List[Dict[str, str]]:
-        """
-        Truncate chat history to keep only recent messages
-        
-        Args:
-            chat_history: Full chat history
-            max_messages: Maximum number of messages to keep
-            
-        Returns:
-            Truncated chat history
-        """
-        if len(chat_history) <= max_messages:
-            return chat_history
-        
-        return chat_history[-max_messages:]
 
     def get_chatbot_response(
         self, 
