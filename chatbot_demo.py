@@ -1140,16 +1140,146 @@ Kongtup Sai-aroon kongtup.sip@student.mahidol.edu
 
 
 def main():
-    app = create_app()
-    app.launch(
-        share=True,
-        server_name="0.0.0.0",
-        server_port=7860,
-        debug=True,
-        show_error=True,
-        inbrowser=True,
-    )
+    """Main function to launch the application"""
+    try:
+        app = create_app()
+        
+        # Check if we should try to create a share link
+        try_share = True
+        
+        if try_share:
+            print("Attempting to create share link...")
+            print("Note: If share link creation fails, the app will still run locally")
+            
+            # Launch with share=True, but it will fallback to local automatically
+            app.launch(
+                share=False,  # Set to True if you want to try sharing
+                server_name="0.0.0.0",
+                server_port=7860,
+                debug=True,
+                show_error=True,
+                inbrowser=True
+            )
+        else:
+            print("Launching locally only...")
+            app.launch(
+                share=False,
+                server_name="127.0.0.1",
+                server_port=7860,
+                debug=True,
+                show_error=True,
+                inbrowser=True
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to launch application: {e}")
+        raise
 
+def main_local_only():
+    """Launch application locally only (no share link attempt)"""
+    try:
+        app = create_app()
+        print("Launching locally only...")
+        print("Your app will be available at: http://localhost:7860")
+        
+        app.launch(
+            share=True,
+            server_name="127.0.0.1",
+            server_port=7860,
+            debug=True,
+            show_error=True,
+            inbrowser=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to launch application: {e}")
+        raise
+
+def main_with_timeout():
+    """Launch with share link timeout detection"""
+    import time
+    import threading
+    
+    try:
+        app = create_app()
+        
+        # Create a flag to track if share link was created
+        share_success = threading.Event()
+        
+        def launch_with_monitoring():
+            try:
+                print("Attempting to create share link (with timeout monitoring)...")
+                app.launch(
+                    share=True,
+                    server_name="0.0.0.0",
+                    server_port=7860,
+                    debug=True,
+                    show_error=True,
+                    inbrowser=True
+                )
+                share_success.set()
+            except Exception as e:
+                print(f"Launch failed: {e}")
+        
+        # Start the launch in a separate thread
+        launch_thread = threading.Thread(target=launch_with_monitoring)
+        launch_thread.daemon = True
+        launch_thread.start()
+        
+        # Wait for a bit to see if share link gets created
+        time.sleep(5)
+        
+        if not share_success.is_set():
+            print("Share link creation is taking time or failed.")
+            print("Check the console output above for share link status.")
+            print("Your app should still be accessible locally at: http://localhost:7860")
+        
+        # Wait for the thread to complete
+        launch_thread.join()
+        
+    except Exception as e:
+        logger.error(f"Failed to launch application: {e}")
+        raise
+
+# Alternative: Use ngrok for sharing (requires installation)
+def main_with_ngrok():
+    """Alternative main function using ngrok for sharing"""
+    try:
+        # Install ngrok first: pip install pyngrok
+        from pyngrok import ngrok
+        
+        # Start ngrok tunnel
+        public_url = ngrok.connect(7860)
+        print(f"🌐 Public URL: {public_url}")
+        print(f"🏠 Local URL: http://localhost:7860")
+        
+        app = create_app()
+        app.launch(
+            share=False,
+            server_name="127.0.0.1",
+            server_port=7860,
+            debug=True,
+            show_error=True,
+            inbrowser=False  # Don't auto-open since we have ngrok URL
+        )
+    except ImportError:
+        print("pyngrok not installed. Install with: pip install pyngrok")
+        print("Falling back to regular launch...")
+        main_local_only()
+    except Exception as e:
+        logger.error(f"Failed to launch application: {e}")
+        raise
 
 if __name__ == "__main__":
-    main()
+    # Choose which version to use:
+    
+    # Option 1: Try share link (current behavior - will run locally if share fails)
+    # main()
+    
+    # Option 2: Local only (uncomment to use instead)
+    # main_local_only()
+    
+    # Option 3: Use ngrok for sharing (uncomment to use instead)
+    main_with_ngrok()
+    
+    # Option 4: With timeout monitoring (uncomment to use instead)
+    # main_with_timeout()
