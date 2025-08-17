@@ -557,6 +557,7 @@ def create_app() -> gr.Blocks:
                     show_label=True,
                     type="messages",
                     elem_classes=["chat-container"],
+                    value=[{"role": "assistant", "content": "สวัสดีค่ะ 😊 ฉันชื่อกะหล่ำ 🌿 เป็นคุณหมอที่จะคอยดูแลสุขภาพกายและใจของคุณนะคะ 💖 วันนี้รู้สึกยังไงบ้างคะ? 🌸"}]
                 )
 
                 with gr.Row():
@@ -813,6 +814,8 @@ def create_app() -> gr.Blocks:
                     show_label=True,
                     type="messages",
                     elem_classes=["chat-container"],
+                    value=[{"role": "assistant", "content": "Hello there I’m KaLLaM 🌿, your caring doctor chatbot 💖 I’ll be here to support your health and well-being. How are you feeling today? 😊"}]
+
                 )
 
                 with gr.Row():
