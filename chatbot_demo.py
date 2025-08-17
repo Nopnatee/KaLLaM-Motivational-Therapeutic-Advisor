@@ -1259,7 +1259,7 @@ def main_with_ngrok():
             server_port=7860,
             debug=True,
             show_error=True,
-            inbrowser=False  # Don't auto-open since we have ngrok URL
+            inbrowser=False 
         )
     except ImportError:
         print("pyngrok not installed. Install with: pip install pyngrok")
