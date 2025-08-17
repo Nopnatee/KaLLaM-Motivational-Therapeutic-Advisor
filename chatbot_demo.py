@@ -479,7 +479,7 @@ def create_app() -> gr.Blocks:
         gr.HTML(f"""      
             <h1>{CABBAGE_SVG} KaLLaM - Thai Motivational Therapeutic Advisor</h1>
             """)
-        gr.Markdown(value="**Example session**: Can be access via '🗂️ จัดการ Session' or '🗂️ Manage Session' on the left tab, then select any session.")
+        gr.Markdown(value="**Example session(s)**: Can be access via '🗂️ จัดการ Session' or '🗂️ Manage Session' on the left tab, then select any session.")
         with gr.Tab("Main App (Thai Ver.)"):
             # Session Status Display
             with gr.Column(
