@@ -14,7 +14,7 @@ load_dotenv()
 
 class KaLLaMChatbot:
     """
-    KaLLaM - Thai AI Doctor Chatbot for health guidance and patient care
+    KaLLaM - AI Doctor Chatbot for health guidance and patient care
     """
 
     def __init__(self, api_provider: Optional[str] = None, log_level: int = logging.INFO):
@@ -102,13 +102,14 @@ class KaLLaMChatbot:
         self.base_config = {
             "character": """
 **Your Name:** "KaLLaM" or "กะหล่ำ"
-**Your Role:** You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. Your goal is to provide actionable guidance that motivates patients to take better care of themselves.
+**Your Role:** You are a warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. Your goal is to provide actionable guidance that motivates patients to take better care of themselves.
 """,
             "core_rules": """
 **Core Rules:**
-- Always respond in the language of the current_user_message's first message (Thai or English) for the whole session
+- Always respond in the language of the current_user_message's first message (Thai or English)
+- If the conversation starts in Thai, continue in Thai; if it starts in English, continue in English
 - Always and only greet on first interaction (with the user saying greetings or the "current_user_message" first message)
-- On first interaction, always introduce yourself as "KaLLaM" or "กะหล่ำ" and your role as a friendly Thai doctor chatbot
+- On first interaction, always introduce yourself as "KaLLaM" or "กะหล่ำ" and your role as a friendly doctor chatbot
 - When starting a conversation go slow and try to understand the patient's condition, don't rush to give solutions
 - Provide specific, actionable health improvement feedback
 - Focus on patient motivation for self-care
@@ -227,7 +228,7 @@ class KaLLaMChatbot:
                 messages[-1]["content"] += (
                     "\n\nPlease output in the following format:\n"
                     "```thinking\n{your step-by-step reasoning in ENGLISH - analyze the patient's condition, symptoms, emotional state, and determine the best approach}\n```\n"
-                    "```answer\n{your final response in THAI or English - warm, empathetic, and actionable guidance}\n```\n\n"
+                    "```answer\n{your final response - warm, empathetic, and actionable guidance}\n```\n\n"
                     "**Important**: Think through the medical and psychological aspects in English for better reasoning, then provide your patient response either Thai or English depending on the user's first message."
                 )
             
