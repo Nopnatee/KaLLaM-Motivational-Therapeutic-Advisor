@@ -485,7 +485,7 @@ def create_app() -> gr.Blocks:
                 elem_classes=["session-info"]
             ):
                 gr.Markdown(
-                    value="## ประวัติของผู้ใช้งาน",
+                    value="## ข้อมูล Session",
                 )
                 with gr.Row():
                     with gr.Column():
@@ -1006,19 +1006,126 @@ def create_app() -> gr.Blocks:
                 inputs=None,
                 outputs=[chatbot_window]
             )
-        with gr.Tab("READ ME"):
+        with gr.Tab("POC Description"):
             gr.Markdown("""
-            ### 🧪 **Note for Proof of Concept (POC)**
-            * **Future Vision:** We aim for a fully localized Thai user interface (UI). 🇹🇭
-            * **Current Version:** For this POC, the UI has two versions. The fully Thai one and the partially English one to make it easier for judges to visualize and evaluate. 👀
-                        
+# 🧪 **Note for Proof of Concept (POC)**
 
-            ### ⚙️ **Key Features**
-            This system uses advanced AI to provide health advice and behavioral therapy, with the following features:
-            * **🔄 Auto-Summary:** Summarizes the conversation every 5 messages.
-            * **💾 Session Management:** Stores and manages conversation sessions.
-            * **🏥 Medical Tracking:** Tracks health conditions across sessions.
-            * **📊 Analytics:** Provides detailed usage statistics.""")
+## What is KaLLaM?
+
+**KaLLaM** (กะหล่ำ) is a warm Thai AI healthcare caring female doctor chatbot. Providing medical guidance and mental health support in Thai language, helping patients take better care of themselves.
+
+## Main Features
+
+### 🩺 **Thai Medical Assistant**
+- Speaks naturally in Thai with appropriate medical terminology
+- Behaves like a friendly Thai female doctor/psychiatrist
+- Understands Thai culture and communication style
+- Uses respectful Thai addressing from the according local cultural context
+
+### 💬 **Smart Conversations**
+- Remembers what you talked about before (up to 200 responses)
+- Can shoot follow-up questions
+- Can handle long conversations without losing main context
+
+### 🎯 **Health Assessment**
+- Asks about sleep, eating, exercise, mood, and stress
+- Digs deeper to find the real cause of problems
+- Uses proven questioning techniques from real doctors
+- Helps stubborn patients who don't want to change their habits
+
+### 🧠 **Two AI Options**
+- **SEA-Lion**: Specialized for Southeast Asian languages and context
+- **Gemini**: Google's AI as backup option
+
+## How It Works
+
+### Basic Usage
+```python
+# Create the chatbot
+doctor = KaLLaMChatbot(api_provider="sea_lion")
+
+# Get medical advice
+response = doctor.get_chatbot_response(
+    chat_history=previous_messages,
+    user_message="ปวดหัวมาก 3 วันแล้ว",
+    health_status="patient_info"
+)
+```
+
+### Key Capabilities
+1. **Medical Consultation**: Analyzes symptoms and gives advice
+2. **Follow-up Care**: Capable of asking "How are you doing now?" as poking conversation (automatically in future)
+3. **Conversation Summary**: Remembers important details from long chats
+4. **Progress Tracking**: Monitors if patients are following advice
+
+## What Makes It Special
+
+### 🇹🇭 **Thai-First Design**
+- Built specifically for Thai patients
+- Understands Thai medical culture
+- Uses appropriate Thai's level of formality
+- Considers Thai cultural context dynamics
+
+### 💪 **Handles Difficult Patients**
+- Doesn't give up when patients resist advice
+- Uses medical facts to motivate change
+- Handle behavior bhange & lifestyle interventions
+- Stays calm with angry or frustrated patients
+- Capable of using multiple professional psychologist techniques
+
+## Real-World Applications
+
+### 🏥 **Primary Healthcare**
+- First-line medical consultation
+- Symptom assessment and triage
+- Basic health screening
+- Referral guidance
+
+### 🧘 **Mental Health Support**
+- Stress and anxiety management
+- Depression screening
+- Emotional support
+- Crisis prevention
+
+### 🔄 **Chronic Care Management**
+- Medication reminders
+- Lifestyle coaching
+- Symptom monitoring
+- Patient education
+
+## POC Success Goals
+
+### Patient Experience
+- Patients feel understood and cared for
+- High engagement and return usage
+- Improved health awareness
+- Better compliance with medical advice
+
+### Clinical Impact
+- Accurate behavioral and medical guidance
+- Early problem detection
+- Better overall health outcomes
+
+### System Performance
+- Fast responses (under 3 seconds)
+- Works reliably 24/7
+- Handles multiple conversations
+- Graceful error recovery
+
+## Why This POC Matters
+
+Problem Statement
+Thailand’s Universal Coverage Scheme (UCS) offers highly affordable healthcare, often requiring only a 30 THB co-payment per visit. While this ensures accessibility, it has led to overutilization, with many individuals seeking hospital care for conditions that could be managed at home. This pattern places immense strain on medical professionals, who face overwhelming patient loads while receiving relatively low compensation, prompting many to seek employment in private institutions. The problem is further exacerbated by uneven resource distribution, with rural areas experiencing a significant shortage of medical personnel compared to urban centers. Additionally, lifestyle changes in rural communities, such as increased consumption of processed foods and reduced physical activity, have contributed to a rise in chronic diseases. Many individuals in these areas lack adequate health literacy, hindering their ability to manage their health effectively and leading to poor self-care practices.
+
+Proposing KaLLaM Chatbot
+To address these multifaceted challenges, we propose KaLLaM—a Thai Motivational Therapeutic Advisor chatbot powered by a large language model (LLM). KaLLaM is designed to act as an empathetic and supportive healthcare advisor, guiding patients in managing their health while reducing unnecessary hospital visits. By collecting medical history, symptoms, and lifestyle information, the chatbot provides users with personalized, evidence-based guidance tailored to their unique situation. This approach aims to bridge the gap between patients and healthcare providers, especially in underserved rural areas.
+
+Main Features
+KaLLaM offers a comprehensive approach to patient engagement. It provides actionable recommendations for both physical and mental well-being, using motivational and empathetic prompts to encourage healthy habits. The system can communicate in Thai or English, adapting its responses to cultural and linguistic context. Beyond advice, KaLLaM educates users about their own conditions, promoting self-care, disease prevention, and early intervention strategies—all in a patient-friendly conversational format. This feature is particularly crucial in rural areas, where access to healthcare professionals is limited, and health literacy is often low.
+
+Potential Impact
+By simulating a trusted healthcare adviser, KaLLaM empowers patients to take proactive steps toward managing their health. It has the potential to reduce unnecessary hospital visits, ease the workload of medical professionals, and optimize healthcare resource allocation. Furthermore, by enhancing health literacy and encouraging preventive care, the chatbot contributes to long-term improvements in public health and supports a more sustainable, equitable healthcare system across Thailand. In rural communities, where lifestyle changes and limited health education have led to increased chronic diseases, KaLLaM can play a pivotal role in reversing these trends and promoting healthier living.
+                        """)
 
         
     return app
