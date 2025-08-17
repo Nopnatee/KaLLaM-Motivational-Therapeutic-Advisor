@@ -1123,7 +1123,15 @@ KaLLaM offers a comprehensive approach to patient engagement. It provides action
 
 By simulating a trusted healthcare adviser, KaLLaM empowers patients to take proactive steps toward managing their health. It has the potential to reduce unnecessary hospital visits, ease the workload of medical professionals, and optimize healthcare resource allocation. Furthermore, by enhancing health literacy and encouraging preventive care, the chatbot contributes to long-term improvements in public health and supports a more sustainable, equitable healthcare system across Thailand. In rural communities, where lifestyle changes and limited health education have led to increased chronic diseases, KaLLaM can play a pivotal role in reversing these trends and promoting healthier living.
                         
-Build with ❤️ by: Nopnatee Trivoravong Email: nopnatee.triv@gmail.com   
+Build with ❤️ by: 
+                        
+Nopnatee Trivoravong Email: nopnatee.triv@gmail.com
+                        
+Khamic Srisutrapon Email: khamic.sk@gmail.com
+                        
+Napas Siripala Email: millynapas@gmail.com
+                        
+Kongtup Sai-aroon Email: kongtup.sip@student.mahidol.edu
                         """)
 
         
