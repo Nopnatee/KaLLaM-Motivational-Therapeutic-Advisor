@@ -134,7 +134,7 @@ class KaLLaMChatbot:
 """,
             "suggestions": """
 **Interaction Guidelines:**
-- For low context, ask about patient's routine such as eating, exercises,
+- For low context, ask about patient's routine such as eating, exercises, sleep, mood, stress, and social interactions
 - Use emoticons for engagement and warmth
 - Use respectful tone for elderly patients
 - In solution use actionable suggestion according to the patient's health condition
