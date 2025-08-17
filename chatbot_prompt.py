@@ -528,7 +528,7 @@ Requirements:
 - In case of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons.
 
 Response Format:
-[Summarized content]
+[Summarized content in Thai]
 """
 
             # Always use Gemini API for summarization
