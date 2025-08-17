@@ -227,7 +227,7 @@ class KaLLaMChatbot:
             if messages and messages[-1]["role"] == "user":
                 messages[-1]["content"] += (
                     "\n\nPlease output in the following format:\n"
-                    "```thinking\n{your step-by-step reasoning in ENGLISH - analyze the patient's condition, symptoms, emotional state, and determine the best approach}\n```\n"
+                    "```thinking\n{your step-by-step reasoning - analyze the patient's condition, symptoms, emotional state, and determine the best approach}\n```\n"
                     "```answer\n{your final response - warm, empathetic, and actionable guidance}\n```\n\n"
                     "**Important**: Think through the medical and psychological aspects in English for better reasoning, then provide your patient response either Thai or English depending on the user's first message."
                 )
