@@ -1142,7 +1142,7 @@ Kongtup Sai-aroon kongtup.sip@student.mahidol.edu
 def main():
     app = create_app()
     app.launch(
-        share=False,
+        share=True,
         server_name="0.0.0.0",
         server_port=7860,
         debug=True,
