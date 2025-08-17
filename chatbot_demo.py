@@ -498,7 +498,7 @@ def create_app() -> gr.Blocks:
                     new_session_btn = gr.Button("➕ Session ใหม่", variant="primary")
                     manage_session_btn = gr.Button("🗂️ จัดการ Session", variant="secondary")
                     edit_profile_btn = gr.Button("✏️ แก้ไขข้อมูลสุขภาพ", variant="secondary")
-                    update_summary_btn = gr.Button("📋 บังคับสรุปแชท (dev)", variant="secondary")
+                    # update_summary_btn = gr.Button("📋 บังคับสรุปแชท (dev)", variant="secondary")
                     
                 # Session Details Accordion
                 session_result = gr.Markdown(
@@ -527,10 +527,10 @@ def create_app() -> gr.Blocks:
                         with gr.Row():
                             switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
-                        with gr.Row():
-                            export_btn = gr.Button("📤 ส่งออกข้อมูล Session (dev)", variant="secondary")
-                            clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
-                            clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
+                        # with gr.Row():
+                        #     export_btn = gr.Button("📤 ส่งออกข้อมูล Session (dev)", variant="secondary")
+                        #     clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
+                        #     clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
                         close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
 
             # Health Management Section
@@ -670,27 +670,27 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            update_summary_btn.click(
-                fn=set_button_loading,
-                outputs=[update_summary_btn]
-            ).then(
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,health_management,session_management]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[summary_page]
-            ).then(
-                fn=force_update_summary, 
-                outputs=[summary_result]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            ).then(
-                fn=reset_update_summary_button,
-                outputs=[update_summary_btn]
-            )
+            # update_summary_btn.click(
+            #     fn=set_button_loading,
+            #     outputs=[update_summary_btn]
+            # ).then(
+            #     fn=clear_all_buttons,
+            #     inputs=None,
+            #     outputs=[chatbot_window,health_management,session_management]
+            # ).then(
+            #     fn=show_buttons,
+            #     inputs=None,
+            #     outputs=[summary_page]
+            # ).then(
+            #     fn=force_update_summary, 
+            #     outputs=[summary_result]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # ).then(
+            #     fn=reset_update_summary_button,
+            #     outputs=[update_summary_btn]
+            # )
 
             send_btn.click(
                 fn=set_button_loading,
@@ -716,26 +716,26 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            clear_chat_btn.click(
-                fn=clear_session,
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
+            # clear_chat_btn.click(
+            #     fn=clear_session,
+            #     outputs=[chatbot, msg, session_result, session_status, health_context]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # )
 
-            clear_summary_btn.click(
-                fn=clear_summary, 
-                outputs=[session_result]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
+            # clear_summary_btn.click(
+            #     fn=clear_summary, 
+            #     outputs=[session_result]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # )
 
-            export_btn.click(
-                fn=export_session, 
-                outputs=[session_result]
-            ) 
+            # export_btn.click(
+            #     fn=export_session, 
+            #     outputs=[session_result]
+            # ) 
 
         with gr.Tab("Main App (English Ver.)"):
             # Session Status Display
@@ -755,7 +755,7 @@ def create_app() -> gr.Blocks:
                     new_session_btn = gr.Button("➕ New Session", variant="primary")
                     manage_session_btn = gr.Button("🗂️ Manage Session", variant="secondary")
                     edit_profile_btn = gr.Button("✏️ Edit Health Profile", variant="secondary")
-                    update_summary_btn = gr.Button("📋 Force Chat Summary (dev)", variant="secondary")
+                    # update_summary_btn = gr.Button("📋 Force Chat Summary (dev)", variant="secondary")
                     
                 # Session Details Accordion
                 session_result = gr.Markdown(
@@ -784,10 +784,10 @@ def create_app() -> gr.Blocks:
                         with gr.Row():
                             switch_btn = gr.Button("🔀 Load Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 Refresh", variant="primary")
-                        with gr.Row():
-                            export_btn = gr.Button("📤 Export Session (dev)", variant="secondary")
-                            clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
-                            clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
+                        # with gr.Row():
+                        #     export_btn = gr.Button("📤 Export Session (dev)", variant="secondary")
+                        #     clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
+                        #     clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
                         close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
 
             # Health Management Section
@@ -926,27 +926,27 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            update_summary_btn.click(
-                fn=set_button_loading,
-                outputs=[update_summary_btn]
-            ).then(
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,health_management,session_management]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[summary_page]
-            ).then(
-                fn=force_update_summary, 
-                outputs=[summary_result]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            ).then(
-                fn=reset_update_summary_button,
-                outputs=[update_summary_btn]
-            )
+            # update_summary_btn.click(
+            #     fn=set_button_loading,
+            #     outputs=[update_summary_btn]
+            # ).then(
+            #     fn=clear_all_buttons,
+            #     inputs=None,
+            #     outputs=[chatbot_window,health_management,session_management]
+            # ).then(
+            #     fn=show_buttons,
+            #     inputs=None,
+            #     outputs=[summary_page]
+            # ).then(
+            #     fn=force_update_summary, 
+            #     outputs=[summary_result]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # ).then(
+            #     fn=reset_update_summary_button,
+            #     outputs=[update_summary_btn]
+            # )
 
             send_btn.click(
                 fn=set_button_loading,
@@ -972,21 +972,21 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            clear_chat_btn.click(
-                fn=clear_session,
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
+            # clear_chat_btn.click(
+            #     fn=clear_session,
+            #     outputs=[chatbot, msg, session_result, session_status, health_context]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # )
 
-            clear_summary_btn.click(
-                fn=clear_summary, 
-                outputs=[session_result]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
+            # clear_summary_btn.click(
+            #     fn=clear_summary, 
+            #     outputs=[session_result]
+            # ).then(
+            #     fn=refresh_session_list, 
+            #     outputs=[session_dropdown]
+            # )
 
             back_btn_1.click(
                 fn=hide_buttons,
