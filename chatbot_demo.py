@@ -1122,16 +1122,17 @@ To address these multifaceted challenges, we propose KaLLaM—a Thai Motivationa
 KaLLaM offers a comprehensive approach to patient engagement. It provides actionable recommendations for both physical and mental well-being, using motivational and empathetic prompts to encourage healthy habits. The system can communicate in Thai or English, adapting its responses to cultural and linguistic context. Beyond advice, KaLLaM educates users about their own conditions, promoting self-care, disease prevention, and early intervention strategies—all in a patient-friendly conversational format. This feature is particularly crucial in rural areas, where access to healthcare professionals is limited, and health literacy is often low.
 
 By simulating a trusted healthcare adviser, KaLLaM empowers patients to take proactive steps toward managing their health. It has the potential to reduce unnecessary hospital visits, ease the workload of medical professionals, and optimize healthcare resource allocation. Furthermore, by enhancing health literacy and encouraging preventive care, the chatbot contributes to long-term improvements in public health and supports a more sustainable, equitable healthcare system across Thailand. In rural communities, where lifestyle changes and limited health education have led to increased chronic diseases, KaLLaM can play a pivotal role in reversing these trends and promoting healthier living.
+
+                                           
+**Build with ❤️ by:** 
                         
-Build with ❤️ by: 
+Nopnatee Trivoravong nopnatee.triv@gmail.com
                         
-Nopnatee Trivoravong Email: nopnatee.triv@gmail.com
+Khamic Srisutrapon khamic.sk@gmail.com
                         
-Khamic Srisutrapon Email: khamic.sk@gmail.com
+Napas Siripala millynapas@gmail.com
                         
-Napas Siripala Email: millynapas@gmail.com
-                        
-Kongtup Sai-aroon Email: kongtup.sip@student.mahidol.edu
+Kongtup Sai-aroon kongtup.sip@student.mahidol.edu
                         """)
 
         
