@@ -247,23 +247,23 @@ def update_medical_condition(condition: str) -> Tuple[str, str]:
         logger.error(f"Error updating new condition: {e}")
         return get_current_session_status(), f"❌ **ไม่สามารถอัปเดตสถานะกำหนดเอง:** {str(e)}"
 
-def process_chat_message(current_users_message: str, history: List) -> Tuple[List, str]:
+def process_chat_message(user_message: str, history: List) -> Tuple[List, str]:
     """Process chat message and return updated history."""
     if not app_state.current_session_id:
         history.append({"role": "assistant", "content": "❌ **กรุณาสร้าง Session ใหม่ก่อนใช้งาน**"})
         return history, ""
     
-    if not current_users_message.strip():
+    if not user_message.strip():
         return history, ""
     
     try:
         # Add user message to history immediately
-        history.append({"role": "user", "content": current_users_message})
+        history.append({"role": "user", "content": user_message})
         
         # Process message through chatbot manager
         bot_response = chatbot_manager.handle_message(
             session_id=app_state.current_session_id,
-            current_users_message=current_users_message
+            user_message=user_message
         )
         
         # Add bot response to history

@@ -21,4 +21,4 @@ COPY . .
 EXPOSE 7860
 
 # Default command to run your app
-CMD ["python", "chatbot_demo.py"]
+CMD ["python", "chatbot_dev_app.py"]
