@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 
 # Import your prompt.py functions
-from chatbot_prompt import KaLLaMChatbot
+from agents.chatbot_prompt import KaLLaMChatbot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -102,6 +102,7 @@ class ChatbotManager:
                     tokens_input INTEGER DEFAULT 0,
                     tokens_output INTEGER DEFAULT 0,
                     latency_ms INTEGER,
+                    flags TEXT, -- comma-separated activation flags
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
                 )
