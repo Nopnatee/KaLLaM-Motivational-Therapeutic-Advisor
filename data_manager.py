@@ -32,7 +32,6 @@ class ChatbotManager:
     """
     def __init__(self, 
                  db_path: str = "chatbot_data.db", 
-                 api_provider: Optional[str] = "sea_lion", 
                  summarize_every_n_messages: Optional[int] = 10
                  ):
         """
@@ -44,7 +43,6 @@ class ChatbotManager:
             summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
         """
         self.chatbot = KaLLaMChatbot(api_provider=api_provider)
-        self.model_used = api_provider
         self.summarize_every_n_messages = summarize_every_n_messages  # Summarize every n messages
         self.db_path = Path(db_path)
         self.lock = threading.RLock()
@@ -89,7 +87,6 @@ class ChatbotManager:
                     total_user_messages INTEGER DEFAULT 0,
                     total_assistant_messages INTEGER DEFAULT 0,
                     total_summaries INTEGER DEFAULT 0,
-                    model_used TEXT DEFAULT {self.model_used},
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1
                 )
@@ -182,7 +179,6 @@ class ChatbotManager:
 
         Args:
             condition (Optional[str]): Optional health condition or context for the session.
-            model_used (str): The model name to use for the session. Defaults to "sea_lion".
 
         Returns:
             str: The newly created session ID.
@@ -193,9 +189,9 @@ class ChatbotManager:
         try:
             with self._get_connection() as conn:
                 conn.execute(f"""
-                    INSERT INTO sessions (session_id, timestamp, last_activity, condition, model_used)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (session_id, now, now, condition, self.model_used))
+                    INSERT INTO sessions (session_id, timestamp, last_activity, condition)
+                    VALUES (?, ?, ?, ?)
+                """, (session_id, now, now, condition))
                 conn.commit()
             
             logger.info(f"Started new session: {session_id}")
