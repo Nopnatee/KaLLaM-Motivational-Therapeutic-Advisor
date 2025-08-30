@@ -45,7 +45,6 @@ class ChatbotManager:
             summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
         """
         self.orchestrator = AgentsManager()
-        self.supervisor = SupervisorAgent()
         self.sum_every_n = summarize_every_n_messages
         self.db_path = Path(db_path)
         self.lock = threading.RLock()
@@ -226,29 +225,92 @@ class ChatbotManager:
                 session = self.get_session(session_id)
                 if not session:
                     raise ValueError(f"Session {session_id} not found")
+                
+                # Start timer for latency measurement
+                start_time = time.time()
 
                 # Get chat history
-                chat_history = self._get_chat_history(session_id)
-                summarized_histories = self._get_chat_summaries(session_id)
-                logger.debug(f"Fetched {len(chat_history)} messages for session {session_id}")
-                logger.debug(f"Fetched {len(summarized_histories)} summaries for session {session_id}")
+                eng_chat_history = self._get_chat_history(session_id)
+                eng_summarized_histories = self._get_chat_summaries(session_id)
+                logger.debug(f"Fetched {len(eng_chat_history)} messages for session {session_id}")
+                logger.debug(f"Fetched {len(eng_summarized_histories)} summaries for session {session_id}")
+
+                # Get activation flags
+                dict_flags = self._get_flags_dict(session_id, user_message)
+                translate_flag = dict_flags.get("translate")
+
+                # Translate the input message if needed
+                try:
+                    if translate_flag == "thai":
+                        logger.debug("Translation flag 'thai' detected, translating to English")
+                        eng_message = self.orchestrator.get_translation(message=user_message, 
+                                                                        original_lang="th", 
+                                                                        target_lang="en")
+                    elif translate_flag == "english":
+                        logger.debug("Translation flag 'english' detected, using original message")
+                        eng_message = user_message
+                    elif translate_flag is None:  # no flag set
+                        logger.debug("No translation flag set, using original message")
+                        eng_message = user_message
+                    else:
+                        # 🚨 Anything else = error
+                        raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
+
+                except Exception as e:
+                    logger.error(f"Error translating via translate flags for session {session_id}: {e}", exc_info=True)
+                    raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
+                                     An error occurred while translating. Please make sure you are using Thai or English and try again.""")
 
                 # Generate response
-                start_time = time.time()
-                bot_reply = self.chatbot.get_chatbot_response(
-                    chat_history,
-                    user_message=user_message,
+                bot_eng = self.chatbot.get_chatbot_response(
+                    chat_history=eng_chat_history,
+                    user_message=eng_message,
                     health_status=health_status or session.get("condition"),
-                    summarized_histories=summarized_histories
+                    summarized_histories=eng_summarized_histories
                 )
+
+                # Translate back to original language if needed
+                try:
+                    if translate_flag == "thai":
+                        logger.debug("Translation flag 'thai' detected, translating back to Thai")
+                        bot_reply = self.orchestrator.get_translation(message=bot_eng, 
+                                                                        original_lang="en", 
+                                                                        target_lang="th")
+                    elif translate_flag == "english":
+                        logger.debug("Translation flag 'english' detected, using original message")
+                        bot_reply = bot_eng
+                    elif translate_flag is None:  # no flag set
+                        logger.debug("No translation flag set, using original message")
+                        bot_reply = bot_eng
+                    else:
+                        # 🚨 Anything else = error
+                        raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
+
+                except Exception as e:
+                    logger.error(f"Error translating via translate flags for session {session_id}: {e}", exc_info=True)
+                    raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
+                                     An error occurred while translating. Please make sure you are using Thai or English and try again.""")
+
+                # Measure latency
                 latency_ms = int((time.time() - start_time) * 1000)
 
                 # Store messages in a transaction
                 with self._get_connection() as conn:
                     # Store user message
-                    self._add_message_to_conn(conn, session_id, "user", user_message)
+                    self._add_message_to_conn(conn=conn, 
+                                              session_id=session_id, 
+                                              role="user", 
+                                              content=user_message,
+                                              translated_content=eng_message,
+                                              flags=json.dumps(dict_flags))
+
                     # Store bot reply
-                    self._add_message_to_conn(conn, session_id, "assistant", bot_reply, latency_ms)
+                    self._add_message_to_conn(conn=conn, 
+                                              session_id=session_id, 
+                                              role="assistant", 
+                                              content=bot_reply,
+                                              translated_content=bot_eng,
+                                              latency_ms=latency_ms,)
                     
                     conn.commit()
 
@@ -265,7 +327,7 @@ class ChatbotManager:
                 logger.error(f"Error handling message for session {session_id}: {e}")
                 raise
     
-    def _get_flags_in_json(self, session_id: str) -> Dict[str, bool]: # Need dict return
+    def _get_flags_dict(self, session_id: str, user_message: str) -> Dict[str, bool]: # Need dict return
         """
         Returns:
             Dict[str, bool]: Dictionary with flags as keys and True as values.
@@ -279,10 +341,9 @@ class ChatbotManager:
                 }
         """
         self._validate_inputs(session_id=session_id)
-        flags = self.supervisor.get_activation_flags()
-        json_flags = json.dumps(flags) # dict to json string
-        
-        return json_flags
+        dict_flags = self.supervisor.get_activation_flags(user_message=user_message)
+
+        return dict_flags
 
     def _get_chat_history(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """
