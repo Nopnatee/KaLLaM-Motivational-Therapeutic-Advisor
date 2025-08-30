@@ -34,7 +34,8 @@ class ChatbotManager:
     """
     def __init__(self, 
                  db_path: str = "chatbot_data.db", 
-                 summarize_every_n_messages: Optional[int] = 10
+                 summarize_every_n_messages: Optional[int] = 10,
+                 message_limit: Optional[int] = 20,
                  ):
         """
         Initialize the ChatbotManager.
@@ -46,6 +47,7 @@ class ChatbotManager:
         """
         self.orchestrator = AgentsManager()
         self.sum_every_n = summarize_every_n_messages
+        self.message_limit = message_limit
         self.db_path = Path(db_path)
         self.lock = threading.RLock()
         self._create_tables()
@@ -230,8 +232,8 @@ class ChatbotManager:
                 start_time = time.time()
 
                 # Get chat history
-                eng_chat_history = self._get_chat_history(session_id)
-                eng_summarized_histories = self._get_chat_summaries(session_id)
+                eng_chat_history = self._get_eng_chat_history(session_id)
+                eng_summarized_histories = self._get_eng_chat_summaries(session_id)
                 logger.debug(f"Fetched {len(eng_chat_history)} messages for session {session_id}")
                 logger.debug(f"Fetched {len(eng_summarized_histories)} summaries for session {session_id}")
 
@@ -345,30 +347,37 @@ class ChatbotManager:
 
         return dict_flags
 
-    def _get_chat_history(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
+    def _get_eng_chat_history(self, session_id: str) -> List[Dict[str, str]]:
         """
-        Get chat history for a session.
+        Get the English version of chat history for a session.
 
         Args:
             session_id (str): ID of the session.
             limit (Optional[int]): Maximum number of messages to fetch. Defaults to None (all).
 
         Returns:
-            List[Dict[str, str]]: List of messages with role and content.
+            List[Dict[str, str]]: List of messages with role and English content.
         """
         with self._get_connection() as conn:
-            query = "SELECT role, content FROM messages WHERE session_id=? ORDER BY id"
+            query = """
+                SELECT role, translated_content AS content
+                FROM messages
+                WHERE session_id=?
+                ORDER BY id
+            """
             params = [session_id]
-            
-            if limit:
-                query += " LIMIT ?"
-                params.append(limit)
-            
-            history = [{"role": row["role"], "content": row["content"]} for row in conn.execute(query, params)]
-    
+
+            # Check for message limit
+            limit = self.message_limit
+            query += " LIMIT ?"
+            params.append(limit)
+
+            history = [{"role": row["role"], "content": row["content"]}
+                    for row in conn.execute(query, params)]
+
             return history
         
-    def _get_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
+    def _get_eng_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """
         Get chat summaries for a session.
 
@@ -464,10 +473,10 @@ class ChatbotManager:
 
         with self.lock:
             try:
-                response_history = self._get_chat_history(session_id)
+                response_history = self._get_eng_chat_history(session_id)
                 if not response_history:
                     raise ValueError("No chat history found for session")
-                summarized_histories = self._get_chat_summaries(session_id)
+                summarized_histories = self._get_eng_chat_summaries(session_id)
                 if not response_history:
                     raise ValueError("No messages found in session history")
                 logger.debug(f"Fetched {len(response_history)} messages for session {session_id}")
