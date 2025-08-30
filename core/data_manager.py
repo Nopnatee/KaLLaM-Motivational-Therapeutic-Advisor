@@ -377,6 +377,30 @@ class ChatbotManager:
 
             return history
         
+    def _get_original_chat_history(self, session_id: str) -> List[Dict[str, str]]:
+        """
+        Get the original chat history for a session.
+
+        Args:
+            session_id (str): ID of the session.
+
+        Returns:
+            List[Dict[str, str]]: List of messages with role and original content.
+        """
+        with self._get_connection() as conn:
+            query = """
+                SELECT role, content
+                FROM messages
+                WHERE session_id=?
+                ORDER BY id
+            """
+            params = [session_id]
+
+            history = [{"role": row["role"], "content": row["content"]}
+                    for row in conn.execute(query, params)]
+
+            return history
+        
     def _get_eng_chat_summaries(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """
         Get chat summaries for a session.
