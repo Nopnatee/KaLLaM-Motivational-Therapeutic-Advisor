@@ -12,6 +12,8 @@ from datetime import timedelta
 
 # Import your prompt.py functions
 from agents.chatbot_prompt import KaLLaMChatbot
+from core.orchestrator import AgentsManager
+from agents.supervisor import SupervisorAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,8 +44,9 @@ class ChatbotManager:
             api_provider (Optional[str]): API provider for KaLLaMChatbot. Defaults to "sea_lion".
             summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
         """
-        self.chatbot = KaLLaMChatbot(api_provider=api_provider)
-        self.summarize_every_n_messages = summarize_every_n_messages  # Summarize every n messages
+        self.orchestrator = AgentsManager()
+        self.supervisor = SupervisorAgent()
+        self.sum_every_n = summarize_every_n_messages
         self.db_path = Path(db_path)
         self.lock = threading.RLock()
         self._create_tables()
@@ -83,6 +86,7 @@ class ChatbotManager:
                     timestamp TEXT NOT NULL,
                     last_activity TEXT NOT NULL,
                     condition TEXT,
+                    saved_memory TEXT, -- json based memory
                     total_messages INTEGER DEFAULT 0,
                     total_user_messages INTEGER DEFAULT 0,
                     total_assistant_messages INTEGER DEFAULT 0,
@@ -99,10 +103,11 @@ class ChatbotManager:
                     timestamp TEXT NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
                     content TEXT NOT NULL,
+                    translated_content TEXT,
                     tokens_input INTEGER DEFAULT 0,
                     tokens_output INTEGER DEFAULT 0,
                     latency_ms INTEGER,
-                    flags TEXT, -- comma-separated activation flags
+                    flags TEXT, -- json activation flags
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
                 )
@@ -202,7 +207,7 @@ class ChatbotManager:
             logger.error(f"Failed to start session: {e}")
             raise
 
-    def handle_message(self, session_id: str, user_message: str, health_status: Optional[str] = None) -> str:
+    def handle_message(self, session_id: str, user_message: str, health_status: Optional[str] = None) -> str: # Need translated_content
         """
         Handle user message and generate bot response.
 
@@ -251,7 +256,7 @@ class ChatbotManager:
 
                 # Re-fetch updated session counts after storing messages and check for summarization
                 updated_session = self.get_session(session_id)
-                if updated_session["total_user_messages"] % self.summarize_every_n_messages == 0:
+                if updated_session["total_user_messages"] % self.sum_every_n == 0:
                     self.summarize_session(session_id)
 
                 return bot_reply
@@ -259,6 +264,25 @@ class ChatbotManager:
             except Exception as e:
                 logger.error(f"Error handling message for session {session_id}: {e}")
                 raise
+    
+    def _get_flags_in_json(self, session_id: str) -> Dict[str, bool]: # Need dict return
+        """
+        Returns:
+            Dict[str, bool]: Dictionary with flags as keys and True as values.
+            flags (dict): Activation signals, e.g.,
+                {
+                    "translate": "thai",   # force translation
+                    "summarize": True,
+                    "doctor": False,
+                    "psychologist": True
+                    "to core memory": True
+                }
+        """
+        self._validate_inputs(session_id=session_id)
+        flags = self.supervisor.get_activation_flags()
+        json_flags = json.dumps(flags) # dict to json string
+        
+        return json_flags
 
     def _get_chat_history(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """
@@ -307,7 +331,15 @@ class ChatbotManager:
                 for row in conn.execute(query, params)
             ]
 
-    def _add_message_to_conn(self, conn, session_id: str, role: str, content: str, latency_ms: Optional[int] = None):
+    def _add_message_to_conn(self, 
+                             conn, 
+                             session_id: str, 
+                             role: str, 
+                             content: str,
+                             translated_content: Optional[str] = None, 
+                             latency_ms: Optional[int] = None, 
+                             flags: Dict[str, Optional[bool]] = None):
+        
         """
         Add message using existing database connection.
 
@@ -327,10 +359,10 @@ class ChatbotManager:
 
         conn.execute("""
             INSERT INTO messages (
-                session_id, message_id, timestamp, role, content,
-                tokens_input, tokens_output, latency_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (session_id, message_id, now, role, content, tokens_in, tokens_out, latency_ms))
+                session_id, message_id, timestamp, role, content, translated_content,
+                tokens_input, tokens_output, latency_ms, flags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, message_id, now, role, content, translated_content, tokens_in, tokens_out, latency_ms, flags))
 
         # Additionally store messages count in session
         if role == "user":
