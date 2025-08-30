@@ -118,7 +118,7 @@ def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
         app_state.message_count = session.get('total_messages', 0)
         
         # Load chat history
-        chat_history = chatbot_manager._get_eng_chat_history(session_id)
+        chat_history = chatbot_manager._get_original_chat_history(session_id)
         gradio_history = []
         
         for msg in chat_history:
