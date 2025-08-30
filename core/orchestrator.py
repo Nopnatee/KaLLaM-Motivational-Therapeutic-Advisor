@@ -14,6 +14,17 @@ from agents.translator import TranslatorAgent
 from agents.doctor import DoctorAgent
 from agents.psychologist import PsychologistAgent
 
+config = {
+    # Example config options
+    "default_model": "gpt-4o",
+    "translation_model": "gpt-4o",
+    "summarization_model": "gpt-4o",
+    "doctor_model": "gpt-4o",
+    "psychologist_model": "gpt-4o",
+    "similarity_threshold": 0.75,
+    # Add more as needed
+}
+
 class AgentsManager:
 
     def __init__(self, log_level: int = logging.INFO):
