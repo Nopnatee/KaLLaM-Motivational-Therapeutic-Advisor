@@ -503,17 +503,17 @@ class ChatbotManager:
 
         with self.lock:
             try:
-                eng_response_history = self._get_eng_chat_history(session_id)
-                if not eng_response_history:
+                eng_chat_history = self._get_eng_chat_history(session_id)
+                if not eng_chat_history:
                     raise ValueError("No chat history found for session")
                 summarized_histories = self._get_eng_chat_summaries(session_id)
-                if not eng_response_history:
+                if not eng_chat_history:
                     raise ValueError("No messages found in session history")
-                logger.debug(f"Fetched {len(eng_response_history)} messages for session {session_id}")
+                logger.debug(f"Fetched {len(eng_chat_history)} messages for session {session_id}")
                 logger.debug(f"Fetched {len(summarized_histories)} summaries for session {session_id}")
 
 
-                summary = self.orchestrator.summarize_history(response_history=eng_response_history, summarized_histories=summarized_histories)
+                summary = self.orchestrator.summarize_history(chat_history=eng_chat_history, summarized_histories=summarized_histories)
 
                 with self._get_connection() as conn:
                     conn.execute("""

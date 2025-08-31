@@ -178,3 +178,16 @@ class Orchestrator:
             if agent != "final_output":
                 final.append(f"[{agent.upper()}]: {out}")
         return "\n".join(final)
+    
+    def summarize_history(self, 
+                          chat_history: List[Dict[str, str]],
+                          summarized_histories: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+        
+        try:
+            summary = self.summarizer.summarize(chat_history, summarized_histories)
+            self.logger.info("Summarization complete.")
+        except Exception as e:
+            self.logger.error(f"Error during summarization: {e}", exc_info=True)
+            summary = None
+
+        return summary
