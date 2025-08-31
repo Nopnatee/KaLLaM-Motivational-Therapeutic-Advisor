@@ -61,6 +61,7 @@ class ChatbotManager:
         Yields:
             sqlite3.Connection: An active SQLite connection.
         """
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.execute("PRAGMA foreign_keys = ON;")  # Enforce cascade deletes
@@ -288,7 +289,7 @@ class ChatbotManager:
                     
                     conn.commit()
 
-                logger.info("Processed message", extra={"session_id": session_id, "latency_ms": latency_ms})
+                logger.info(f"Processed message for {session_id} in {latency_ms} ms")
 
                 # Re-fetch updated session counts after storing messages and check for summarization
                 updated_session = self.get_session(session_id)
@@ -435,6 +436,7 @@ class ChatbotManager:
                              role: str, 
                              content: str,
                              translated_content: Optional[str] = None, 
+                             chain_of_thoughts: Optional[str] = None,
                              latency_ms: Optional[int] = None, 
                              flags: Dict[str, Optional[bool]] = None):
         
@@ -458,9 +460,9 @@ class ChatbotManager:
         conn.execute("""
             INSERT INTO messages (
                 session_id, message_id, timestamp, role, content, translated_content,
-                tokens_input, tokens_output, latency_ms, flags
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (session_id, message_id, now, role, content, translated_content, tokens_in, tokens_out, latency_ms, flags))
+                chain_of_thoughts, tokens_input, tokens_output, latency_ms, flags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, message_id, now, role, content, translated_content, chain_of_thoughts, tokens_in, tokens_out, latency_ms, flags))
 
         # Additionally store messages count in session
         if role == "user":
