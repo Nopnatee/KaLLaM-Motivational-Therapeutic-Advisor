@@ -48,6 +48,7 @@ class Orchestrator:
         # Optional config (model names, thresholds, etc.)
         self.config = config or {}
         self.logger.info(f"KaLLaM agents manager initialized successfully. Log level: {logging.getLevelName(log_level)}")
+        self._setup_logging(log_level)
 
     def _setup_logging(self, log_level: int) -> None:
         """Setup file + console logging for the orchestrator."""
@@ -84,30 +85,16 @@ class Orchestrator:
         self.logger.addHandler(console_handler)
 
     def get_flags_from_supervisor(self, user_message: str) -> dict:
-        """
-        Use the SupervisorAgent to determine which agents to activate.
-        Args:
-            user_message (str): The raw user input.
-        Returns:
-            dict: Flags indicating which agents to activate.
-        """
+
         self.logger.info("Getting flags from SupervisorAgent")
         dict_flags = self.supervisor.evaluate(user_message)
         self.logger.debug(f"Supervisor flags: {dict_flags}")
+
         return dict_flags
     
     def get_translation(self, message: str, flags: dict, type: str) -> str:
-        """
-        Handle translation requests.
-        Args:
-            message (str): The text to translate.
-            flags (dict): Flags indicating translation needs.
-        Returns:
-            str: Translated text.
-        """
-        translate_flag = flags.get("translate")
-
         try:
+            translate_flag = flags.get("translate")
             if type == "forward":  # Other -> English
                 if translate_flag == "thai":
                     logger.debug("Translation flag 'thai' detected, translating to English")
