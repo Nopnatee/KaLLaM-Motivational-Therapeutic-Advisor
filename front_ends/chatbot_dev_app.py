@@ -40,15 +40,15 @@ def get_current_session_status() -> str:
         avg_latency = stats.get('avg_latency')
         latency_str = f"{float(avg_latency):.1f}" if avg_latency is not None else "0.0"
         
-        condition = session_info.get('condition')
-        condition_str = condition if condition else 'ไม่ได้ระบุ'
+        saved_memories = session_info.get('saved_memories')
+        saved_memories_str = saved_memories if saved_memories else 'ไม่ได้ระบุ'
         
         return f"""
 🟢 **Session ปัจจุบัน:** `{app_state.current_session_id}`  
 📅 **สร้างเมื่อ:** {session_info.get('timestamp', 'N/A')}  
 💬 **จำนวนข้อความ:** {stats.get('message_count', 0) or 0} ข้อความ  
 📋 **จำนวนสรุป:** {session_info.get('total_summaries', 0) or 0} ครั้ง  
-🏥 **สถานะกำหนดเอง:** {condition_str}  
+🏥 **สถานะกำหนดเอง:** {saved_memories_str}  
 ⚡ **Latency เฉลี่ย:** {latency_str} ms  
 🔧 **Model:** {session_info.get('model_used', 'N/A')}
         """.strip()
@@ -63,11 +63,11 @@ def get_session_list() -> List[str]:
         session_options = []
         
         for session in sessions:
-            condition = (session.get('condition') or 'ไม่ระบุ')[:20]
+            saved_memories = (session.get('saved_memories') or 'ไม่ระบุ')[:20]
             msg_count = session.get('total_messages', 0)
             summary_count = session.get('total_summaries', 0)
             
-            display_name = f"{session['session_id']} | {msg_count}💬 {summary_count}📋 | {condition}"
+            display_name = f"{session['session_id']} | {msg_count}💬 {summary_count}📋 | {saved_memories}"
             session_options.append(display_name)
         
         return session_options if session_options else ["ไม่มี Session"]
@@ -86,17 +86,17 @@ def refresh_session_list() -> gr.update:
     session_list = get_session_list()
     return gr.update(choices=session_list, value=session_list[0] if session_list else None)
 
-def create_new_session(condition: str = "") -> Tuple[List, str, str, str, str]:
+def create_new_session(saved_memories: str = "") -> Tuple[List, str, str, str, str]:
     """Create a new session."""
     try:
-        session_id = chatbot_manager.start_session(condition=condition or None)
+        session_id = chatbot_manager.start_session(saved_memories=saved_memories or None)
         app_state.current_session_id = session_id
         app_state.message_count = 0
         
         status = get_current_session_status()
         result_msg = f"✅ **สร้าง Session ใหม่สำเร็จ!**\n\n🆔 Session ID: `{session_id}`"
         
-        return [], "", result_msg, status, condition
+        return [], "", result_msg, status, saved_memories
     except Exception as e:
         logger.error(f"Error creating new session: {e}")
         error_msg = f"❌ **ไม่สามารถสร้าง Session ใหม่:** {str(e)}"
@@ -129,9 +129,9 @@ def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
         
         status = get_current_session_status()
         result_msg = f"✅ **เปลี่ยน Session สำเร็จ!**\n\n🆔 Session ID: `{session_id}`"
-        condition = session.get('condition', '')
+        saved_memories = session.get('saved_memories', '')
         
-        return gradio_history, "", result_msg, status, condition
+        return gradio_history, "", result_msg, status, saved_memories
     except Exception as e:
         logger.error(f"Error switching session: {e}")
         error_msg = f"❌ **ไม่สามารถเปลี่ยน Session:** {str(e)}"
@@ -154,8 +154,8 @@ def get_session_info() -> str:
         total_tokens_in = stats.get('total_tokens_in') or 0
         total_tokens_out = stats.get('total_tokens_out') or 0
         
-        condition = session_info.get('condition')
-        condition_str = condition if condition else 'ไม่ได้ระบุ'
+        saved_memories = session_info.get('saved_memories')
+        saved_memories_str = saved_memories if saved_memories else 'ไม่ได้ระบุ'
         
         summarized_history = session_info.get('summarized_history')
         summary_str = summarized_history if summarized_history else 'ยังไม่มีการสรุป'
@@ -171,7 +171,7 @@ def get_session_info() -> str:
 - **สถานะ:** {'🟢 Active' if session_info.get('is_active') else '🔴 Inactive'}
 
 ### 🏥 ข้อมูลสถานะกำหนดเอง
-- **สถานะกำหนดเอง:** {condition_str}
+- **สถานะกำหนดเอง:** {saved_memories_str}
 
 ### 📈 สถิติการใช้งาน
 - **จำนวนข้อความทั้งหมด:** {stats.get('message_count', 0) or 0} ข้อความ
@@ -203,14 +203,14 @@ def get_all_sessions_info() -> str:
         
         for i, session in enumerate(sessions, 1):
             status_icon = "🟢" if session.get('is_active') else "🔴"
-            condition = session.get('condition', 'ไม่ระบุ')[:30]
+            saved_memories = session.get('saved_memories', 'ไม่ระบุ')[:30]
             
             session_info = f"""
 ## {i}. {status_icon} `{session['session_id']}`
 - **สร้าง:** {session.get('timestamp', 'N/A')}
 - **ใช้งานล่าสุด:** {session.get('last_activity', 'N/A')}
 - **ข้อความ:** {session.get('total_messages', 0)} | **สรุป:** {session.get('total_summaries', 0)}
-- **สภาวะ:** {condition}
+- **สภาวะ:** {saved_memories}
 - **Model:** {session.get('model_used', 'N/A')}
             """.strip()
             
@@ -221,30 +221,30 @@ def get_all_sessions_info() -> str:
         logger.error(f"Error getting all sessions info: {e}")
         return f"❌ **Error:** {str(e)}"
 
-def update_medical_condition(condition: str) -> Tuple[str, str]:
-    """Update medical condition for current session."""
+def update_medical_saved_memories(saved_memories: str) -> Tuple[str, str]:
+    """Update medical saved_memories for current session."""
     if not app_state.current_session_id:
         return get_current_session_status(), "❌ **ไม่มี Session ที่ใช้งาน**"
     
-    if not condition.strip():
+    if not saved_memories.strip():
         return get_current_session_status(), "❌ **กรุณาสถานะกำหนดเอง**"
     
     try:
-        # Update condition in database
+        # Update saved_memories in database
         with chatbot_manager._get_connection() as conn:
             conn.execute("""
                 UPDATE sessions 
-                SET condition = ?, last_activity = ? 
+                SET saved_memories = ?, last_activity = ? 
                 WHERE session_id = ?
-            """, (condition.strip(), datetime.now().isoformat(), app_state.current_session_id))
+            """, (saved_memories.strip(), datetime.now().isoformat(), app_state.current_session_id))
             conn.commit()
         
         status = get_current_session_status()
-        result = f"✅ **อัปเดตสถานะกำหนดเองสำเร็จ!**\n\n📝 **ข้อมูลใหม่:** {condition.strip()}"
+        result = f"✅ **อัปเดตสถานะกำหนดเองสำเร็จ!**\n\n📝 **ข้อมูลใหม่:** {saved_memories.strip()}"
         
         return status, result
     except Exception as e:
-        logger.error(f"Error updating new condition: {e}")
+        logger.error(f"Error updating new saved_memories: {e}")
         return get_current_session_status(), f"❌ **ไม่สามารถอัปเดตสถานะกำหนดเอง:** {str(e)}"
 
 def process_chat_message(user_message: str, history: List) -> Tuple[List, str]:
@@ -392,7 +392,7 @@ def create_app() -> gr.Blocks:
         color: white;
         font-weight: 500;
     }
-    .condition-box {
+    .saved_memories-box {
         border-radius: 8px;
         padding: 10px;
         margin: 5px 0;
@@ -428,7 +428,7 @@ def create_app() -> gr.Blocks:
                     
         💾 **Session Management:** จัดเก็บและจัดการ session การสนทนา  
                     
-        🏥 **Customizable Condition:** การตั้งสภาวะเบื้องต้นของนิสัยภายในบทสนทนา
+        🏥 **Customizable saved_memories:** การตั้งสภาวะเบื้องต้นของนิสัยภายในบทสนทนา
                     
         📊 **Analytics:** วิเคราะห์สถิติการใช้งานอย่างละเอียด
         """)
@@ -487,9 +487,9 @@ def create_app() -> gr.Blocks:
                 max_lines=5,
                 lines=3,
                 info="ข้อมูลนี้จะถูกเก็บใน session และใช้ปรับแต่งบทสนทนา",
-                elem_classes=["condition-box"]
+                elem_classes=["saved_memories-box"]
             )
-            update_condition_btn = gr.Button("💾 อัปเดตข้อมูล", variant="primary")
+            update_saved_memories_btn = gr.Button("💾 อัปเดตข้อมูล", variant="primary")
 
         gr.Markdown("---")
 
@@ -571,8 +571,8 @@ def create_app() -> gr.Blocks:
             outputs=[session_info_display]
         )
 
-        update_condition_btn.click(
-            fn=update_medical_condition,
+        update_saved_memories_btn.click(
+            fn=update_medical_saved_memories,
             inputs=[health_context],
             outputs=[session_status, session_result]
         )

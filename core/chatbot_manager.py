@@ -86,8 +86,7 @@ class ChatbotManager:
                     session_id TEXT PRIMARY KEY,
                     timestamp TEXT NOT NULL,
                     last_activity TEXT NOT NULL,
-                    condition TEXT,
-                    saved_memory TEXT, -- json based memory
+                    saved_memories TEXT, -- json based memory
                     total_messages INTEGER DEFAULT 0,
                     total_user_messages INTEGER DEFAULT 0,
                     total_assistant_messages INTEGER DEFAULT 0,
@@ -180,12 +179,12 @@ class ChatbotManager:
         
         return token_count
 
-    def start_session(self, condition: Optional[str] = None) -> str:
+    def start_session(self, saved_memories: Optional[str] = None) -> str:
         """
         Start a new chatbot session.
 
         Args:
-            condition (Optional[str]): Optional health condition or context for the session.
+            saved_memories (Optional[str]): Optional health saved_memories or context for the session.
 
         Returns:
             str: The newly created session ID.
@@ -196,9 +195,9 @@ class ChatbotManager:
         try:
             with self._get_connection() as conn:
                 conn.execute(f"""
-                    INSERT INTO sessions (session_id, timestamp, last_activity, condition)
+                    INSERT INTO sessions (session_id, timestamp, last_activity, saved_memories)
                     VALUES (?, ?, ?, ?)
-                """, (session_id, now, now, condition))
+                """, (session_id, now, now, saved_memories))
                 conn.commit()
             
             logger.info(f"Started new session: {session_id}")
@@ -264,10 +263,10 @@ class ChatbotManager:
                                      An error occurred while translating. Please make sure you are using Thai or English and try again.""")
 
                 # Generate response
-                bot_eng = self.chatbot.get_chatbot_response(
+                bot_eng = self.orchestrator.get_response(
                     chat_history=eng_chat_history,
                     user_message=eng_message,
-                    health_status=health_status or session.get("condition"),
+                    health_status=health_status or session.get("saved_memories"),
                     summarized_histories=eng_summarized_histories
                 )
 
