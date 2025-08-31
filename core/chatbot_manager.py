@@ -104,6 +104,7 @@ class ChatbotManager:
                     role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
                     content TEXT NOT NULL,
                     translated_content TEXT,
+                    chain_of_thoughts TEXT, -- json based internal reasoning
                     tokens_input INTEGER DEFAULT 0,
                     tokens_output INTEGER DEFAULT 0,
                     latency_ms INTEGER,
@@ -233,8 +234,10 @@ class ChatbotManager:
                 # Get eng chat history
                 eng_chat_history = self._get_eng_chat_history(session_id)
                 eng_summarized_histories = self._get_eng_chat_summaries(session_id)
+                chain_of_thoughts = self._get_chain_of_thoughts(session_id)
                 logger.debug(f"Fetched {len(eng_chat_history)} messages for session {session_id}")
                 logger.debug(f"Fetched {len(eng_summarized_histories)} summaries for session {session_id}")
+                logger.debug(f"Fetched {len(chain_of_thoughts)} chain of thoughts for session {session_id}")
 
                 # Get activation flags
                 dict_flags = self._get_flags_dict(session_id, user_message)
@@ -246,12 +249,15 @@ class ChatbotManager:
                                                                 type="forward")
 
                 # Generate response
-                bot_eng = self.orchestrator.get_response(
+                dict_response = self.orchestrator.get_response(
                     chat_history=eng_chat_history,
                     user_message=eng_message,
-                    health_status=health_status or session.get("saved_memories"),
+                    flags=dict_flags,
+                    chain_of_thoughts=chain_of_thoughts,
                     summarized_histories=eng_summarized_histories
                 )
+
+                bot_eng = dict_response["final_output"]
 
                 # Translate back to original language if needed
                 bot_reply = self.orchestrator.get_translation(message=bot_eng, 
@@ -277,6 +283,7 @@ class ChatbotManager:
                                               role="assistant", 
                                               content=bot_reply,
                                               translated_content=bot_eng,
+                                              chain_of_thoughts=json.dumps(dict_response),
                                               latency_ms=latency_ms,)
                     
                     conn.commit()
@@ -389,6 +396,38 @@ class ChatbotManager:
                 {"timestamp": row["timestamp"], "summary": row["summary"]}
                 for row in conn.execute(query, params)
             ]
+        
+    def _get_chain_of_thoughts(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Get chain of thoughts for a session.
+
+        Args:
+            session_id (str): ID of the session.
+
+        Returns:
+            List[Dict[str, Any]]: List of chain of thoughts with message_id and details.
+        """
+        with self._get_connection() as conn:
+            query = """
+                SELECT message_id, chain_of_thoughts
+                FROM messages
+                WHERE session_id=? AND chain_of_thoughts IS NOT NULL
+                ORDER BY id
+            """
+            params = [session_id]
+
+            thoughts = []
+            for row in conn.execute(query, params):
+                try:
+                    thoughts.append({
+                        "message_id": row["message_id"], # e.g., MSG-XXXXXXXX
+                        "contents": json.loads(row["chain_of_thoughts"]) # as Dict
+                    })
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in chain_of_thoughts for message {row['message_id']}")
+                    continue
+
+            return thoughts
 
     def _add_message_to_conn(self, 
                              conn, 

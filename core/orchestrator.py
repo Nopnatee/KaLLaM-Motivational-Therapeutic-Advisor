@@ -19,6 +19,7 @@ from agents.translator import TranslatorAgent
 from agents.doctor import DoctorAgent
 from agents.psychologist import PsychologistAgent
 from agents.supervisor import SupervisorAgent
+from agents.base_agent import BaseAgent
 
 config = {
     # Example config options
@@ -44,6 +45,7 @@ class Orchestrator:
         self.translator = TranslatorAgent()
         self.doctor = DoctorAgent()
         self.psychologist = PsychologistAgent()
+        self.base_agent = BaseAgent()
 
         # Optional config (model names, thresholds, etc.)
         self.config = config or {}
@@ -134,53 +136,37 @@ class Orchestrator:
     
         return translated_message
 
-    def get_response(self, user_message: str, flags: dict) -> dict:
-        """
-        Main orchestration logic.
-        Args:
-            user_message (str): The raw user input.
-            flags (dict): Activation signals, e.g.,
-                {
-                    "translate": "thai",   # force translation
-                    "summarize": True,
-                    "doctor": False,
-                    "psychologist": True
-                }
-        Returns:
-            dict: Structured response with agent outputs.
-        """
+    def get_response(self, 
+                     chat_history: List[Dict[str, str]], 
+                     user_message: str, 
+                     flags: dict,
+                     chain_of_thoughts: List[Dict[str, str]],
+                     summarized_histories: List[Dict[str, str]]) -> dict:
+        
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
-        response_bundle = {}
-        working_text = user_message
+        chain_of_thoughts = {}
 
-        # 1. Handle translation first if needed
-        if flags.get("translate") == "thai":
-            self.logger.debug("Activating TranslatorAgent for Thai → English")
-            translated_text = self.translator.translate(user_message, target_lang="en")
-            response_bundle["translator"] = translated_text
-            working_text = translated_text
-
-        # 2. Summarizer
-        if flags.get("summarize"):
-            self.logger.debug("Activating SummarizerAgent")
-            summary = self.summarizer.summarize(working_text)
-            response_bundle["summarizer"] = summary
-            working_text = summary  # optional
-
-        # 3. Specialized agents
+        # Get specialized agents suggestions
         if flags.get("doctor"):
             self.logger.debug("Activating DoctorAgent")
-            response_bundle["doctor"] = self.doctor.analyze(working_text)
+            chain_of_thoughts["doctor"] = self.doctor.analyze(user_message, 
+                                                              chat_history, 
+                                                              chain_of_thoughts,
+                                                              summarized_histories)
 
         if flags.get("psychologist"):
             self.logger.debug("Activating PsychologistAgent")
-            response_bundle["psychologist"] = self.psychologist.listen(working_text)
+            chain_of_thoughts["psychologist"] = self.psychologist.analyze(user_message, 
+                                                                          chat_history, 
+                                                                          chain_of_thoughts,
+                                                                          summarized_histories)
 
-        # 4. Merge and return results
-        response_bundle["final_output"] = self._merge_outputs(response_bundle)
+        # Get final output from all agents' suggestions
+        chain_of_thoughts["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
         self.logger.info("Routing complete. Returning results.")
-        return response_bundle
+
+        return chain_of_thoughts
 
     def _merge_outputs(self, outputs: dict) -> str:
         """
