@@ -25,7 +25,7 @@ config = {
     # Add more as needed
 }
 
-class AgentsManager:
+class Orchestrator:
 
     def __init__(self, log_level: int = logging.INFO):
 

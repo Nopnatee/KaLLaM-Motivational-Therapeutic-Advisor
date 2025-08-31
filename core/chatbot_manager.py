@@ -12,7 +12,7 @@ from datetime import timedelta
 
 # Import your prompt.py functions
 from agents.chatbot_prompt import KaLLaMChatbot
-from core.orchestrator import AgentsManager
+from core.orchestrator import Orchestrator
 from agents.supervisor import SupervisorAgent
 
 # Configure logging
@@ -45,7 +45,7 @@ class ChatbotManager:
             api_provider (Optional[str]): API provider for KaLLaMChatbot. Defaults to "sea_lion".
             summarize_every_n_messages (Optional[int]): How many messages before summarization. Defaults to 10.
         """
-        self.orchestrator = AgentsManager()
+        self.orchestrator = Orchestrator()
         self.sum_every_n = summarize_every_n_messages
         self.message_limit = message_limit
         self.db_path = Path(db_path)
