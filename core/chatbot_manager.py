@@ -241,26 +241,9 @@ class ChatbotManager:
                 translate_flag = dict_flags.get("translate")
 
                 # Translate the input message if needed
-                try:
-                    if translate_flag == "thai":
-                        logger.debug("Translation flag 'thai' detected, translating to English")
-                        eng_message = self.orchestrator.get_translation(message=user_message, 
-                                                                        flags=dict_flags,
-                                                                        type="forward")
-                    elif translate_flag == "english":
-                        logger.debug("Translation flag 'english' detected, using original message")
-                        eng_message = user_message
-                    elif translate_flag is None:  # no flag set
-                        logger.debug("No translation flag set, using original message")
-                        eng_message = user_message
-                    else:
-                        # 🚨 Anything else = error
-                        raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
-
-                except Exception as e:
-                    logger.error(f"Error translating via translate flags for session {session_id}: {e}", exc_info=True)
-                    raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
-                                     An error occurred while translating. Please make sure you are using Thai or English and try again.""")
+                eng_message = self.orchestrator.get_translation(message=user_message, 
+                                                                flags=dict_flags,
+                                                                type="forward")
 
                 # Generate response
                 bot_eng = self.orchestrator.get_response(
@@ -271,26 +254,9 @@ class ChatbotManager:
                 )
 
                 # Translate back to original language if needed
-                try:
-                    if translate_flag == "thai":
-                        logger.debug("Translation flag 'thai' detected, translating back to Thai")
-                        bot_reply = self.orchestrator.get_translation(message=bot_eng, 
-                                                                        flags=dict_flags,
-                                                                        type="backward")
-                    elif translate_flag == "english":
-                        logger.debug("Translation flag 'english' detected, using original message")
-                        bot_reply = bot_eng
-                    elif translate_flag is None:  # no flag set
-                        logger.debug("No translation flag set, using original message")
-                        bot_reply = bot_eng
-                    else:
-                        # 🚨 Anything else = error
-                        raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
-
-                except Exception as e:
-                    logger.error(f"Error translating via translate flags for session {session_id}: {e}", exc_info=True)
-                    raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
-                                     An error occurred while translating. Please make sure you are using Thai or English and try again.""")
+                bot_reply = self.orchestrator.get_translation(message=bot_eng, 
+                                                              flags=dict_flags,
+                                                              type="backward")
 
                 # Measure latency
                 latency_ms = int((time.time() - start_time) * 1000)
