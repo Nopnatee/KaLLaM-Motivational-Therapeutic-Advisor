@@ -230,7 +230,7 @@ class ChatbotManager:
                 # Start timer for latency measurement
                 start_time = time.time()
 
-                # Get chat history
+                # Get eng chat history
                 eng_chat_history = self._get_eng_chat_history(session_id)
                 eng_summarized_histories = self._get_eng_chat_summaries(session_id)
                 logger.debug(f"Fetched {len(eng_chat_history)} messages for session {session_id}")
@@ -245,8 +245,8 @@ class ChatbotManager:
                     if translate_flag == "thai":
                         logger.debug("Translation flag 'thai' detected, translating to English")
                         eng_message = self.orchestrator.get_translation(message=user_message, 
-                                                                        original_lang="th", 
-                                                                        target_lang="en")
+                                                                        flags=dict_flags,
+                                                                        type="forward")
                     elif translate_flag == "english":
                         logger.debug("Translation flag 'english' detected, using original message")
                         eng_message = user_message
@@ -275,8 +275,8 @@ class ChatbotManager:
                     if translate_flag == "thai":
                         logger.debug("Translation flag 'thai' detected, translating back to Thai")
                         bot_reply = self.orchestrator.get_translation(message=bot_eng, 
-                                                                        original_lang="en", 
-                                                                        target_lang="th")
+                                                                        flags=dict_flags,
+                                                                        type="backward")
                     elif translate_flag == "english":
                         logger.debug("Translation flag 'english' detected, using original message")
                         bot_reply = bot_eng
@@ -342,7 +342,7 @@ class ChatbotManager:
                 }
         """
         self._validate_inputs(session_id=session_id)
-        dict_flags = self.supervisor.get_activation_flags(user_message=user_message)
+        dict_flags = self.orchestrator.get_flags_from_supervisor(user_message=user_message)
 
         return dict_flags
 
