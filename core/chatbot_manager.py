@@ -36,7 +36,8 @@ class ChatbotManager:
     ChatbotManager handles chatbot sessions, message storage, summaries,
     and exports using a SQLite database with improved performance and reliability.
     """
-    
+    # ----------------------------------------------------------------------------------------------
+    # Initialize the ChatbotManager
     def __init__(self, 
                  db_path: str = "chatbot_data.db", 
                  summarize_every_n_messages: int = 10,
@@ -56,25 +57,6 @@ class ChatbotManager:
         
         self._create_tables()
         logger.info(f"ChatbotManager initialized with database: {self.db_path}")
-
-    @contextmanager
-    def _get_connection(self):
-        """Context manager for database connections with proper error handling."""
-        conn = None
-        try:
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA foreign_keys = ON")
-            conn.execute("PRAGMA journal_mode = WAL")  # Better concurrency
-            conn.row_factory = sqlite3.Row
-            yield conn
-        except sqlite3.Error as e:
-            if conn:
-                conn.rollback()
-            logger.error(f"Database error: {e}")
-            raise RuntimeError(f"Database operation failed: {e}")
-        finally:
-            if conn:
-                conn.close()
 
     def _create_tables(self):
         """Create database tables with optimized schema."""
@@ -141,6 +123,25 @@ class ChatbotManager:
             
             conn.commit()
 
+    @contextmanager
+    def _get_connection(self):
+        """Context manager for database connections with proper error handling."""
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")  # Better concurrency
+            conn.row_factory = sqlite3.Row
+            yield conn
+        except sqlite3.Error as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Database error: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+
     def _validate_inputs(self, **kwargs):
         """Validate input parameters with specific error messages."""
         validators = {
@@ -173,6 +174,9 @@ class ChatbotManager:
         self._token_cache[text_hash] = token_count
         return token_count
 
+    # ----------------------------------------------------------------------------------------------
+    # Session Management Methods
+
     def start_session(self, saved_memories: Optional[str] = None) -> str:
         """Start a new chatbot session with better error handling."""
         session_id = f"ID-{uuid.uuid4().hex[:8].upper()}"
@@ -196,6 +200,110 @@ class ChatbotManager:
         except Exception as e:
             logger.error(f"Failed to start session: {e}")
             raise
+
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get session information with caching consideration."""
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ?", 
+                    (session_id,)
+                ).fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error getting session {session_id}: {e}")
+            return None
+
+    def list_sessions(self, active_only: bool = True, limit: int = 50) -> List[Dict[str, Any]]:
+        """List sessions with improved query."""
+        try:
+            with self._get_connection() as conn:
+                query = """
+                    SELECT session_id, timestamp, last_activity, total_messages,
+                           total_user_messages, total_assistant_messages, 
+                           total_summaries, is_active
+                    FROM sessions
+                """
+                params = []
+                
+                if active_only:
+                    query += " WHERE is_active = 1"
+                
+                query += " ORDER BY last_activity DESC LIMIT ?"
+                params.append(limit)
+                
+                return [dict(row) for row in conn.execute(query, params)]
+        except Exception as e:
+            logger.error(f"Error listing sessions: {e}")
+            return []
+
+    def close_session(self, session_id: str) -> bool:
+        """Mark session as inactive with return status."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    UPDATE sessions 
+                    SET is_active = 0, last_activity = ? 
+                    WHERE session_id = ?
+                """, (datetime.now().isoformat(), session_id))
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    logger.info(f"Closed session {session_id}")
+                    return True
+                else:
+                    logger.warning(f"Session {session_id} not found for closing")
+                    return False
+        except Exception as e:
+            logger.error(f"Error closing session {session_id}: {e}")
+            return False
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete session with return status."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "DELETE FROM sessions WHERE session_id = ?", 
+                    (session_id,)
+                )
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    logger.info(f"Deleted session {session_id}")
+                    return True
+                else:
+                    logger.warning(f"Session {session_id} not found for deletion")
+                    return False
+        except Exception as e:
+            logger.error(f"Error deleting session {session_id}: {e}")
+            return False
+
+    def cleanup_old_sessions(self, days_old: int = 30) -> int:
+        """Clean up old sessions with better date handling."""
+        if days_old <= 0:
+            raise ValueError("days_old must be positive")
+            
+        try:
+            cutoff_date = (datetime.now() - timedelta(days=days_old)).isoformat()
+            
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    DELETE FROM sessions 
+                    WHERE last_activity < ?
+                """, (cutoff_date,))
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+            
+            logger.info(f"Cleaned up {deleted_count} sessions older than {days_old} days")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up old sessions: {e}")
+            raise
+
+    # ----------------------------------------------------------------------------------------------
+    # Message Handling and Helpers
 
     def handle_message(self, session_id: str, user_message: str, 
                       health_status: Optional[str] = None) -> str:
@@ -440,6 +548,9 @@ class ChatbotManager:
                 WHERE session_id = ?
             """, (now, session_id))
 
+    # ----------------------------------------------------------------------------------------------
+    # Summary
+
     def summarize_session(self, session_id: str) -> str:
         """Summarize session with better error handling."""
         with self.lock:
@@ -476,83 +587,9 @@ class ChatbotManager:
             except Exception as e:
                 logger.error(f"Error summarizing session {session_id}: {e}")
                 raise
-
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get session information with caching consideration."""
-        try:
-            with self._get_connection() as conn:
-                row = conn.execute(
-                    "SELECT * FROM sessions WHERE session_id = ?", 
-                    (session_id,)
-                ).fetchone()
-                return dict(row) if row else None
-        except Exception as e:
-            logger.error(f"Error getting session {session_id}: {e}")
-            return None
-
-    def list_sessions(self, active_only: bool = True, limit: int = 50) -> List[Dict[str, Any]]:
-        """List sessions with improved query."""
-        try:
-            with self._get_connection() as conn:
-                query = """
-                    SELECT session_id, timestamp, last_activity, total_messages,
-                           total_user_messages, total_assistant_messages, 
-                           total_summaries, is_active
-                    FROM sessions
-                """
-                params = []
-                
-                if active_only:
-                    query += " WHERE is_active = 1"
-                
-                query += " ORDER BY last_activity DESC LIMIT ?"
-                params.append(limit)
-                
-                return [dict(row) for row in conn.execute(query, params)]
-        except Exception as e:
-            logger.error(f"Error listing sessions: {e}")
-            return []
-
-    def close_session(self, session_id: str) -> bool:
-        """Mark session as inactive with return status."""
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute("""
-                    UPDATE sessions 
-                    SET is_active = 0, last_activity = ? 
-                    WHERE session_id = ?
-                """, (datetime.now().isoformat(), session_id))
-                conn.commit()
-                
-                if cursor.rowcount > 0:
-                    logger.info(f"Closed session {session_id}")
-                    return True
-                else:
-                    logger.warning(f"Session {session_id} not found for closing")
-                    return False
-        except Exception as e:
-            logger.error(f"Error closing session {session_id}: {e}")
-            return False
-
-    def delete_session(self, session_id: str) -> bool:
-        """Delete session with return status."""
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "DELETE FROM sessions WHERE session_id = ?", 
-                    (session_id,)
-                )
-                conn.commit()
-                
-                if cursor.rowcount > 0:
-                    logger.info(f"Deleted session {session_id}")
-                    return True
-                else:
-                    logger.warning(f"Session {session_id} not found for deletion")
-                    return False
-        except Exception as e:
-            logger.error(f"Error deleting session {session_id}: {e}")
-            return False
+    
+    # ----------------------------------------------------------------------------------------------
+    # Analytics & Export
 
     def get_session_stats(self, session_id: str) -> Dict[str, Any]:
         """Get session statistics with better structure."""
@@ -641,28 +678,4 @@ class ChatbotManager:
             
         except Exception as e:
             logger.error(f"Error exporting session {session_id}: {e}")
-            raise
-
-    def cleanup_old_sessions(self, days_old: int = 30) -> int:
-        """Clean up old sessions with better date handling."""
-        if days_old <= 0:
-            raise ValueError("days_old must be positive")
-            
-        try:
-            cutoff_date = (datetime.now() - timedelta(days=days_old)).isoformat()
-            
-            with self._get_connection() as conn:
-                cursor = conn.execute("""
-                    DELETE FROM sessions 
-                    WHERE last_activity < ?
-                """, (cutoff_date,))
-                
-                deleted_count = cursor.rowcount
-                conn.commit()
-            
-            logger.info(f"Cleaned up {deleted_count} sessions older than {days_old} days")
-            return deleted_count
-            
-        except Exception as e:
-            logger.error(f"Error cleaning up old sessions: {e}")
             raise
