@@ -1,9 +1,6 @@
 import os
 import json
 import logging
-import requests
-import re
-from google import genai
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -50,7 +47,6 @@ class Orchestrator:
         # Optional config (model names, thresholds, etc.)
         self.config = config or {}
         self.logger.info(f"KaLLaM agents manager initialized successfully. Log level: {logging.getLevelName(log_level)}")
-        self._setup_logging(log_level)
 
     def _setup_logging(self, log_level: int) -> None:
         """Setup file + console logging for the orchestrator."""
@@ -99,30 +95,30 @@ class Orchestrator:
             translate_flag = flags.get("translate")
             if type == "forward":  # Other -> English
                 if translate_flag == "thai":
-                    logger.debug("Translation flag 'thai' detected, translating to English")
+                    self.logger.debug("Translation flag 'thai' detected, translating to English")
                     translated_message = self.translator.get_translation(message=message, 
                                                                     target="english")
                 elif translate_flag == "english":
-                    logger.debug("Translation flag 'english' detected, using original message")
-                    return message
+                    self.logger.debug("Translation flag 'english' detected, using original message")
+                    translated_message = message
                 elif translate_flag is None:  # no flag set
-                    logger.debug("No translation flag set, using original message")
-                    return message
+                    self.logger.debug("No translation flag set, using original message")
+                    translated_message = message
                 else:
                     # 🚨 Anything else = error
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
             
             elif type == "backward":  # English -> Other
                 if translate_flag == "thai":
-                    logger.debug("Translation flag 'thai' detected, translating back to Thai")
+                    self.logger.debug("Translation flag 'thai' detected, translating back to Thai")
                     translated_message = self.translator.get_translation(message=message, 
                                                                     target="thai")
                 elif translate_flag == "english":
-                    logger.debug("Translation flag 'english' detected, using original message")
-                    return message
+                    self.logger.debug("Translation flag 'english' detected, using original message")
+                    translated_message = message
                 elif translate_flag is None:  # no flag set
-                    logger.debug("No translation flag set, using original message")
-                    return message
+                    self.logger.debug("No translation flag set, using original message")
+                    translated_message = message
                 else:
                     # 🚨 Anything else = error
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
@@ -130,7 +126,7 @@ class Orchestrator:
                 raise ValueError(f"Invalid translation type: {type}. Allowed values: 'forward' or 'backward'.")
             
         except Exception as e:
-            logger.error(f"Error translating via translate flags for session: {e}", exc_info=True)
+            self.logger.error(f"Error translating via translate flags for session: {e}", exc_info=True)
             raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
                                 An error occurred while translating. Please make sure you are using Thai or English and try again.""")
     
@@ -145,28 +141,28 @@ class Orchestrator:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
-        chain_of_thoughts = {}
+        chain_of_thought = {}
 
         # Get specialized agents suggestions
         if flags.get("doctor"):
             self.logger.debug("Activating DoctorAgent")
-            chain_of_thoughts["doctor"] = self.doctor.analyze(user_message, 
+            chain_of_thought["doctor"] = self.doctor.analyze(user_message, 
                                                               chat_history, 
                                                               chain_of_thoughts,
                                                               summarized_histories)
 
         if flags.get("psychologist"):
             self.logger.debug("Activating PsychologistAgent")
-            chain_of_thoughts["psychologist"] = self.psychologist.analyze(user_message, 
+            chain_of_thought["psychologist"] = self.psychologist.analyze(user_message, 
                                                                           chat_history, 
                                                                           chain_of_thoughts,
                                                                           summarized_histories)
 
         # Get final output from all agents' suggestions
-        chain_of_thoughts["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
+        chain_of_thought["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
         self.logger.info("Routing complete. Returning results.")
 
-        return chain_of_thoughts
+        return chain_of_thought
 
     def _merge_outputs(self, outputs: dict) -> str:
         """
