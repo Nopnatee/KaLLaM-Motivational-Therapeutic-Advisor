@@ -295,7 +295,7 @@ def process_chat_message(message: str, history: List, health_context: str) -> Tu
         bot_response = chatbot_manager.handle_message(
             session_id=app_state.current_session_id,
             user_message=message,
-            health_status=health_context
+            health_context=health_context
         )
         
         # Add bot response to history

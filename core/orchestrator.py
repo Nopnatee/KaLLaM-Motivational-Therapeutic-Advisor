@@ -134,6 +134,7 @@ class Orchestrator:
                      user_message: str, 
                      flags: Dict[str, Any],
                      chain_of_thoughts: List[Dict[str, str]],
+                     health_context: Optional[Dict[str, Any]],
                      summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
@@ -175,10 +176,10 @@ class Orchestrator:
     
     def summarize_history(self, 
                           chat_history: List[Dict[str, str]],
-                          summarized_histories: List[Dict[str, str]]) -> Optional[str]:
+                          eng_summaries: List[Dict[str, str]]) -> Optional[str]:
         
         try:
-            summary = self.summarizer.summarize(chat_history, summarized_histories)
+            summary = self.summarizer.summarize(chat_history, eng_summaries)
             self.logger.info("Summarization complete.")
         except Exception as e:
             self.logger.error(f"Error during summarization: {e}", exc_info=True)
