@@ -87,8 +87,12 @@ class Orchestrator:
         return dict_flags
     
     def get_translation(self, message: str, flags: dict, type: str) -> str:
+        
+        translated_message = None
+
         try:
             translate_flag = flags.get("translate")
+
             # Forward: Other -> English
             if type == "forward":  # Other -> English
                 if translate_flag == "thai":
@@ -125,7 +129,7 @@ class Orchestrator:
             raise
         except Exception as e:
             self.logger.error(f"Unexpected error in translation for session: {e}", exc_info=True)
-            RuntimeError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
+            raise RuntimeError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
                                 An error occurred while translating. Please make sure you are using Thai or English and try again.""")
             
         return translated_message
