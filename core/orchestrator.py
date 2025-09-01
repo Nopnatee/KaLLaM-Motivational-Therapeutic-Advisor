@@ -13,17 +13,6 @@ from agents.psychologist import PsychologistAgent
 from agents.supervisor import SupervisorAgent
 from agents.base_agent import BaseAgent
 
-config = {
-    # Example config options
-    "default_model": "gpt-4o",
-    "translation_model": "gpt-4o",
-    "summarization_model": "gpt-4o",
-    "doctor_model": "gpt-4o",
-    "psychologist_model": "gpt-4o",
-    "similarity_threshold": 0.75,
-    # Add more as needed
-}
-
 class Orchestrator:
 
     def __init__(self, log_level: int = logging.INFO):
@@ -40,7 +29,15 @@ class Orchestrator:
         self.base_agent = BaseAgent()
 
         # Optional config (model names, thresholds, etc.)
-        self.config = config or {}
+        self.config = {
+                        "default_model": "gpt-4o",
+                        "translation_model": "gpt-4o",
+                        "summarization_model": "gpt-4o",
+                        "doctor_model": "gpt-4o",
+                        "psychologist_model": "gpt-4o",
+                        "similarity_threshold": 0.75,
+                      }
+        
         self.logger.info(f"KaLLaM agents manager initialized successfully. Log level: {logging.getLevelName(log_level)}")
 
     def _setup_logging(self, log_level: int) -> None:
@@ -78,7 +75,7 @@ class Orchestrator:
             self.logger.addHandler(file_handler)
             self.logger.addHandler(console_handler)
 
-    def get_flags_from_supervisor(self, user_message: str) -> dict:
+    def get_flags_from_supervisor(self, user_message: str) -> Dict[str, Any]:
 
         self.logger.info("Getting flags from SupervisorAgent")
         dict_flags = self.supervisor.evaluate(user_message)
