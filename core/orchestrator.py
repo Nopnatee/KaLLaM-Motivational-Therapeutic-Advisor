@@ -5,10 +5,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-# Configure logging
+# Import logging
 import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load agents
 from agents.summarizer import SummarizerAgent
@@ -79,8 +77,9 @@ class Orchestrator:
         console_handler.setFormatter(formatter)
 
         # Add handlers
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
+        if not self.logger.handlers:
+            self.logger.addHandler(file_handler)
+            self.logger.addHandler(console_handler)
 
     def get_flags_from_supervisor(self, user_message: str) -> dict:
 
@@ -141,9 +140,10 @@ class Orchestrator:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
+        # Prepare current chain of thought container
         chain_of_thought = {}
 
-        # Get specialized agents suggestions
+        # Get specialized agents suggestions via flags with chain_of_thoughts
         if flags.get("doctor"):
             self.logger.debug("Activating DoctorAgent")
             chain_of_thought["doctor"] = self.doctor.analyze(user_message, 
