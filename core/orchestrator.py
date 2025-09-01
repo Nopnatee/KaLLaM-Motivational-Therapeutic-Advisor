@@ -36,6 +36,8 @@ class Orchestrator:
                         "doctor_model": "gpt-4o",
                         "psychologist_model": "gpt-4o",
                         "similarity_threshold": 0.75,
+                        "supported_languages": {"thai", "english"},
+                        "agents_language": "english"
                       }
         
         self.logger.info(f"KaLLaM agents manager initialized successfully. Log level: {logging.getLevelName(log_level)}")
@@ -49,8 +51,7 @@ class Orchestrator:
         self.logger.setLevel(log_level)
 
         # Remove existing handlers to avoid duplicate logs
-        if self.logger.handlers:
-            self.logger.handlers.clear()
+        self.logger.handlers.clear()
 
         # File handler for detailed logs
         file_handler = logging.FileHandler(
@@ -71,9 +72,8 @@ class Orchestrator:
         console_handler.setFormatter(formatter)
 
         # Add handlers
-        if not self.logger.handlers:
-            self.logger.addHandler(file_handler)
-            self.logger.addHandler(console_handler)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
 
     def get_flags_from_supervisor(self, user_message: str) -> Dict[str, Any]:
 
@@ -84,52 +84,50 @@ class Orchestrator:
         return dict_flags
     
     def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
-        
-        translated_message = None
-
+        """Translate message based on flags and translation type."""
         try:
-            translate_flag = flags.get("translate")
-
-            # Forward: Other -> English
-            if translation_type == "forward":  # Other -> English
-                if translate_flag == "thai":
-                    self.logger.debug("Translation flag 'thai' detected, translating to English")
-                    translated_message = self.translator.get_translation(message=message, 
-                                                                    target="english")
-                elif translate_flag == "english":
-                    self.logger.debug("Translation flag 'english' detected, using original message")
-                    translated_message = message
-                elif translate_flag is None:  # no flag set
-                    self.logger.debug("No translation flag set, using original message")
-                    translated_message = message
-                else:
-                    raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
+            source_lang = flags.get("translate")
+            default_target = self.config["agents_language"]
+            supported_langs = self.config["supported_languages"]
             
-            # Backward: English -> Other
-            elif translation_type == "backward":  # English -> Other
-                if translate_flag == "thai":
-                    self.logger.debug("Translation flag 'thai' detected, translating back to Thai")
-                    translated_message = self.translator.get_translation(message=message, 
-                                                                    target="thai")
-                elif translate_flag == "english":
-                    self.logger.debug("Translation flag 'english' detected, using original message")
-                    translated_message = message
-                elif translate_flag is None:  # no flag set
-                    self.logger.debug("No translation flag set, using original message")
-                    translated_message = message
-                else:
-                    raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
+            # Validate translation type
+            if translation_type not in {"forward", "backward"}:
+                raise ValueError(f"Invalid translation type: {translation_type}. Allowed: 'forward', 'backward'")
+            
+            # No translation needed if no source language
+            if source_lang is None:
+                self.logger.debug("No translation flag set, using original message")
+                return message
+            
+            # Validate source language
+            if source_lang not in supported_langs:
+                supported = ", ".join(f"'{lang}'" for lang in supported_langs)
+                raise ValueError(f"Invalid translate flag: {source_lang}. Supported: {supported}")
+            
+            # Determine target and if translation needed
+            if translation_type == "forward":
+                target_lang = default_target if source_lang != default_target else source_lang
+                needs_translation = source_lang != default_target
+            else:  # backward
+                target_lang = source_lang if source_lang != default_target else default_target
+                needs_translation = source_lang != default_target
+            
+            # Log and execute
+            if needs_translation:
+                self.logger.debug(f"Translating {translation_type}: '{source_lang}' -> '{target_lang}'")
+                return self.translator.get_translation(message=message, target=target_lang)
             else:
-                raise ValueError(f"Invalid translation type: {translation_type}. Allowed values: 'forward' or 'backward'.")
-            
-        except ValueError as e:
+                self.logger.debug(f"Source '{source_lang}' same as target, using original message")
+                return message
+                
+        except ValueError:
             raise
         except Exception as e:
-            self.logger.error(f"Unexpected error in translation for session: {e}", exc_info=True)
-            raise RuntimeError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
-                                An error occurred while translating. Please make sure you are using Thai or English and try again.""")
-            
-        return translated_message
+            self.logger.error(f"Unexpected error in translation: {e}", exc_info=True)
+            raise RuntimeError(
+                "เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาที่รองรับ แล้วลองอีกครั้ง\n"
+                "An error occurred while translating. Please make sure you are using a supported language and try again."
+            )
 
     def get_response(self, 
                      chat_history: List[Dict[str, str]], 
@@ -177,13 +175,13 @@ class Orchestrator:
     
     def summarize_history(self, 
                           chat_history: List[Dict[str, str]],
-                          summarized_histories: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+                          summarized_histories: List[Dict[str, str]]) -> Optional[str]:
         
         try:
             summary = self.summarizer.summarize(chat_history, summarized_histories)
             self.logger.info("Summarization complete.")
         except Exception as e:
             self.logger.error(f"Error during summarization: {e}", exc_info=True)
-            summary = None
+            summary = "Error during summarization."
 
-        return summary
+        return str(summary)
