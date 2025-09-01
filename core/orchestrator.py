@@ -5,9 +5,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-# Import logging
-import logging
-
 # Load agents
 from agents.summarizer import SummarizerAgent
 from agents.translator import TranslatorAgent
@@ -92,6 +89,7 @@ class Orchestrator:
     def get_translation(self, message: str, flags: dict, type: str) -> str:
         try:
             translate_flag = flags.get("translate")
+            # Forward: Other -> English
             if type == "forward":  # Other -> English
                 if translate_flag == "thai":
                     self.logger.debug("Translation flag 'thai' detected, translating to English")
@@ -104,9 +102,9 @@ class Orchestrator:
                     self.logger.debug("No translation flag set, using original message")
                     translated_message = message
                 else:
-                    # 🚨 Anything else = error
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
             
+            # Backward: English -> Other
             elif type == "backward":  # English -> Other
                 if translate_flag == "thai":
                     self.logger.debug("Translation flag 'thai' detected, translating back to Thai")
@@ -119,50 +117,51 @@ class Orchestrator:
                     self.logger.debug("No translation flag set, using original message")
                     translated_message = message
                 else:
-                    # 🚨 Anything else = error
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
             else:
                 raise ValueError(f"Invalid translation type: {type}. Allowed values: 'forward' or 'backward'.")
             
+        except ValueError as e:
+            raise
         except Exception as e:
-            self.logger.error(f"Error translating via translate flags for session: {e}", exc_info=True)
-            raise ValueError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
+            self.logger.error(f"Unexpected error in translation for session: {e}", exc_info=True)
+            RuntimeError("""เกิดข้อผิดพลาดขณะแปล โปรดตรวจสอบให้แน่ใจว่าคุณใช้ภาษาไทยหรือภาษาอังกฤษ แล้วลองอีกครั้ง
                                 An error occurred while translating. Please make sure you are using Thai or English and try again.""")
-    
+            
         return translated_message
 
     def get_response(self, 
                      chat_history: List[Dict[str, str]], 
                      user_message: str, 
-                     flags: dict,
+                     flags: Dict[str, Any],
                      chain_of_thoughts: List[Dict[str, str]],
-                     summarized_histories: List[Dict[str, str]]) -> dict:
+                     summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
         # Prepare current chain of thought container
-        chain_of_thought = {}
+        commentary = {}
 
         # Get specialized agents suggestions via flags with chain_of_thoughts
         if flags.get("doctor"):
             self.logger.debug("Activating DoctorAgent")
-            chain_of_thought["doctor"] = self.doctor.analyze(user_message, 
-                                                              chat_history, 
-                                                              chain_of_thoughts,
-                                                              summarized_histories)
+            commentary["doctor"] = self.doctor.analyze(user_message, 
+                                                        chat_history, 
+                                                        chain_of_thoughts,
+                                                        summarized_histories)
 
         if flags.get("psychologist"):
             self.logger.debug("Activating PsychologistAgent")
-            chain_of_thought["psychologist"] = self.psychologist.analyze(user_message, 
-                                                                          chat_history, 
-                                                                          chain_of_thoughts,
-                                                                          summarized_histories)
+            commentary["psychologist"] = self.psychologist.analyze(user_message, 
+                                                                    chat_history, 
+                                                                    chain_of_thoughts,
+                                                                    summarized_histories)
 
         # Get final output from all agents' suggestions
-        chain_of_thought["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
+        commentary["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
         self.logger.info("Routing complete. Returning results.")
 
-        return chain_of_thought
+        return commentary
 
     def _merge_outputs(self, outputs: dict) -> str:
         """
