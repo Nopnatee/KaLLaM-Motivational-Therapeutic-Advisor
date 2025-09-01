@@ -15,6 +15,9 @@ from agents.base_agent import BaseAgent
 
 class Orchestrator:
 
+    # ----------------------------------------------------------------------------------------------
+    # Initialization
+
     def __init__(self, log_level: int = logging.INFO):
 
         # Setup logging
@@ -75,6 +78,8 @@ class Orchestrator:
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
 
+    # ----------------------------------------------------------------------------------------------
+    # Supervisor & Routing
     def get_flags_from_supervisor(self, user_message: str) -> Dict[str, Any]:
 
         self.logger.info("Getting flags from SupervisorAgent")
@@ -83,6 +88,7 @@ class Orchestrator:
 
         return dict_flags
     
+    # Translation handling
     def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
         """Translate message based on flags and translation type."""
         try:
@@ -129,6 +135,7 @@ class Orchestrator:
                 "An error occurred while translating. Please make sure you are using a supported language and try again."
             )
 
+    # Main response generation logic
     def get_response(self, 
                      chat_history: List[Dict[str, str]], 
                      user_message: str, 
@@ -163,6 +170,7 @@ class Orchestrator:
 
         return commentary
 
+    # Dummy for now
     def _merge_outputs(self, outputs: dict) -> str:
         """
         Merge multiple agent responses into a single final string.
@@ -174,6 +182,7 @@ class Orchestrator:
                 final.append(f"[{agent.upper()}]: {out}")
         return "\n".join(final)
     
+    # Summarization handling
     def summarize_history(self, 
                           chat_history: List[Dict[str, str]],
                           eng_summaries: List[Dict[str, str]]) -> Optional[str]:
