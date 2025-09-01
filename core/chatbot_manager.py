@@ -247,7 +247,7 @@ class ChatbotManager:
                 # Translate the input message if needed
                 eng_message = self.orchestrator.get_translation(message=user_message, 
                                                                 flags=dict_flags,
-                                                                type="forward")
+                                                                translation_type="forward")
 
                 # Generate response
                 dict_response = self.orchestrator.get_response(
@@ -263,7 +263,7 @@ class ChatbotManager:
                 # Translate back to original language if needed
                 bot_reply = self.orchestrator.get_translation(message=bot_eng, 
                                                               flags=dict_flags,
-                                                              type="backward")
+                                                              translation_type="backward")
 
                 # Measure latency
                 latency_ms = int((time.time() - start_time) * 1000)

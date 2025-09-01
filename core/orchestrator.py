@@ -86,7 +86,7 @@ class Orchestrator:
 
         return dict_flags
     
-    def get_translation(self, message: str, flags: dict, type: str) -> str:
+    def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
         
         translated_message = None
 
@@ -94,7 +94,7 @@ class Orchestrator:
             translate_flag = flags.get("translate")
 
             # Forward: Other -> English
-            if type == "forward":  # Other -> English
+            if translation_type == "forward":  # Other -> English
                 if translate_flag == "thai":
                     self.logger.debug("Translation flag 'thai' detected, translating to English")
                     translated_message = self.translator.get_translation(message=message, 
@@ -109,7 +109,7 @@ class Orchestrator:
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
             
             # Backward: English -> Other
-            elif type == "backward":  # English -> Other
+            elif translation_type == "backward":  # English -> Other
                 if translate_flag == "thai":
                     self.logger.debug("Translation flag 'thai' detected, translating back to Thai")
                     translated_message = self.translator.get_translation(message=message, 
@@ -123,7 +123,7 @@ class Orchestrator:
                 else:
                     raise ValueError(f"Invalid translate flag: {translate_flag}. Allowed values: 'thai', 'english', or None.")
             else:
-                raise ValueError(f"Invalid translation type: {type}. Allowed values: 'forward' or 'backward'.")
+                raise ValueError(f"Invalid translation type: {translation_type}. Allowed values: 'forward' or 'backward'.")
             
         except ValueError as e:
             raise
