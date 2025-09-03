@@ -11,9 +11,7 @@ import time
 import threading
 
 # Import your prompt.py functions (maintained for compatibility)
-from agents.chatbot_prompt import KaLLaMChatbot
 from core.orchestrator import Orchestrator
-from agents.supervisor import SupervisorAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

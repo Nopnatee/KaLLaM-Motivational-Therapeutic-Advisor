@@ -3,6 +3,9 @@ import json
 import logging
 from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
+import sys
+import os
+
 from core.chatbot_manager import ChatbotManager
 
 # Initialize the chatbot manager

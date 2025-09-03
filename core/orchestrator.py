@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 # Load agents
-from agents.summarizer import SummarizerAgent
-from agents.translator import TranslatorAgent
-from agents.doctor import DoctorAgent
-from agents.psychologist import PsychologistAgent
-from agents.supervisor import SupervisorAgent
-from agents.base_agent import BaseAgent
+from core.agents.supervisor import SupervisorAgent
+from core.agents.summarizer import SummarizerAgent
+from core.agents.translator import TranslatorAgent
+from core.agents.doctor import DoctorAgent
+from core.agents.psychologist import PsychologistAgent
+from core.agents.base_agent import BaseAgent
 
 class Orchestrator:
 
