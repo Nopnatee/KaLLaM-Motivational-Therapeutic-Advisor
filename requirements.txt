@@ -5,3 +5,7 @@ pyngrok==7.3.0
 python-dotenv
 strands-agents
 boto3
+sagemaker
+pydantic
+transformers
+tokenizers
