@@ -90,7 +90,7 @@ class Orchestrator:
     def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
         """Translate message based on flags and translation type."""
         try:
-            source_lang = flags.get("translate")
+            source_lang = flags.get("language")
             default_target = self.config["agents_language"]
             supported_langs = self.config["supported_languages"]
             

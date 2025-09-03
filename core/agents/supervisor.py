@@ -1,120 +1,129 @@
-# supervisor_agent.py
-# pip install "strands-agents" "boto3"
+# supervisor_agent_sagemaker.py
+# pip install "strands-agents" "boto3" "pydantic" "sagemaker" "python-dotenv"
 
-from typing import List, Literal
+import os
+import json
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from a .env file if present
 
+from typing import Literal
 from strands import Agent, tool
-from strands.models import BedrockModel
-from botocore.config import Config as BotocoreConfig
+import sagemaker
+from sagemaker.huggingface import HuggingFaceModel
 
+# --------------------------
+# AWS & Hugging Face Setup
+# --------------------------
+AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")  # SageMaker execution role
+AWS_REGION   = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-2")
+HF_MODEL_ID  = "aisingapore/Llama-SEA-LION-v3-8B-IT"
+HF_TASK      = "text-generation"  # adjust if model requires text2text-generation
 
+# --------------------------
+# SageMaker Model Wrapper
+# --------------------------
+class SageMakerModelWrapper:
+    def __init__(self, predictor):
+        self.predictor = predictor
+
+    def generate(self, prompt: str, max_length: int = 512, **kwargs):
+        response = self.predictor.predict({
+            "inputs": prompt,
+            "parameters": {"max_new_tokens": max_length}
+        })
+        # HF models return a list of dicts
+        if isinstance(response, list) and "generated_text" in response[0]:
+            return response[0]["generated_text"]
+        return response
+
+# --------------------------
+# Supervisor Agent
+# --------------------------
 class SupervisorAgent:
-    """Supervisor agent powered by Amazon Bedrock SEA-Lion.
-    - Produces structured decisions on which specialists to activate.
-    - Can synthesize a final response from collected context.
-    """
-
-    # ------------------------------------------------------------------
-    # Structured Output Schema (plain Python)
-    # ------------------------------------------------------------------
     SpecialistName = Literal["math_specialist", "code_specialist", "research_specialist"]
 
-    class ActivationFlag:
-        def __init__(self, specialist: "SupervisorAgent.SpecialistName", reason: str):
-            self.specialist = specialist
-            self.reason = reason
-
-    class SupervisorDecision:
-        def __init__(
-            self,
-            plan: str,
-            activate: List["SupervisorAgent.ActivationFlag"],
-            final_answer_allowed: bool
-        ):
-            self.plan = plan
-            self.activate = activate
-            self.final_answer_allowed = final_answer_allowed
-
-    # ------------------------------------------------------------------
-    # Tools for runtime configuration updates
-    # ------------------------------------------------------------------
     @staticmethod
     @tool
-    def update_model_id(model_id: str, agent: Agent) -> str:
-        agent.model.update_config(model_id=model_id)
-        return f"Supervisor model_id updated to {model_id}"
+    def update_max_tokens(max_tokens: int, agent: Agent) -> str:
+        agent.model.max_tokens = max_tokens
+        return f"Supervisor max_tokens updated to {max_tokens}"
 
-    @staticmethod
-    @tool
-    def update_temperature(temperature: float, agent: Agent) -> str:
-        agent.model.update_config(temperature=temperature)
-        return f"Supervisor temperature updated to {temperature}"
+    def __init__(self, aws_role_arn: str = AWS_ROLE_ARN, region: str = AWS_REGION):
+        # Create SageMaker session
+        sess = sagemaker.Session()
 
-    # ------------------------------------------------------------------
-    # Initialization
-    # ------------------------------------------------------------------
-    def __init__(
-        self,
-        model_id: str = "us.YOUR-SEALION-MODEL-ID",
-        region: str = "us-east-1",
-        guardrail_id: str = None,
-        guardrail_version: str = None,
-    ):
-        boto_cfg = BotocoreConfig(
-            retries={"max_attempts": 3, "mode": "standard"},
-            connect_timeout=5,
-            read_timeout=60,
+        # Deploy Hugging Face model
+        hf_model = HuggingFaceModel(
+            model_data=None,
+            role=aws_role_arn,
+            transformers_version="4.32.0",
+            pytorch_version="2.1.0",
+            py_version="py310",
+            env={
+                "HF_MODEL_ID": HF_MODEL_ID,
+                "HF_TASK": HF_TASK
+            },
+            sagemaker_session=sess
         )
 
-        supervisor_llm = BedrockModel(
-            model_id=model_id,
-            region_name=region,
-            streaming=False,
-            temperature=0.2,
-            top_p=0.8,
-            stop_sequences=["</END>"],
-
-            guardrail_id=guardrail_id,
-            guardrail_version=guardrail_version,
-            guardrail_trace="enabled",
-            guardrail_stream_processing_mode="sync",
-            guardrail_redact_input=True,
-            guardrail_redact_input_message="[User input redacted due to guardrail policy]",
-            guardrail_redact_output=False,
-
-            cache_prompt="default",
-            cache_tools="default",
-            boto_client_config=boto_cfg,
+        predictor = hf_model.deploy(
+            initial_instance_count=1,
+            instance_type="ml.g5.2xlarge"
         )
 
+        self.model = SageMakerModelWrapper(predictor)
+
+        # System prompt
         system_prompt = """\
-You are the SupervisorAgent. Read the user's request and decide which specialists to activate.
-Rules:
+You are the SupervisorAgent. Read the user's request and decide which specialists to activate according to the **Flags Schema:** or finalize the answer given the suggestion by other agents in structured string.
+**Rules:**
 - Prefer 1–2 specialists unless clearly multi-domain.
-- If trivial/general, set final_answer_allowed=true and activate=[].
-- When in doubt about math -> math_specialist. Code -> code_specialist. Factual info -> research_specialist.
-- Always produce a succinct plan.
-End messages with </END>.
-"""
+- You are an expert in routing requests to the right specialists.
+- Always respond **Output Schema:**.
 
+**Flags Schema:**
+{
+  "language": [detected language in lowercase, e.g. "thai", "english"],
+  "doctor": [true/false],
+  "psychologist": [true/false]
+}
+"""
+        # Create Strands Agent
         self.agent = Agent(
-            name="SupervisorAgent",
+            model=self,
             system_prompt=system_prompt,
-            model=supervisor_llm,
-            tools=[self.update_model_id, self.update_temperature],
+            tools=[self.update_max_tokens],
             callback_handler=None,
         )
 
-    # ------------------------------------------------------------------
+    # --------------------------
     # Public methods
-    # ------------------------------------------------------------------
-    def decide(self, user_message: str) -> "SupervisorDecision":
-        """Ask the supervisor for a structured decision on which agents to activate."""
-        return self.agent.structured_output(
-            self.SupervisorDecision,
-            f"User request: {user_message}\nDecide which specialists to activate."
-        )
+    # --------------------------
+    def decide(self, user_message: str) -> str:
+        prompt = f"User request: {user_message}\nDecide which specialists to activate and respond only in structured format according to the given **Flags Schema:**."
+        return self.model.generate(prompt)
 
-    def conclude(self, context: str) -> str:
-        """Use the supervisor to synthesize a final answer given collected context."""
-        return str(self.agent(context))
+    def conclude(self, context: str, language: str) -> str:
+        prompt = f"synthesize a response given collected context: {context} Respond only in {language} language."
+        return self.model.generate(prompt)
+
+    def cleanup(self):
+        # Delete SageMaker endpoint to avoid charges
+        self.model.predictor.delete_endpoint()
+
+# --------------------------
+# Example usage
+# --------------------------
+if __name__ == "__main__":
+    supervisor = SupervisorAgent()
+
+    user_input = "I have a headache and feel anxious about my exams."
+    decision = supervisor.decide(user_input)
+    print("Decision:", decision)
+
+    context = "Based on the analysis, it seems you might be experiencing stress-related symptoms."
+    final_response = supervisor.conclude(context, language="english")
+    print("Final Response:", final_response)
+
+    # Clean up SageMaker endpoint
+    supervisor.cleanup()
