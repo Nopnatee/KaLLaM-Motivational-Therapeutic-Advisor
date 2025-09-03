@@ -11,7 +11,6 @@ from core.agents.summarizer import SummarizerAgent
 from core.agents.translator import TranslatorAgent
 from core.agents.doctor import DoctorAgent
 from core.agents.psychologist import PsychologistAgent
-from core.agents.base_agent import BaseAgent
 
 class Orchestrator:
 
@@ -29,7 +28,6 @@ class Orchestrator:
         self.translator = TranslatorAgent()
         self.doctor = DoctorAgent()
         self.psychologist = PsychologistAgent()
-        self.base_agent = BaseAgent()
 
         # Optional config (model names, thresholds, etc.)
         self.config = {
@@ -83,7 +81,7 @@ class Orchestrator:
     def get_flags_from_supervisor(self, user_message: str) -> Dict[str, Any]:
 
         self.logger.info("Getting flags from SupervisorAgent")
-        dict_flags = self.supervisor.evaluate(user_message)
+        dict_flags = self.supervisor.decide(user_message)
         self.logger.debug(f"Supervisor flags: {dict_flags}")
 
         return dict_flags
@@ -165,7 +163,7 @@ class Orchestrator:
                                                                     summarized_histories)
 
         # Get final output from all agents' suggestions
-        commentary["final_output"] = self.base_agent.conclude(user_message, chain_of_thoughts)
+        commentary["final_output"] = self.supervisor.conclude(user_message, chain_of_thoughts)
         self.logger.info("Routing complete. Returning results.")
 
         return commentary
