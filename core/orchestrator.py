@@ -78,10 +78,24 @@ class Orchestrator:
 
     # ----------------------------------------------------------------------------------------------
     # Supervisor & Routing
-    def get_flags_from_supervisor(self, user_message: str) -> Dict[str, Any]:
+    def get_flags_from_supervisor(
+            self, 
+            chat_history: List[Dict[str, str]], 
+            user_message: str, 
+            memory_context: str, 
+            task: str, 
+            summarized_histories: Optional[List] = None
+            ) -> Dict[str, Any]:
 
         self.logger.info("Getting flags from SupervisorAgent")
-        dict_flags = self.supervisor.decide(user_message)
+        string_flags = self.supervisor.generate_feedback(
+            chat_history=chat_history, 
+            user_message=user_message,
+            memory_context=memory_context, 
+            task="flag", 
+            summarized_histories=summarized_histories
+            )
+        dict_flags = json.loads(string_flags)
         self.logger.debug(f"Supervisor flags: {dict_flags}")
 
         return dict_flags
@@ -139,7 +153,7 @@ class Orchestrator:
                      user_message: str, 
                      flags: Dict[str, Any],
                      chain_of_thoughts: List[Dict[str, str]],
-                     health_context: Optional[Dict[str, Any]],
+                     memory_context: Optional[Dict[str, Any]],
                      summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
@@ -163,7 +177,14 @@ class Orchestrator:
                                                                     summarized_histories)
 
         # Get final output from all agents' suggestions
-        commentary["final_output"] = self.supervisor.conclude(user_message, chain_of_thoughts)
+        commentary["final_output"] = self.supervisor.generate_feedback(
+            chat_history=chat_history, 
+            user_message=user_message,
+            memory_context=memory_context, 
+            task="flag", 
+            summarized_histories=summarized_histories,
+            commentary=commentary,
+            )
         self.logger.info("Routing complete. Returning results.")
 
         return commentary

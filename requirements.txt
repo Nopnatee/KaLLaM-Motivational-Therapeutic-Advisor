@@ -9,3 +9,4 @@ sagemaker
 pydantic
 transformers
 tokenizers
+"strands-agents[openai]" strands-agents-tools
