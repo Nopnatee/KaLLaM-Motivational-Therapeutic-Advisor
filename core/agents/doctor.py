@@ -1,6 +1,3 @@
-# doctor_agent.py
-# pip install "strands-agents" "boto3" "pydantic" "python-dotenv"
-
 from typing import List, Literal, Dict, Any, Optional
 import json
 import os
