@@ -24,59 +24,13 @@ GUARDRAIL_VERSION = None
 
 # --------------------------
 # Doctor Agent
+# -is static method good here?
 # --------------------------
+
 class DoctorAgent:
     SeverityLevel = Literal["low", "moderate", "high", "emergency"]
     RecommendationType = Literal["self_care", "consult_gp", "urgent_care", "emergency"]
 
-    @staticmethod
-    @tool
-    def update_model_id(model_id: str, agent: Agent) -> str:
-        """Update the model ID for the doctor agent"""
-        agent.model.update_config(model_id=model_id)
-        return f"Doctor model_id updated to {model_id}"
-
-    @staticmethod
-    @tool
-    def update_temperature(temperature: float, agent: Agent) -> str:
-        """Update the temperature for more/less creative responses"""
-        agent.model.update_config(temperature=temperature)
-        return f"Doctor temperature updated to {temperature}"
-
-    @staticmethod
-    @tool
-    def assess_symptom_severity(symptoms: str) -> Dict[str, Any]:
-        """Assess the severity of reported symptoms"""
-        # This is a simplified assessment - in real applications, 
-        # this would use more sophisticated medical logic
-        emergency_keywords = ["chest pain", "difficulty breathing", "severe bleeding", "unconscious", "stroke", "heart attack"]
-        urgent_keywords = ["high fever", "severe pain", "persistent vomiting", "severe headache"]
-        moderate_keywords = ["fever", "headache", "nausea", "fatigue", "cough"]
-        
-        symptoms_lower = symptoms.lower()
-        
-        if any(keyword in symptoms_lower for keyword in emergency_keywords):
-            return {"severity": "emergency", "recommendation": "emergency", "urgent": True}
-        elif any(keyword in symptoms_lower for keyword in urgent_keywords):
-            return {"severity": "high", "recommendation": "urgent_care", "urgent": True}
-        elif any(keyword in symptoms_lower for keyword in moderate_keywords):
-            return {"severity": "moderate", "recommendation": "consult_gp", "urgent": False}
-        else:
-            return {"severity": "low", "recommendation": "self_care", "urgent": False}
-
-    @staticmethod
-    @tool
-    def provide_first_aid_guidance(emergency_type: str) -> str:
-        """Provide basic first aid guidance for emergency situations"""
-        first_aid_guides = {
-            "chest_pain": "Call emergency services immediately. Have the person sit down and rest. If they have prescribed nitroglycerin, help them take it. Loosen tight clothing.",
-            "difficulty_breathing": "Call emergency services immediately. Help the person sit upright. Loosen tight clothing around neck and chest. If they have an inhaler, help them use it.",
-            "bleeding": "Apply direct pressure to the wound with clean cloth. Elevate the injured area if possible. Do not remove embedded objects.",
-            "choking": "For adults: Stand behind them, place hands below ribcage, thrust inward and upward. For infants: 5 back blows, then 5 chest thrusts.",
-            "burn": "Cool the burn with cool (not cold) running water for 10-20 minutes. Remove jewelry before swelling begins. Do not use ice or butter.",
-            "fracture": "Do not move the person unless in immediate danger. Immobilize the injured area. Apply ice wrapped in cloth to reduce swelling."
-        }
-        return first_aid_guides.get(emergency_type.lower(), "Call emergency services for immediate medical assistance.")
 
     def __init__(
         self,
@@ -235,7 +189,7 @@ Remember: Your primary goal is to be helpful while ensuring user safety through 
         """Handle follow-up consultations for ongoing health concerns"""
         
         prompt = f"""
-        FOLLOW-UP CONSULTATION:
+        FOLLOW-UP:
         
         Previous symptoms: {previous_symptoms}
         Current status: {current_status}
@@ -251,43 +205,3 @@ Remember: Your primary goal is to be helpful while ensuring user safety through 
         
         response = self.agent(prompt)
         return response
-
-# --------------------------
-# Example usage
-# --------------------------
-if __name__ == "__main__":
-    doctor = DoctorAgent(
-        model_id=MODEL_ID,
-        region=REGION,
-        guardrail_id=GUARDRAIL_ID,
-        guardrail_version=GUARDRAIL_VERSION
-    )
-
-    # Example 1: Basic symptom analysis
-    print("=== BASIC SYMPTOM ANALYSIS ===")
-    user_symptoms = "I have a headache, fever, and feel very tired. It started yesterday."
-    response = doctor.diagnose_and_advise(user_symptoms, language="english")
-    print("Doctor's Response:", response)
-    print()
-
-    # Example 2: Emergency situation
-    print("=== EMERGENCY SITUATION ===")
-    emergency = "Someone is having chest pain and difficulty breathing"
-    emergency_response = doctor.emergency_guidance(emergency, language="english")
-    print("Emergency Response:", emergency_response)
-    print()
-
-    # Example 3: Health information request
-    print("=== HEALTH INFORMATION ===")
-    health_info = doctor.provide_health_information("diabetes prevention", language="english")
-    print("Health Information:", health_info)
-    print()
-
-    # Example 4: Follow-up consultation
-    print("=== FOLLOW-UP CONSULTATION ===")
-    follow_up = doctor.follow_up_consultation(
-        previous_symptoms="headache and fever",
-        current_status="fever is gone but headache persists",
-        language="english"
-    )
-    print("Follow-up Response:", follow_up)
