@@ -120,9 +120,9 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 Read the user's request and decide which specialist agent to activate via flags response in json format.
 - You are an expert in routing requests to the right specialists.
 - You can activate multiple of them if clearly needed.
-- Always respond according to the **Output Schema**.
+- Always respond according to the **Output Schema:**.
 
-**Flags Schema:**
+**Output Schema:**
 {{
   "language": "[detected language in lowercase, e.g. 'thai', 'english']",
   "doctor": "[true/false]",

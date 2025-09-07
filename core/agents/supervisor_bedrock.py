@@ -16,7 +16,7 @@ access_key = os.getenv("AWS_ACCESS_KEY_ID")
 secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 region = os.getenv("AWS_DEFAULT_REGION")
 
-MODEL_ID = "Llama-SEA-LION-v3-8B-IT"
+MODEL_ID = "Llama-SEA-LION-v3-8B-IT" #Not real, need S3 bucket to load it to AWS Bedrock
 REGION   = "ap-southeast-2"
 
 GUARDRAIL_ID      = None

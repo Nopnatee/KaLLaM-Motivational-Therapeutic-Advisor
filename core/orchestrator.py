@@ -162,14 +162,14 @@ class Orchestrator:
         commentary = {}
 
         # Get specialized agents suggestions via flags with chain_of_thoughts
-        if flags.get("doctor"):
+        if flags.get("doctor"): # Dummy for now
             self.logger.debug("Activating DoctorAgent")
             commentary["doctor"] = self.doctor.analyze(user_message, 
                                                         chat_history, 
                                                         chain_of_thoughts,
                                                         summarized_histories)
 
-        if flags.get("psychologist"):
+        if flags.get("psychologist"): # Dummy for now
             self.logger.debug("Activating PsychologistAgent")
             commentary["psychologist"] = self.psychologist.analyze(user_message, 
                                                                     chat_history, 
