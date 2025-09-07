@@ -1,86 +1,27 @@
-# summarizer_agent.py
-# pip install "strands-agents" "boto3" "pydantic" "python-dotenv" "google-genai"
-
-from typing import List, Dict, Any, Optional
-import json
 import os
+import json
+import logging
+import requests
+import re
+from pathlib import Path
 from datetime import datetime
+from typing import List, Dict, Literal, Any, Optional
+
 from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from a .env file if present
+load_dotenv()
 
-from strands import Agent, tool
-from strands.models import BedrockModel
-from botocore.config import Config as BotocoreConfig
 
-# Import Gemini for summarization
-from google import genai
-
-# AWS credentials from environment
-access_key = os.getenv("AWS_ACCESS_KEY_ID")
-secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-region = os.getenv("AWS_DEFAULT_REGION")
-
-# Model configuration
-MODEL_ID = "Llama-SEA-LION-v3-8B-IT"
-REGION   = "ap-southeast-2"
-
-GUARDRAIL_ID      = None
-GUARDRAIL_VERSION = None
-
-# Gemini configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20"
-
-# --------------------------
-# Summarizer Agent
-# --------------------------
 class SummarizerAgent:
+    SummaryType = Literal["conversation", "medical_session", "health_insights", "progress_report"]
+    SummaryLength = Literal["brief", "detailed", "comprehensive"]
 
-    def __init__(
-        self,
-        model_id: str = MODEL_ID,
-        region: str = REGION,
-        guardrail_id: str = None,
-        guardrail_version: str = None,
-        gemini_api_key: str = GEMINI_API_KEY,
-        gemini_model_name: str = GEMINI_MODEL_NAME,
-    ):
-        # Setup AWS Bedrock model (for potential future use or consistency)
-        boto_cfg = BotocoreConfig(
-            retries={"max_attempts": 3, "mode": "standard"},
-            connect_timeout=5,
-            read_timeout=60,
-        )
-
-        bedrock_model = BedrockModel(
-            model_id=model_id,
-            region_name=region,
-            streaming=False,
-            temperature=0.2,  # Lower temperature for consistent summarization
-            top_p=0.8,
-            stop_sequences=["</END>"],
-
-            guardrail_id=guardrail_id,
-            guardrail_version=guardrail_version,
-            guardrail_trace="enabled",
-            guardrail_stream_processing_mode="sync",
-            guardrail_redact_input=True,
-            guardrail_redacted_input_message="[User input redacted due to privacy policy]",
-            guardrail_redact_output=False,
-
-            cache_prompt="default",
-            cache_tools="default",
-            boto_client_config=boto_cfg,
-        )
-
-        # Setup Gemini client for actual summarization work
-        if not gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is required for summarization functionality")
+    def __init__(self, log_level: int = logging.INFO):
+        self._setup_logging(log_level)
+        self._setup_api_clients()
         
-        self.gemini_client = genai.Client(api_key=gemini_api_key)
-        self.gemini_model_name = gemini_model_name
+        self.logger.info("Summarizer Agent initialized successfully")
 
-        system_prompt = """\
+        self.system_prompt = """
 You are a Medical Conversation Summarizer AI specializing in healthcare and mental health conversation analysis. Your role is to create concise, medically-relevant summaries of patient-doctor interactions.
 
 **Your Capabilities:**
@@ -112,49 +53,163 @@ You are a Medical Conversation Summarizer AI specializing in healthcare and ment
 - Provide actionable insights for healthcare continuity
 - Avoid redundant information from previous summaries
 
+**Language Guidelines:**
+- Respond in Thai and English as contextually appropriate
+- Use professional medical terminology accurately
+- Maintain cultural sensitivity in health communication
+- Ensure clarity for healthcare providers and patients
+
 Remember: Your summaries support continuity of care and help healthcare providers understand patient history and progress patterns.
 """
 
-        self.agent = Agent(
-            model=bedrock_model,
-            system_prompt=system_prompt,
-            tools=[],
-            callback_handler=None,
-        )
-
-    def _generate_summary_with_gemini(self, prompt: str) -> str:
-        """
-        Generate summary using Gemini API directly
+    def _setup_logging(self, log_level: int) -> None:
+        """Setup logging configuration"""
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
         
-        Args:
-            prompt: The summarization prompt
-            
-        Returns:
-            Generated summary text
-        """
+        self.logger = logging.getLogger(f"{__name__}.SummarizerAgent")
+        self.logger.setLevel(log_level)
+        
+        if self.logger.handlers:
+            self.logger.handlers.clear()
+        
+        file_handler = logging.FileHandler(
+            log_dir / f"summarizer_{datetime.now().strftime('%Y%m%d')}.log",
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+        
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+
+    def _setup_api_clients(self) -> None:
+        """Setup API clients"""
         try:
-            response = self.gemini_client.models.generate_content(
-                model=self.gemini_model_name,
-                contents=[prompt],
+            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
+            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            
+            if not self.sea_lion_api_key:
+                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+                
+            self.logger.info("SEA-Lion API client initialized for Summarizer Agent")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to initialize API clients: {str(e)}")
+            raise
+
+    def _format_messages(self, prompt: str, context: str = "") -> List[Dict[str, str]]:
+        """Format messages for API call"""
+        now = datetime.now()
+        
+        context_info = f"""
+**Current Context:**
+- Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
+- Summarization Context: {context}
+"""
+        
+        system_message = {
+            "role": "system",
+            "content": f"{self.system_prompt}\n\n{context_info}"
+        }
+        
+        user_message = {
+            "role": "user",
+            "content": prompt
+        }
+        
+        return [system_message, user_message]
+
+    def _generate_response(self, messages: List[Dict[str, str]]) -> str:
+        """Generate response using SEA-Lion API"""
+        try:
+            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
+            
+            headers = {
+                "Authorization": f"Bearer {self.sea_lion_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "messages": messages,
+                "chat_template_kwargs": {
+                    "thinking_mode": "on"
+                },
+                "max_tokens": 2000,
+                "temperature": 0.2,  # Lower temperature for consistent summarization
+                "top_p": 0.8,
+                "frequency_penalty": 0.1,
+                "presence_penalty": 0.1
+            }
+            
+            response = requests.post(
+                f"{self.sea_lion_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
             )
             
-            response_text = response.text
+            response.raise_for_status()
+            response_data = response.json()
             
-            # Check if response is None or empty
-            if response_text is None:
+            if "choices" not in response_data or len(response_data["choices"]) == 0:
+                self.logger.error(f"Unexpected response structure: {response_data}")
                 return "ไม่สามารถสร้างสรุปได้ในขณะนี้"
             
-            if isinstance(response_text, str) and response_text.strip() == "":
+            choice = response_data["choices"][0]
+            if "message" not in choice or "content" not in choice["message"]:
+                self.logger.error(f"Unexpected message structure: {choice}")
+                return "ไม่สามารถสร้างสรุปได้ในขณะนี้"
+                
+            raw_content = choice["message"]["content"]
+            
+            if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
+                self.logger.error("SEA-Lion API returned None or empty content")
                 return "ไม่สามารถสร้างสรุปได้ในขณะนี้"
             
-            return str(response_text).strip()
+            # Extract thinking and answer blocks
+            thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
+            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
             
+            reasoning = thinking_match.group(1).strip() if thinking_match else None
+            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            
+            if reasoning:
+                self.logger.debug(f"Summarizer reasoning:\n{reasoning}")
+            
+            self.logger.info(f"Generated summary (length: {len(final_answer)} chars)")
+            return final_answer
+            
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
+            return "เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
-            return f"เกิดข้อผิดพลาดในการสร้างสรุป: {str(e)}"
+            self.logger.error(f"Error generating response: {str(e)}")
+            return "เกิดข้อผิดพลาดในการสร้างสรุป"
 
-    # --------------------------
+    def _format_history_for_summarization(self, history: List[Dict[str, str]]) -> str:
+        """Format conversation history for summarization"""
+        if not history:
+            return "No conversation history provided"
+        
+        formatted_history = []
+        for msg in history:
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            formatted_history.append(f"{role}: {content}")
+        
+        return "\n".join(formatted_history)
+
     # Public methods
-    # --------------------------
     def summarize_conversation_history(
         self, 
         response_history: List[Dict[str, str]], 
@@ -173,32 +228,20 @@ Remember: Your summaries support continuity of care and help healthcare provider
             Summarized conversation history
         """
         
-        # Convert histories to text format similar to chatbot_prompt.py
-        history_text = ""
-        if response_history:
-            history_text = "\n".join([
-                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
-                for msg in response_history
-            ])
-        
-        summarized_text = ""
-        if summarized_histories:
-            summarized_text = "\n".join([
-                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
-                for msg in summarized_histories
-            ])
+        # Format histories
+        history_text = self._format_history_for_summarization(response_history) if response_history else ""
+        summarized_text = self._format_history_for_summarization(summarized_histories) if summarized_histories else ""
         
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # Create the summarization prompt following the exact structure from chatbot_prompt.py
-        summary_prompt = f"""
+        prompt = f"""
 Your Task:
 Summarize the given chat history into a short paragraph including all key events.
 
 Input Format:
--chat_history (For content): {history_text}
--summarized_history (For repetitive context): {summarized_text}
--current_time: {current_time}
+- chat_history (For content): {history_text}
+- summarized_history (For repetitive context): {summarized_text}
+- current_time: {current_time}
 
 Requirements:
 - Keep summary concise with all key events and important details
@@ -208,16 +251,24 @@ Requirements:
 - Return "None" if insufficient information
 - Track patient's progress and health concerns
 - Do not summarize the summarized_histories, only use it for repetitive context
-- Do not include repetitive information according to summarized_histories.
-- In case of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons.
+- Do not include repetitive information according to summarized_histories
+- In case of the information is already similar to the summarized_histories, just say ไม่มีข้อมูลใหม่ที่จำเป็นต้องสรุปเพิ่มเติมจากวันที่... (No new information to summarize from date...) without providing any reasons
 
 Response Format:
 [Summarized content]
+
+**Focus on:**
+- Medical symptoms and health concerns discussed
+- Treatment recommendations and patient responses
+- Emotional state and psychological well-being
+- Progress in health status or treatment compliance
+- Any red flags or concerning developments
+- Patient engagement and understanding levels
 """
         
-        # Use Gemini API for summarization
-        result = self._generate_summary_with_gemini(summary_prompt)
-        return result
+        context = f"Conversation summarization from {current_time}"
+        messages = self._format_messages(prompt, context)
+        return self._generate_response(messages)
 
     def summarize_medical_session(
         self, 
@@ -239,11 +290,7 @@ Response Format:
             Session summary
         """
         
-        history_text = "\n".join([
-            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
-            for msg in session_history
-        ])
-        
+        history_text = self._format_history_for_summarization(session_history)
         focus_text = ", ".join(focus_areas) if focus_areas else "general medical consultation"
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
@@ -290,10 +337,18 @@ Output Format:
 **Clinical Notes:** [Important observations for continuity]
 
 Respond primarily in {language} with appropriate medical terminology.
+
+**Structure Requirements:**
+- Use professional medical documentation format
+- Include timestamps and session context
+- Focus on actionable clinical information
+- Maintain clear, concise language
+- Ensure continuity of care focus
 """
         
-        result = self._generate_summary_with_gemini(prompt)
-        return result
+        context = f"Medical session summary: {session_type} session on {current_time}"
+        messages = self._format_messages(prompt, context)
+        return self._generate_response(messages)
 
     def extract_health_insights(
         self, 
@@ -313,11 +368,7 @@ Respond primarily in {language} with appropriate medical terminology.
             Health insights and patterns
         """
         
-        history_text = "\n".join([
-            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
-            for msg in conversation_history
-        ])
-        
+        history_text = self._format_history_for_summarization(conversation_history)
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         prompt = f"""
@@ -368,10 +419,18 @@ Output Format:
 **Recommendations:** [Suggested focus areas for future care]
 
 Respond primarily in {language} with actionable healthcare insights.
+
+**Analysis Focus:**
+- Pattern recognition across time periods
+- Clinical significance of changes
+- Behavioral health connections
+- Risk stratification and prevention
+- Patient engagement and motivation trends
 """
         
-        result = self._generate_summary_with_gemini(prompt)
-        return result
+        context = f"Health insights analysis for {time_period} period"
+        messages = self._format_messages(prompt, context)
+        return self._generate_response(messages)
 
     def create_progress_report(
         self, 
@@ -393,11 +452,7 @@ Respond primarily in {language} with actionable healthcare insights.
             Progress report comparing baseline to current status
         """
         
-        recent_text = "\n".join([
-            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
-            for msg in recent_conversations
-        ])
-        
+        recent_text = self._format_history_for_summarization(recent_conversations)
         focus_metrics = ", ".join(metrics_focus) if metrics_focus else "overall health and well-being"
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
@@ -454,7 +509,137 @@ Output Format:
 **Overall Assessment:** [Summary of progress trajectory]
 
 Respond primarily in {language} with clear progress indicators and actionable recommendations.
+
+**Report Standards:**
+- Evidence-based progress assessment
+- Clear comparison metrics
+- Actionable clinical recommendations
+- Timeline-based progress tracking
+- Goal-oriented outcome measures
 """
         
-        result = self._generate_summary_with_gemini(prompt)
-        return result
+        context = f"Progress report generation comparing baseline to current status"
+        messages = self._format_messages(prompt, context)
+        return self._generate_response(messages)
+
+    def generate_clinical_notes(
+        self,
+        session_content: str,
+        session_type: str = "consultation",
+        clinical_focus: List[str] = None,
+        language: str = "english"
+    ) -> str:
+        """
+        Generate structured clinical notes for medical documentation
+        
+        Args:
+            session_content: Content of the clinical session
+            session_type: Type of clinical session
+            clinical_focus: Specific clinical areas to emphasize
+            language: Language for clinical notes
+            
+        Returns:
+            Structured clinical notes
+        """
+        
+        focus_areas = ", ".join(clinical_focus) if clinical_focus else "general clinical assessment"
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        prompt = f"""
+Your Task:
+Generate structured clinical notes for medical documentation and continuity of care.
+
+Clinical Session Data:
+- Session Content: {session_content}
+- Session Type: {session_type}
+- Clinical Focus: {focus_areas}
+- Documentation Date: {current_time}
+
+Clinical Documentation Requirements:
+- Follow standard medical documentation format
+- Include subjective and objective findings
+- Document assessment and clinical reasoning
+- Provide clear treatment plan recommendations
+- Note any changes from previous assessments
+- Include risk factors and safety considerations
+
+SOAP Note Structure:
+**Subjective:** Patient's reported symptoms, concerns, and history
+**Objective:** Observable findings, mental status, and clinical observations
+**Assessment:** Clinical interpretation and diagnostic considerations
+**Plan:** Treatment recommendations, follow-up, and next steps
+
+Medical Documentation Standards:
+- Use appropriate medical terminology
+- Maintain professional clinical language
+- Include relevant timeline information
+- Document patient understanding and consent
+- Note any contraindications or concerns
+- Specify follow-up requirements
+
+Output Format:
+**CLINICAL NOTES - {session_type.upper()}**
+**Date:** {current_time}
+
+**SUBJECTIVE:**
+[Patient-reported information, symptoms, concerns]
+
+**OBJECTIVE:**
+[Clinical observations, mental status, behavioral observations]
+
+**ASSESSMENT:**
+[Clinical interpretation, severity assessment, diagnostic considerations]
+
+**PLAN:**
+[Treatment recommendations, medications, lifestyle modifications, follow-up]
+
+**ADDITIONAL NOTES:**
+[Risk factors, safety considerations, patient education provided]
+
+Respond in {language} using appropriate clinical documentation standards.
+
+**Documentation Focus:**
+- Clinical accuracy and completeness
+- Legal and regulatory compliance
+- Continuity of care support
+- Professional medical standards
+- Patient safety considerations
+"""
+        
+        context = f"Clinical notes generation for {session_type} session"
+        messages = self._format_messages(prompt, context)
+        return self._generate_response(messages)
+
+
+if __name__ == "__main__":
+    # Test the Summarizer Agent
+    try:
+        summarizer = SummarizerAgent(log_level=logging.DEBUG)
+        
+        # Test conversation summary
+        print("=== TEST: CONVERSATION SUMMARY ===")
+        chat_history = [
+            {"role": "user", "content": "I've been having headaches for the past week"},
+            {"role": "assistant", "content": "Tell me more about these headaches - when do they occur and how severe are they?"},
+            {"role": "user", "content": "They're usually worse in the afternoon, around 7/10 pain level"},
+            {"role": "assistant", "content": "That sounds concerning. Have you noticed any triggers like stress, lack of sleep, or screen time?"}
+        ]
+        
+        summary = summarizer.summarize_conversation_history(
+            response_history=chat_history,
+            language="english"
+        )
+        print(summary)
+        
+        # Test medical session summary
+        print("\n=== TEST: MEDICAL SESSION SUMMARY ===")
+        session_summary = summarizer.summarize_medical_session(
+            session_history=chat_history,
+            session_type="consultation",
+            focus_areas=["headache assessment", "symptom analysis"],
+            language="english"
+        )
+        print(session_summary)
+        
+    except Exception as e:
+        print(f"Error testing Summarizer Agent: {e}")
