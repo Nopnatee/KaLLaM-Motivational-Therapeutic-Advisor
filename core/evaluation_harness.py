@@ -1,9 +1,9 @@
 from typing import Dict, Any, List
-from core.agents.judges.llm_client import LLMClient
-from core.agents.judges.judge_evaluator import JudgeEvaluator
-from core.agents.judges.agentic_evaluator import AgenticEvaluator, SearchBackend, FetchBackend
-from core.agents.judges.embedding_scorer import EmbeddingScorer
-from core.agents.judges.psych_metrics import PsychMetrics
+from .judges.llm_client import LLMClient
+from .judges.judge_evaluator import JudgeEvaluator
+from .judges.agentic_evaluator import AgenticEvaluator, SearchBackend, FetchBackend
+from .judges.embedding_scorer import EmbeddingScorer
+from .judges.psych_metrics import PsychMetrics
 
 class EvaluationHarness:
     """

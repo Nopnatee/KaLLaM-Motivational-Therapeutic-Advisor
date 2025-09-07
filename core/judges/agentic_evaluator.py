@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Protocol
-from llm_client import LLMClient
+from .llm_client import LLMClient
 
 class SearchBackend(Protocol):
     def search(self, queries: List[str], k: int = 5) -> List[Dict[str, str]]:
