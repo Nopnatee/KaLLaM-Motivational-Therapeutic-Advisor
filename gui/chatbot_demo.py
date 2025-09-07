@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
-from core.chatbot_manager import ChatbotManager
+from kallam.app.chatbot_manager import ChatbotManager
 
 # key improvement: - delete notification
 # key improvement: - color

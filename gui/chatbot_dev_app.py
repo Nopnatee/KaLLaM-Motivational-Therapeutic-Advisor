@@ -6,7 +6,7 @@ from typing import List, Tuple, Optional, Dict, Any
 import sys
 import os
 
-from core.chatbot_manager import ChatbotManager
+from kallam.app.chatbot_manager import ChatbotManager
 
 # Initialize the chatbot manager
 chatbot_manager = ChatbotManager(api_provider="gemini")

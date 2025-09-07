@@ -1,6 +1,6 @@
 from typing import List, Dict
 from .llm_client import LLMClient
-from artificial_users import Persona
+from .artificial_users import Persona
 
 SESSION_PROMPT = """You are a behavioral-activation chatbot guiding a user through:
 rapport → mood assessment → psychoeducation → activity planning → obstacles → rewards → review.
