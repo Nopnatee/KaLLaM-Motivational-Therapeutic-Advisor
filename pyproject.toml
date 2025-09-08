@@ -15,11 +15,15 @@ requires-python = ">=3.10"
 dependencies = [
   "python-dotenv>=1.0.1",         # for load_dotenv
   "strands-agents>=0.1.0",        # strands Agent + BedrockModel
+  "strands-agents-tools",
+  "strands-agents-builder",
+  "google-genai",                 # google cloud api
   "boto3>=1.34.0",                # AWS SDK (brings in botocore)
   "numpy>=1.26.0",                # numerical utils
   "sentence-transformers>=2.6.0", # embeddings
   "transformers>=4.40.0",         # Hugging Face transformers
   "gradio>=4.0.0",                # UI
+  "pyngrok==7.3.0",               # Hosting gradio interface
 ]
 
 [project.optional-dependencies]

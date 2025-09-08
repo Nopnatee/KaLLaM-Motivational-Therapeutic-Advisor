@@ -107,10 +107,10 @@ Remember: Your primary goal is to be helpful while ensuring user safety through 
             model=bedrock_model,
             system_prompt=system_prompt,
             tools=[
-                self.update_model_id, 
-                self.update_temperature,
-                self.assess_symptom_severity,
-                self.provide_first_aid_guidance
+                # self.update_model_id,  comment cus it doesnt work
+                # self.update_temperature,
+                # self.assess_symptom_severity,
+                # self.provide_first_aid_guidance
             ],
             callback_handler=None,
         )

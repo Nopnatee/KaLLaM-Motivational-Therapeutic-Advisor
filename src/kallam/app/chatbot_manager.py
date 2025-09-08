@@ -145,8 +145,8 @@ class ChatbotManager:
         return self.sessions.create(saved_memories=saved_memories)
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        meta = self.sessions.get_raw(session_id)  # raw row dict for full parity
-        return meta
+        # Prefer a stable API; get_meta should return a dict-like row
+        return self.sessions.get_meta(session_id)
 
     def list_sessions(self, active_only: bool = True, limit: int = 50) -> List[Dict[str, Any]]:
         return self.sessions.list(active_only=active_only, limit=limit)
@@ -178,6 +178,9 @@ class ChatbotManager:
             eng_summaries = self.summaries.list(session_id)
             chain = self.messages.get_reasoning_traces(session_id, limit=10)
 
+            meta = self.sessions.get_meta(session_id) or {}
+            memory_context = (meta.get("saved_memories") or "") if isinstance(meta, dict) else ""
+
             # flags and translation
             flags = self._get_flags_dict(session_id, user_message)
             eng_msg = self.orchestrator.get_translation(
@@ -190,8 +193,10 @@ class ChatbotManager:
                 user_message=eng_msg,
                 flags=flags,
                 chain_of_thoughts=chain,
+                memory_context=memory_context,
                 summarized_histories=eng_summaries,
             )
+
             bot_eng = result["final_output"]
             bot_reply = self.orchestrator.get_translation(
                 message=bot_eng, flags=flags, translation_type="backward"
@@ -217,10 +222,30 @@ class ChatbotManager:
     def _get_flags_dict(self, session_id: str, user_message: str) -> Dict[str, Any]:
         self._validate_inputs(session_id=session_id)
         try:
-            return self.orchestrator.get_flags_from_supervisor(user_message=user_message)
+            # Build context Supervisor expects
+            chat_history = self.messages.get_translated_history(session_id, limit=self.message_limit) or []
+            summaries = self.summaries.list(session_id) or []
+            meta = self.sessions.get_meta(session_id) or {}
+            memory_context = (meta.get("saved_memories") or "") if isinstance(meta, dict) else ""
+
+            flags = self.orchestrator.get_flags_from_supervisor(
+                chat_history=chat_history,
+                user_message=user_message,
+                memory_context=memory_context,
+                task="flag",
+                summarized_histories=summaries
+            )
+            # Ensure language exists and is supported
+            lang = (flags or {}).get("language") or "english"
+            if lang not in {"thai", "english"}:
+                lang = "english"
+            flags["language"] = lang
+            return flags
         except Exception as e:
-            logger.warning(f"Failed to get flags from supervisor: {e}, using defaults")
-            return {"translate": False}
+            logger.warning(f"Failed to get flags from supervisor: {e}, using safe defaults")
+            # Safe defaults keep the pipeline alive
+            return {"language": "english", "doctor": False, "psychologist": False}
+
 
     def summarize_session(self, session_id: str) -> str:
         with self.lock:
@@ -234,19 +259,44 @@ class ChatbotManager:
             self.summaries.add(session_id, summary)
             return summary
 
-    def get_session_stats(self, session_id: str) -> Dict[str, Any]:
+    def get_session_stats(self, session_id: str) -> dict:
         stats, session = self.messages.aggregate_stats(session_id)
-        return {
-            "session_info": session,
-            "stats": SessionStats(
-                message_count=stats["message_count"] or 0,
-                total_tokens_in=stats["total_tokens_in"] or 0,
-                total_tokens_out=stats["total_tokens_out"] or 0,
-                avg_latency=float(stats["avg_latency"] or 0),
-                first_message=stats["first_message"],
-                last_message=stats["last_message"],
-            ),
+
+        stats_dict = {
+            "message_count": stats.get("message_count") or 0,
+            "total_tokens_in": stats.get("total_tokens_in") or 0,
+            "total_tokens_out": stats.get("total_tokens_out") or 0,
+            "avg_latency": float(stats.get("avg_latency") or 0),
+            "first_message": stats.get("first_message"),
+            "last_message": stats.get("last_message"),
         }
+
+        return {
+            "session_info": session,   # already a dict from MessageStore
+            "stats": stats_dict,       # plain dict, UI can call .get()
+        }
+
+    def get_original_chat_history(self, session_id: str, limit: int | None = None) -> list[dict]:
+        self._validate_inputs(session_id=session_id)
+        if limit is None:
+            limit = self.message_limit
+
+        if hasattr(self.messages, "get_history"):
+            return self.messages.get_history(session_id=session_id, limit=limit)
+
+        # Fallback: direct query
+        with sqlite_conn(str(self.db_path)) as c:
+            rows = c.execute(
+                """
+                SELECT role, content, timestamp
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY id ASC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def export_session_json(self, session_id: str) -> str:
         return self.exporter.export_session_json(session_id)

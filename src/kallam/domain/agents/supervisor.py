@@ -10,7 +10,6 @@ from datetime import datetime
 
 from typing import Literal, Optional, Dict, Any, List
 from strands import Agent, tool
-from strands.models.openai import OpenAIModel  # <-- swap provider
 
 
 class SupervisorAgent:

@@ -79,25 +79,27 @@ class Orchestrator:
     # ----------------------------------------------------------------------------------------------
     # Supervisor & Routing
     def get_flags_from_supervisor(
-            self, 
-            chat_history: List[Dict[str, str]], 
-            user_message: str, 
-            memory_context: str, 
-            task: str, 
-            summarized_histories: Optional[List] = None
-            ) -> Dict[str, Any]:
-
+        self,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        user_message: str = "",
+        memory_context: Optional[str] = "",
+        task: str = "flag",
+        summarized_histories: Optional[List] = None
+    ) -> Dict[str, Any]:
         self.logger.info("Getting flags from SupervisorAgent")
+        chat_history = chat_history or []
+        summarized_histories = summarized_histories or []
+        memory_context = memory_context or ""
+
         string_flags = self.supervisor.generate_feedback(
-            chat_history=chat_history, 
+            chat_history=chat_history,
             user_message=user_message,
-            memory_context=memory_context, 
-            task="flag", 
+            memory_context=memory_context,
+            task=task,
             summarized_histories=summarized_histories
-            )
+        )
         dict_flags = json.loads(string_flags)
         self.logger.debug(f"Supervisor flags: {dict_flags}")
-
         return dict_flags
     
     # Translation handling
@@ -181,7 +183,7 @@ class Orchestrator:
             chat_history=chat_history, 
             user_message=user_message,
             memory_context=memory_context, 
-            task="flag", 
+            task="finalize", 
             summarized_histories=summarized_histories,
             commentary=commentary,
             )

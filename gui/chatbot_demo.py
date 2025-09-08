@@ -37,7 +37,7 @@ CABBAGE_SVG = """
 
 
 # Initialize the chatbot manager
-chatbot_manager = ChatbotManager(api_provider="sea_lion")
+chatbot_manager = ChatbotManager()
 current_session_id = None
 
 # Configure logging

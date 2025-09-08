@@ -9,7 +9,7 @@ import os
 from kallam.app.chatbot_manager import ChatbotManager
 
 # Initialize the chatbot manager
-chatbot_manager = ChatbotManager(api_provider="gemini")
+chatbot_manager = ChatbotManager()
 current_session_id = None
 
 # Configure logging
@@ -121,7 +121,7 @@ def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
         app_state.message_count = session.get('total_messages', 0)
         
         # Load chat history
-        chat_history = chatbot_manager._get_original_chat_history(session_id)
+        chat_history = chatbot_manager.get_original_chat_history(session_id)
         gradio_history = []
         
         for msg in chat_history:
