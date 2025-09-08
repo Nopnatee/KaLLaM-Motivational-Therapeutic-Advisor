@@ -1,232 +1,241 @@
 #!/usr/bin/env python3
-# Minimal Gradio smoketest for ChatbotManager's SQLite paths (no agents).
-# Run: python tests/gradio_chatbot_manager_smoketest.py
+# ChatbotManager SQLite smoketest with explicit I/O visualization and signature-safe store calls.
+# No Orchestrator paths are ever called. Launches local, auto-opens browser.
+
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Tuple
 
 import gradio as gr
 
-# 1) Import the module to monkeypatch Orchestrator BEFORE ChatbotManager is constructed.
-from kallam.app import chatbot_manager as cm_mod  # adjust package root if needed
+# Monkeypatch Orchestrator BEFORE importing ChatbotManager to block any agent init.
+from kallam.app import chatbot_manager as cm_mod  # <-- adjust only if your package root differs
 
 class _DummyOrchestrator:
-    def __init__(self, *a, **k): pass
+    def __init__(self, *a, **k): ...
     def __getattr__(self, name):
-        raise RuntimeError(f"Orchestrator method '{name}' should NOT be called in this test app.")
+        raise RuntimeError(f"Orchestrator method '{name}' should NOT be called in this test.")
 
-# Monkeypatch the symbol ChatbotManager imports at module scope.
-cm_mod.Orchestrator = _DummyOrchestrator  # stop real init chatter/logs
+cm_mod.Orchestrator = _DummyOrchestrator
 
-# 2) Now import the class
-from kallam.app.chatbot_manager import ChatbotManager
+from kallam.app.chatbot_manager import ChatbotManager  # now safe to import
 
 DB_FILE = Path("./.smoketest.db").resolve()
+MGR = ChatbotManager(db_path=str(DB_FILE), summarize_every_n_messages=10, message_limit=50)
+MGR.orchestrator = _DummyOrchestrator()  # belt-and-suspenders
 
-def init_manager(db_path: str) -> ChatbotManager:
-    mgr = ChatbotManager(db_path=db_path, summarize_every_n_messages=10, message_limit=50)
-    # Belt-and-suspenders: if someone rebinds later, keep it dummy.
-    mgr.orchestrator = _DummyOrchestrator()
-    return mgr
+# ---------- helpers ----------
+def J(x: Any) -> str:
+    return json.dumps(x, indent=2, ensure_ascii=False)
 
-MGR = init_manager(str(DB_FILE))
+def _call_store(func, *, session_id: str, **kwargs):
+    """
+    Adapt kwargs to the store method's real signature.
+    Maps common synonyms and silently drops unknowns.
+    """
+    sig = inspect.signature(func)
+    params = sig.parameters
+    out = {}
 
-def _choices() -> List[str]:
-    rows = MGR.list_sessions(active_only=False, limit=200) or []
-    try:
-        rows.sort(key=lambda r: (r.get("last_activity") or r.get("timestamp") or ""), reverse=True)
-    except Exception:
-        pass
-    return [r["session_id"] for r in rows if r.get("session_id")]
+    def allow(names: List[str], val: Any):
+        for n in names:
+            if n in params:
+                out[n] = val
+                return True
+        return False
 
-# Helpers that return proper UI updates (no more list-into-Markdown crimes)
-def dd_update(value: Optional[str] = None) -> gr.Dropdown:
-    choices = _choices()
-    if value not in choices:
-        value = None
-    return gr.Dropdown.update(choices=choices, value=value)
+    if "content" in kwargs: allow(["content"], kwargs["content"])
+    if "translated" in kwargs: allow(["translated", "translated_content"], kwargs["translated"])
+    if "reasoning" in kwargs: allow(["reasoning", "chain_of_thoughts"], kwargs["reasoning"])
+    if "flags" in kwargs: allow(["flags"], kwargs["flags"])
 
-# ---------- Session ops ----------
-def create_session(saved_memories: str):
+    if "tokens_in" in kwargs: allow(["tokens_in", "tokens_input", "tokens"], kwargs["tokens_in"])
+    if "tokens_out" in kwargs: allow(["tokens_out", "tokens_output", "tokens"], kwargs["tokens_out"])
+
+    if "latency_ms" in kwargs: allow(["latency_ms", "latency"], kwargs["latency_ms"])
+
+    return func(session_id, **out)
+
+# ---------- session ops (return Tuple[input_json, output_json_or_str]) ----------
+def create_session_fn(saved_memories: str) -> Tuple[str, str]:
+    _in = {"saved_memories": saved_memories}
     sid = MGR.start_session(saved_memories or None)
-    return dd_update(value=sid), f"Created session: {sid}"
+    return J(_in), J({"status": "created", "session_id": sid})
 
-def refresh_sessions():
-    return dd_update()
+def list_sessions_fn(active_only: bool) -> Tuple[str, str]:
+    _in = {"active_only": active_only}
+    rows = MGR.list_sessions(active_only=active_only, limit=200) or []
+    return J(_in), J({"count": len(rows), "items": rows})
 
-def get_session_meta(session_id: str):
-    if not session_id:
-        return "Select a session."
-    meta = MGR.get_session(session_id)
-    return json.dumps(meta or {}, indent=2, ensure_ascii=False)
+def get_session_meta_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    meta = MGR.get_session(session_id.strip())
+    return J(_in), J(meta or {})
 
-def close_session(session_id: str):
-    if not session_id:
-        return dd_update(), "Select a session."
-    ok = MGR.close_session(session_id)
-    return dd_update(), f"Closed: {session_id} -> {ok}"
+def close_session_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    ok = MGR.close_session(session_id.strip())
+    return J(_in), J({"closed": ok, "session_id": session_id})
 
-def delete_session(session_id: str):
-    if not session_id:
-        return dd_update(), "Select a session."
-    ok = MGR.delete_session(session_id)
-    return dd_update(), f"Deleted: {session_id} -> {ok}"
+def delete_session_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    ok = MGR.delete_session(session_id.strip())
+    return J(_in), J({"deleted": ok, "session_id": session_id})
 
-def cleanup_sessions(days_old: float):
+def cleanup_old_fn(days_old: float) -> Tuple[str, str]:
+    _in = {"days_old": days_old}
     try:
-        days = int(days_old)
+        d = int(days_old)
     except Exception:
-        return "days_old must be an integer."
-    if days <= 0:
-        return "days_old must be positive."
-    n = MGR.cleanup_old_sessions(days_old=days)
-    return f"Cleaned up {n} session(s) older than {days} day(s)."
+        return J(_in), "days_old must be an integer."
+    if d <= 0:
+        return J(_in), "days_old must be positive."
+    n = MGR.cleanup_old_sessions(days_old=d)
+    return J(_in), J({"cleaned_sessions": n, "threshold_days": d})
 
-# ---------- Message ops (echo, no orchestrator) ----------
-def append_user(session_id: str, content: str):
-    if not session_id:
-        return "Select a session."
-    if not content or not content.strip():
-        return "Provide user content."
-    MGR.messages.append_user(
-        session_id,
+# ---------- messages (echo; never hits Orchestrator) ----------
+def append_user_fn(session_id: str, content: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id, "content": content}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    if not content.strip():
+        return J(_in), "Provide content."
+    _call_store(
+        MGR.messages.append_user,
+        session_id=session_id.strip(),
         content=content,
-        translated=content,  # echo
+        translated=content,
         flags={"language": "english", "doctor": False, "psychologist": False},
         tokens_in=len(content.split()),
     )
-    return "User message appended."
+    tail = MGR.get_original_chat_history(session_id.strip(), limit=10)
+    return J(_in), J({"status": "user_appended", "tail_history": tail})
 
-def append_assistant(session_id: str, content: str):
-    if not session_id:
-        return "Select a session."
-    if not content or not content.strip():
-        return "Provide assistant content."
-    MGR.messages.append_assistant(
-        session_id,
+def append_assistant_fn(session_id: str, content: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id, "content": content}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    if not content.strip():
+        return J(_in), "Provide content."
+    _call_store(
+        MGR.messages.append_assistant,
+        session_id=session_id.strip(),
         content=content,
         translated=content,
         reasoning={"final_output": content, "note": "echo_sample"},
         tokens_out=len(content.split()),
-        latency_ms=0,
+        latency_ms=0,  # will be ignored if store doesn't accept it
     )
-    return "Assistant message appended."
+    tail = MGR.get_original_chat_history(session_id.strip(), limit=10)
+    return J(_in), J({"status": "assistant_appended", "tail_history": tail})
 
-# ---------- Summaries ----------
-def add_summary(session_id: str, text: str):
-    if not session_id:
-        return "Select a session."
-    if not text or not text.strip():
-        return "Provide summary text."
-    MGR.summaries.add(session_id, text)
-    return "Summary added."
+# ---------- summaries ----------
+def add_summary_fn(session_id: str, text: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id, "summary": text}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    if not text.strip():
+        return J(_in), "Provide summary text."
+    MGR.summaries.add(session_id.strip(), text)
+    return J(_in), J({"status": "summary_added"})
 
-def list_summaries(session_id: str):
-    if not session_id:
-        return "Select a session."
-    lst = MGR.summaries.list(session_id) or []
-    return json.dumps(lst, indent=2, ensure_ascii=False)
+def list_summaries_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    lst = MGR.summaries.list(session_id.strip()) or []
+    return J(_in), J({"count": len(lst), "items": lst})
 
-# ---------- Reads / Stats / Export ----------
-def get_history(session_id: str, limit: float):
-    if not session_id:
-        return "Select a session."
+# ---------- inspect ----------
+def get_history_fn(session_id: str, limit: float) -> Tuple[str, str]:
+    _in = {"session_id": session_id, "limit": limit}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
     try:
         n = max(1, min(500, int(limit)))
     except Exception:
         n = 50
-    rows = MGR.get_original_chat_history(session_id, limit=n)
-    return json.dumps(rows or [], indent=2, ensure_ascii=False)
+    rows = MGR.get_original_chat_history(session_id.strip(), limit=n)
+    return J(_in), J(rows or [])
 
-def get_stats(session_id: str):
-    if not session_id:
-        return "Select a session."
-    payload = MGR.get_session_stats(session_id)
-    return json.dumps(payload, indent=2, ensure_ascii=False)
+def get_stats_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    payload = MGR.get_session_stats(session_id.strip())
+    return J(_in), J(payload or {})
 
-def export_json(session_id: str):
-    if not session_id:
-        return "Select a session."
-    path = MGR.export_session_json(session_id)
-    return f"Exported to: {path}"
+def export_json_fn(session_id: str) -> Tuple[str, str]:
+    _in = {"session_id": session_id}
+    if not session_id.strip():
+        return J(_in), "Provide session_id."
+    path = MGR.export_session_json(session_id.strip())
+    return J(_in), f"Exported to: {path}"
 
-with gr.Blocks(title="ChatbotManager SQLite Smoketest") as demo:
-    gr.Markdown("## ChatbotManager SQLite Smoketest (no agents, echo only)")
+# ---------- UI (TabbedInterface: each tab shows Inputs + Output) ----------
+io_in = "Inputs (echoed JSON)"
+io_out = "Output (raw JSON / text)"
 
-    with gr.Tab("Sessions"):
-        with gr.Row():
-            saved_mem = gr.Textbox(label="Saved memories (optional)", placeholder="e.g., prefers Thai; risk low")
-            create_btn = gr.Button("Create session")
-        with gr.Row():
-            session_dd = gr.Dropdown(choices=_choices(), value=None, label="Select session", interactive=True)
-            refresh_btn = gr.Button("Refresh list")
-        with gr.Row():
-            meta_btn = gr.Button("Get session meta")
-            close_btn = gr.Button("Close session")
-            delete_btn = gr.Button("Delete session")
-        with gr.Row():
-            days_old = gr.Number(value=30, precision=0, label="Cleanup: days_old")
-            cleanup_btn = gr.Button("Run cleanup")
-        session_status = gr.Markdown()
-        session_meta = gr.Code(label="Session meta (JSON)", language="json")
+tabs = [
+    gr.Interface(create_session_fn, [gr.Textbox(label="Saved memories (optional)")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Create Session"),
+    gr.Interface(list_sessions_fn, [gr.Checkbox(label="Active only", value=False)],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="List Sessions"),
+    gr.Interface(get_session_meta_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Get Session Meta"),
+    gr.Interface(cleanup_old_fn, [gr.Number(label="days_old", value=30, precision=0)],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Cleanup Old Sessions"),
+    gr.Interface(close_session_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Close Session"),
+    gr.Interface(delete_session_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Delete Session"),
+    gr.Interface(append_user_fn, [gr.Textbox(label="Session ID"), gr.Textbox(label="User content")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Append User (echo)"),
+    gr.Interface(append_assistant_fn, [gr.Textbox(label="Session ID"), gr.Textbox(label="Assistant content")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Append Assistant (echo)"),
+    gr.Interface(add_summary_fn, [gr.Textbox(label="Session ID"), gr.Textbox(label="Summary text")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Add Summary"),
+    gr.Interface(list_summaries_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="List Summaries"),
+    gr.Interface(get_history_fn, [gr.Textbox(label="Session ID"), gr.Number(label="Limit", value=50, precision=0)],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Get Original History"),
+    gr.Interface(get_stats_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Code(label=io_out, language="json")],
+                 title="Get Session Stats"),
+    gr.Interface(export_json_fn, [gr.Textbox(label="Session ID")],
+                 [gr.Code(label=io_in, language="json"), gr.Markdown(label=io_out)],
+                 title="Export Session JSON"),
+]
 
-        create_btn.click(create_session, [saved_mem], [session_dd, session_status])
-        refresh_btn.click(refresh_sessions, None, [session_dd])
-        meta_btn.click(get_session_meta, [session_dd], [session_meta])
-        close_btn.click(close_session, [session_dd], [session_dd, session_status])
-        delete_btn.click(delete_session, [session_dd], [session_dd, session_status])
-        cleanup_btn.click(cleanup_sessions, [days_old], [session_status])
-
-    with gr.Tab("Messages"):
-        with gr.Row():
-            session_dd2 = gr.Dropdown(choices=_choices(), value=None, label="Select session", interactive=True)
-            sync_btn2 = gr.Button("Sync sessions")
-        with gr.Row():
-            user_txt = gr.Textbox(label="User content")
-            user_add = gr.Button("Append user")
-        with gr.Row():
-            asst_txt = gr.Textbox(label="Assistant content (echo sample)")
-            asst_add = gr.Button("Append assistant")
-        msg_status = gr.Markdown()
-
-        sync_btn2.click(refresh_sessions, None, [session_dd2])
-        user_add.click(append_user, [session_dd2, user_txt], [msg_status])
-        asst_add.click(append_assistant, [session_dd2, asst_txt], [msg_status])
-
-    with gr.Tab("Summaries"):
-        with gr.Row():
-            session_dd3 = gr.Dropdown(choices=_choices(), value=None, label="Select session", interactive=True)
-            sync_btn3 = gr.Button("Sync sessions")
-        with gr.Row():
-            sum_txt = gr.Textbox(label="Summary text")
-            sum_add = gr.Button("Add summary")
-            sum_list_btn = gr.Button("List summaries")
-        sum_status = gr.Markdown()
-        sum_list = gr.Code(label="Summaries (JSON)", language="json")
-
-        sync_btn3.click(refresh_sessions, None, [session_dd3])
-        sum_add.click(add_summary, [session_dd3, sum_txt], [sum_status])
-        sum_list_btn.click(list_summaries, [session_dd3], [sum_list])
-
-    with gr.Tab("History / Stats / Export"):
-        with gr.Row():
-            session_dd4 = gr.Dropdown(choices=_choices(), value=None, label="Select session", interactive=True)
-            sync_btn4 = gr.Button("Sync sessions")
-        with gr.Row():
-            limit_num = gr.Number(value=50, precision=0, label="History limit (1-500)")
-            hist_btn = gr.Button("Get original history")
-            stats_btn = gr.Button("Get session stats")
-            export_btn = gr.Button("Export session JSON")
-        hist_out = gr.Code(label="Original history (JSON)", language="json")
-        stats_out = gr.Code(label="Stats payload (JSON)", language="json")
-        export_status = gr.Markdown()
-
-        sync_btn4.click(refresh_sessions, None, [session_dd4])
-        hist_btn.click(get_history, [session_dd4, limit_num], [hist_out])
-        stats_btn.click(get_stats, [session_dd4], [stats_out])
-        export_btn.click(export_json, [session_dd4], [export_status])
+demo = gr.TabbedInterface(
+    tabs,
+    tab_names=[
+        "Create", "List", "Meta", "Cleanup", "Close", "Delete",
+        "User Msg", "Assistant Msg", "Add Summary", "List Summaries",
+        "History", "Stats", "Export"
+    ],
+    title="ChatbotManager SQLite Smoketest (No Orchestrator)"
+)
 
 if __name__ == "__main__":
     demo.launch(share=False, inbrowser=True)
