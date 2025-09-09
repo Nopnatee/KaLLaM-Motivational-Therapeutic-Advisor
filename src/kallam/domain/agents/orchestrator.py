@@ -163,20 +163,63 @@ class Orchestrator:
         # Prepare current chain of thought container
         commentary = {}
 
-        # Get specialized agents suggestions via flags with chain_of_thoughts
-        if flags.get("doctor"): # Dummy for now
-            self.logger.debug("Activating DoctorAgent")
-            commentary["doctor"] = self.doctor.analyze(user_message, 
-                                                        chat_history, 
-                                                        chain_of_thoughts,
-                                                        summarized_histories)
+        # Modified orchestrator code to handle the new agent response format
 
-        if flags.get("psychologist"): # Dummy for now
+        # Get specialized agents suggestions via flags with chain_of_thoughts
+        if flags.get("doctor"):
+            self.logger.debug("Activating DoctorAgent")
+            doctor_analysis = self.doctor.analyze(user_message, 
+                                                chat_history, 
+                                                chain_of_thoughts,
+                                                summarized_histories)
+            
+            # Extract commentary for the response and update chain_of_thoughts
+            commentary["doctor"] = doctor_analysis["commentary"]
+            
+            # Update chain_of_thoughts with doctor's thinking for future use
+            if doctor_analysis.get("thinking"):
+                chain_of_thoughts += f"\n\nDOCTOR ANALYSIS:\n{doctor_analysis['thinking']}"
+
+        if flags.get("psychologist"):
             self.logger.debug("Activating PsychologistAgent")
-            commentary["psychologist"] = self.psychologist.analyze(user_message, 
-                                                                    chat_history, 
-                                                                    chain_of_thoughts,
-                                                                    summarized_histories)
+            psychologist_analysis = self.psychologist.analyze(user_message, 
+                                                            chat_history, 
+                                                            chain_of_thoughts,
+                                                            summarized_histories)
+            
+            # Extract commentary for the response and update chain_of_thoughts
+            commentary["psychologist"] = psychologist_analysis["commentary"]
+            
+            # Update chain_of_thoughts with psychologist's thinking for future use
+            if psychologist_analysis.get("thinking"):
+                chain_of_thoughts += f"\n\nPSYCHOLOGIST ANALYSIS:\n{psychologist_analysis['thinking']}"
+
+        # Optional: If you want to log the detailed thinking for debugging
+        if flags.get("doctor") and doctor_analysis.get("thinking"):
+            self.logger.debug(f"Doctor thinking: {doctor_analysis['thinking'][:200]}...")
+
+        if flags.get("psychologist") and psychologist_analysis.get("thinking"):
+            self.logger.debug(f"Psychologist thinking: {psychologist_analysis['thinking'][:200]}...")
+
+
+        # Alternative approach - if you want to store the full analysis results for later use:
+        specialized_analyses = {}
+
+        if flags.get("doctor"):
+            self.logger.debug("Activating DoctorAgent")
+            specialized_analyses["doctor"] = self.doctor.analyze(user_message, 
+                                                                chat_history, 
+                                                                chain_of_thoughts,
+                                                                summarized_histories)
+            commentary["doctor"] = specialized_analyses["doctor"]["commentary"]
+
+        if flags.get("psychologist"):
+            self.logger.debug("Activating PsychologistAgent")
+            specialized_analyses["psychologist"] = self.psychologist.analyze(user_message, 
+                                                                            chat_history, 
+                                                                            chain_of_thoughts,
+                                                                            summarized_histories)
+            commentary["psychologist"] = specialized_analyses["psychologist"]["commentary"]
 
         # Get final output from all agents' suggestions
         commentary["final_output"] = self.supervisor.generate_feedback(
