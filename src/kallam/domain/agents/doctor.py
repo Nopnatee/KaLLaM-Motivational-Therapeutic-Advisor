@@ -5,7 +5,7 @@ import requests
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import List, Literal, Dict, Any, Optional
+from typing import List, Literal, Dict, Any, Optional, Tuple
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -26,6 +26,7 @@ You are a Medical Assistant AI Doctor. You provide helpful medical information a
 
 **IMPORTANT MEDICAL DISCLAIMERS:**
 - You are NOT a replacement for professional medical care
+- Always use a calm and reassuring tone
 - Always recommend consulting a healthcare professional for serious concerns
 - In emergencies, always advise calling emergency services immediately
 - Do not provide specific diagnoses - only general information and guidance
@@ -127,8 +128,8 @@ Remember: Your primary goal is to be helpful while ensuring user safety through 
         
         return [system_message, user_message]
 
-    def _generate_response(self, messages: List[Dict[str, str]]) -> str:
-        """Generate response using SEA-Lion API"""
+    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> Tuple[str, str]:
+        """Generate response using SEA-Lion API and extract thinking + commentary"""
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
@@ -162,297 +163,209 @@ Remember: Your primary goal is to be helpful while ensuring user safety through 
             
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "Error in medical analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
             
             choice = response_data["choices"][0]
             if "message" not in choice or "content" not in choice["message"]:
                 self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "Error in medical analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
                 
             raw_content = choice["message"]["content"]
             
             if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
                 self.logger.error("SEA-Lion API returned None or empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+                return "No medical analysis available", "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
             # Extract thinking and answer blocks
             thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
             answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
             
-            reasoning = thinking_match.group(1).strip() if thinking_match else None
-            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            thinking = thinking_match.group(1).strip() if thinking_match else "Medical analysis in progress..."
+            commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
             
-            if reasoning:
-                self.logger.debug(f"Doctor reasoning:\n{reasoning}")
-            
-            self.logger.info(f"Generated medical response (length: {len(final_answer)} chars)")
-            return final_answer
+            self.logger.info(f"Generated medical response - Thinking: {len(thinking)} chars, Commentary: {len(commentary)} chars")
+            return thinking, commentary
             
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            return "Connection error during medical analysis", "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
             self.logger.error(f"Error generating response: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            return "Error in medical analysis", "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
 
-    # Public methods
-    def diagnose_and_advise(self, symptoms: str, patient_history: Optional[str] = None, language: str = "english") -> str:
-        """Main method to analyze symptoms and provide medical advice"""
+    def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> Dict[str, str]:
+        """
+        Main analyze method expected by orchestrator
         
-        context = f"Patient symptoms: {symptoms}"
-        if patient_history:
-            context += f"\nPatient history: {patient_history}"
+        Args:
+            user_message: Current user input
+            chat_history: Previous conversation history
+            chain_of_thoughts: Past analysis chain of thoughts
+            summarized_histories: Summarized conversation histories
+            
+        Returns:
+            Dict with 'thinking' and 'commentary' keys
+        """
+        # Build comprehensive context for medical analysis
+        context_parts = []
         
+        if summarized_histories:
+            context_parts.append(f"Patient History Summary: {summarized_histories}")
+        
+        if chain_of_thoughts:
+            context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
+        
+        # Extract recent relevant context from chat history
+        recent_context = []
+        for msg in chat_history[-3:]:  # Last 3 messages for context
+            if msg.get("role") == "user":
+                recent_context.append(f"Patient: {msg.get('content', '')}")
+            elif msg.get("role") == "assistant":
+                recent_context.append(f"Previous Response: {msg.get('content', '')}")
+        
+        if recent_context:
+            context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
+        
+        full_context = "\n\n".join(context_parts) if context_parts else ""
+        
+        # Create comprehensive medical analysis prompt
         prompt = f"""
-Please analyze the following medical query and provide appropriate guidance:
+Based on the current medical query and available context, provide comprehensive medical guidance:
 
-{context}
+**Current Query:** {user_message}
+
+**Available Context:**
+{full_context if full_context else "No previous context available"}
 
 Please provide:
-1. Symptom severity assessment (low/moderate/high/emergency)
-2. Appropriate medical guidance based on the assessment
-3. Relevant first aid information if needed
-4. Response in {language} language
-5. Always include appropriate medical disclaimers
 
-Provide a comprehensive but clear response that helps the user understand their situation and next steps.
+1. **Medical Assessment:**
+   - Symptom analysis and potential severity assessment
+   - Risk factors and concerning signs identification
+   - Differential considerations (without providing diagnoses)
 
-Assessment Framework:
-- **Emergency**: Life-threatening symptoms requiring immediate medical attention
-- **High**: Serious symptoms needing urgent medical care within 24 hours
-- **Moderate**: Concerning symptoms requiring medical consultation within few days
-- **Low**: Minor symptoms manageable with self-care and monitoring
+2. **Recommendations:**
+   - Immediate care recommendations (self-care, GP consultation, urgent care, emergency)
+   - Timeline for seeking professional medical attention
+   - Warning signs that would escalate the situation
 
-Include specific recommendations for:
-- Immediate actions to take
-- When to seek professional medical care
-- Self-care measures if appropriate
-- Warning signs that would escalate the situation
+3. **Patient Education:**
+   - Relevant health information for the condition
+   - Prevention strategies and self-monitoring guidance
+   - When to seek follow-up care
+
+4. **Safety Considerations:**
+   - Emergency protocols if applicable
+   - First aid guidance when relevant
+   - Clear indicators for immediate medical attention
+
+**Response Structure:**
+
+```answer
+[Concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.]
+```
+
+Always include appropriate medical disclaimers and emphasize professional medical care when needed.
 """
+
+        messages = self._format_messages(prompt, full_context)
+        thinking, commentary = self._generate_response_with_thinking(messages)
         
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        return {
+            "thinking": thinking,
+            "commentary": commentary
+        }
+
+    # Keep existing methods for backward compatibility
+    def diagnose_and_advise(self, symptoms: str, patient_history: Optional[str] = None, language: str = "english") -> str:
+        """Legacy method - returns commentary only for backward compatibility"""
+        fake_history = []
+        if patient_history:
+            fake_history.append({"role": "system", "content": f"Patient History: {patient_history}"})
+        
+        result = self.analyze(symptoms, fake_history, "", patient_history or "")
+        return result["commentary"]
 
     def provide_health_information(self, health_topic: str, language: str = "english") -> str:
-        """Provide general health information on a specific topic"""
-        
-        prompt = f"""
-Please provide general health information about: {health_topic}
-
-Include:
-- Overview of the topic
-- Common symptoms or signs (if applicable)
-- Prevention strategies
-- When to seek medical care
-- General management tips
-
-Respond in {language} language and include appropriate medical disclaimers.
-Keep the information accurate, helpful, and accessible to general audiences.
-
-Structure your response with:
-1. **Overview**: Brief explanation of the condition/topic
-2. **Key Information**: Important facts people should know
-3. **Prevention**: How to prevent or reduce risk
-4. **Management**: General approaches to managing the condition
-5. **When to Seek Help**: Clear guidelines on when professional care is needed
-6. **Medical Disclaimer**: Appropriate disclaimers about professional care
-"""
-        
-        context = f"Health information request about: {health_topic}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        result = self.analyze(f"Please provide information about {health_topic}", [], "", "")
+        return result["commentary"]
 
     def emergency_guidance(self, emergency_situation: str, language: str = "english") -> str:
-        """Provide emergency medical guidance"""
-        
-        prompt = f"""
-EMERGENCY SITUATION: {emergency_situation}
-
-Please provide immediate emergency medical guidance:
-
-1. **Immediate Assessment**: Determine if this requires emergency services (call 911/emergency number)
-2. **First Aid Steps**: Provide clear, step-by-step emergency guidance
-3. **Safety Priorities**: Ensure immediate safety of the person
-4. **Professional Care**: Emphasize the need for immediate professional emergency care
-5. **Stay Calm**: Provide reassurance while maintaining urgency
-
-Respond in {language} language with:
-- Clear, simple instructions that can be followed under stress
-- Prioritized action steps (most important first)
-- Specific guidance on when to call emergency services
-- How to monitor the person's condition
-- What information to provide to emergency responders
-
-This is urgent - provide immediate, potentially life-saving guidance while emphasizing professional emergency care.
-
-**CRITICAL**: Always prioritize calling emergency services for serious medical emergencies.
-"""
-        
-        context = f"Emergency situation: {emergency_situation}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        result = self.analyze(f"EMERGENCY: {emergency_situation}", [], "", "")
+        return result["commentary"]
 
     def follow_up_consultation(self, previous_symptoms: str, current_status: str, language: str = "english") -> str:
-        """Handle follow-up consultations for ongoing health concerns"""
-        
-        prompt = f"""
-FOLLOW-UP CONSULTATION:
-
-Previous symptoms: {previous_symptoms}
-Current status: {current_status}
-
-Please provide follow-up medical guidance:
-
-1. **Progress Assessment**: Evaluate improvement, stability, or worsening of symptoms
-2. **Current Status Analysis**: Assess the current situation compared to baseline
-3. **Treatment Effectiveness**: Determine if current approach is working
-4. **Next Steps**: Advise on whether to continue, modify, or escalate care
-5. **Monitoring**: Provide guidance on ongoing symptom monitoring
-
-Respond in {language} language with:
-- Clear assessment of symptom progression
-- Recommendations for continuing or changing current approach
-- Specific criteria for when to seek additional medical attention
-- Timeline for expected improvement or when to reassess
-- Warning signs that would require immediate medical attention
-
-Focus on:
-- **Improvement**: What indicates the situation is getting better
-- **Stability**: What suggests the condition is stable and manageable
-- **Deterioration**: What signs indicate the need for escalated care
-- **Timeline**: Reasonable expectations for recovery or improvement
-"""
-        
-        context = f"Follow-up: Previous - {previous_symptoms}, Current - {current_status}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        history = [{"role": "system", "content": f"Previous symptoms: {previous_symptoms}"}]
+        result = self.analyze(f"Follow-up consultation - Current status: {current_status}", history, "", "")
+        return result["commentary"]
 
     def assess_symptom_severity(self, symptoms: str, additional_context: str = "") -> Dict[str, Any]:
         """Assess symptom severity and provide structured recommendation"""
-        
-        prompt = f"""
-Perform a structured symptom severity assessment:
-
-Symptoms: {symptoms}
-Additional context: {additional_context}
-
-Please provide a structured assessment in the following format:
-
-**SEVERITY ASSESSMENT:**
-Severity Level: [emergency/high/moderate/low]
-
-**REASONING:**
-[Explain why this severity level was chosen]
-
-**RECOMMENDATIONS:**
-Primary Action: [emergency/urgent_care/consult_gp/self_care]
-Timeline: [immediate/within 24h/within few days/monitor]
-
-**SPECIFIC GUIDANCE:**
-- Immediate steps to take
-- Warning signs to watch for
-- When to escalate care
-
-**MEDICAL DISCLAIMER:**
-[Appropriate medical disclaimer]
-
-Base your assessment on:
-- **Emergency**: Life-threatening, requires immediate medical attention
-- **High**: Serious symptoms, needs urgent care within 24 hours
-- **Moderate**: Concerning symptoms, should see doctor within few days
-- **Low**: Minor symptoms, can manage with self-care and monitoring
-"""
-        
-        context = f"Symptom assessment: {symptoms}"
-        if additional_context:
-            context += f" | Additional context: {additional_context}"
-        
-        messages = self._format_messages(prompt, context)
-        response = self._generate_response(messages)
+        result = self.analyze(symptoms, [], "", additional_context)
         
         # Parse response to extract structured information
+        commentary = result["commentary"]
         severity_level = "moderate"  # default
         recommendation = "consult_gp"  # default
         
         # Simple parsing logic to extract severity and recommendation
-        response_lower = response.lower()
-        if "emergency" in response_lower:
+        commentary_lower = commentary.lower()
+        if "emergency" in commentary_lower:
             severity_level = "emergency"
             recommendation = "emergency"
-        elif "high" in response_lower:
+        elif "high" in commentary_lower or "urgent" in commentary_lower:
             severity_level = "high"
             recommendation = "urgent_care"
-        elif "low" in response_lower:
+        elif "low" in commentary_lower or "mild" in commentary_lower:
             severity_level = "low"
             recommendation = "self_care"
         
         return {
             "severity_level": severity_level,
             "recommendation": recommendation,
-            "full_response": response,
+            "full_response": commentary,
+            "thinking": result["thinking"],
             "timestamp": datetime.now().isoformat()
         }
 
     def provide_first_aid_guidance(self, situation: str, language: str = "english") -> str:
-        """Provide specific first aid guidance"""
-        
-        prompt = f"""
-Provide first aid guidance for: {situation}
-
-Please provide clear, step-by-step first aid instructions:
-
-**FIRST AID PROTOCOL:**
-
-1. **Safety First**: Ensure scene safety and universal precautions
-2. **Initial Assessment**: Quick assessment of the person's condition
-3. **Primary Care Steps**: Main first aid interventions
-4. **Monitoring**: What to watch for during care
-5. **Professional Help**: When and how to get professional medical assistance
-
-Respond in {language} language with:
-- Clear, numbered steps that are easy to follow
-- Safety considerations and precautions
-- What supplies or materials might be needed
-- Warning signs that indicate the situation is worsening
-- When to call for emergency medical services
-
-**Important**: 
-- Always prioritize calling emergency services for serious injuries
-- Provide reassurance and comfort to the injured person
-- Continue monitoring until professional help arrives
-- Do not attempt procedures beyond basic first aid training
-
-Structure as:
-**IMMEDIATE ACTIONS:**
-**STEP-BY-STEP CARE:**
-**MONITORING:**
-**WHEN TO CALL FOR HELP:**
-**SAFETY PRECAUTIONS:**
-"""
-        
-        context = f"First aid situation: {situation}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        result = self.analyze(f"First aid guidance needed for: {situation}", [], "", "")
+        return result["commentary"]
 
 
 if __name__ == "__main__":
-    # Test the Doctor Agent
+    # Test the modified Doctor Agent
     try:
         doctor = DoctorAgent(log_level=logging.DEBUG)
         
-        # Test diagnosis
-        print("=== TEST: SYMPTOM DIAGNOSIS ===")
-        diagnosis = doctor.diagnose_and_advise(
-            symptoms="Severe headache, nausea, and sensitivity to light for the past 2 hours",
-            patient_history="History of migraines, but this feels different and more severe",
-            language="english"
+        # Test the new analyze method
+        print("=== TEST: ANALYZE METHOD ===")
+        result = doctor.analyze(
+            user_message="I have severe headache, nausea, and sensitivity to light for the past 2 hours",
+            chat_history=[
+                {"role": "user", "content": "I've been having headaches lately"},
+                {"role": "assistant", "content": "I understand you've been experiencing headaches. Can you tell me more about them?"}
+            ],
+            chain_of_thoughts="Previous consideration of tension headaches, but current presentation more concerning",
+            summarized_histories="Patient has history of occasional mild headaches, usually stress-related"
         )
-        print(diagnosis)
         
-        # Test health information
-        print("\n=== TEST: HEALTH INFORMATION ===")
-        info = doctor.provide_health_information("hypertension", language="english")
-        print(info)
+        print("THINKING:")
+        print(result["thinking"])
+        print("\nCOMMENTARY:")
+        print(result["commentary"])
+        
+        # Test legacy method still works
+        print("\n=== TEST: LEGACY METHOD ===")
+        legacy_result = doctor.diagnose_and_advise(
+            symptoms="Fever and cough",
+            patient_history="Healthy adult, no chronic conditions"
+        )
+        print(legacy_result)
         
     except Exception as e:
         print(f"Error testing Doctor Agent: {e}")
