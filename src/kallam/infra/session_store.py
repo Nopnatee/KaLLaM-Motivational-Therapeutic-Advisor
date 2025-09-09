@@ -67,7 +67,7 @@ class SessionStore:
         with sqlite_conn(self.db_path) as c:
             r = c.execute(
                 """
-                SELECT session_id, total_messages, total_user_messages,
+                SELECT session_id, total_messages, total_user_messages, saved_memories,
                        total_assistant_messages, total_summaries, last_activity, is_active
                 FROM sessions
                 WHERE session_id = ?

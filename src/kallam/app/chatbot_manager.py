@@ -44,7 +44,9 @@ class ChatbotManager:
     def __init__(self,
                  db_path: str = "chatbot_data.db",
                  summarize_every_n_messages: int = 10,
-                 message_limit: int = 20):
+                 message_limit: int = 10,
+                 sunmmary_limit: int = 20,
+                 chain_of_thoughts_limit: int = 5):
         if summarize_every_n_messages <= 0:
             raise ValueError("summarize_every_n_messages must be positive")
         if message_limit <= 0:
@@ -53,6 +55,8 @@ class ChatbotManager:
         self.orchestrator = Orchestrator()
         self.sum_every_n = summarize_every_n_messages
         self.message_limit = message_limit
+        self.summary_limit = sunmmary_limit
+        self.chain_of_thoughts_limit = chain_of_thoughts_limit
         self.db_path = Path(db_path)  # still accept same arg
         self.lock = threading.RLock()
         self.tokens = TokenCounter(capacity=1000)
@@ -163,8 +167,7 @@ class ChatbotManager:
         cutoff = (datetime.now() - timedelta(days=days_old)).isoformat()
         return self.sessions.cleanup_before(cutoff)
 
-    def handle_message(self, session_id: str, user_message: str,
-                       health_status: Optional[str] = None) -> str:
+    def handle_message(self, session_id: str, user_message: str) -> str:
         self._validate_inputs(session_id=session_id, user_message=user_message)
         with self.lock:
             t0 = time.time()
@@ -175,8 +178,8 @@ class ChatbotManager:
 
             # fetch context
             eng_history = self.messages.get_translated_history(session_id, limit=self.message_limit)
-            eng_summaries = self.summaries.list(session_id)
-            chain = self.messages.get_reasoning_traces(session_id, limit=10)
+            eng_summaries = self.summaries.list(session_id, limit=self.summary_limit)
+            chain = self.messages.get_reasoning_traces(session_id, limit=self.chain_of_thoughts_limit)
 
             meta = self.sessions.get_meta(session_id) or {}
             memory_context = (meta.get("saved_memories") or "") if isinstance(meta, dict) else ""
@@ -188,7 +191,7 @@ class ChatbotManager:
             )
 
             # respond
-            result = self.orchestrator.get_response(
+            eng_response = self.orchestrator.get_response(
                 chat_history=eng_history,
                 user_message=eng_msg,
                 flags=flags,
@@ -197,34 +200,34 @@ class ChatbotManager:
                 summarized_histories=eng_summaries,
             )
 
-            bot_eng = result["final_output"]
-            bot_reply = self.orchestrator.get_translation(
+            bot_eng = eng_response["final_output"]
+            bot_message = self.orchestrator.get_translation(
                 message=bot_eng, flags=flags, translation_type="backward"
             )
             latency_ms = int((time.time() - t0) * 1000)
 
             # persist
             tok_user = self.tokens.count(user_message)
-            tok_bot = self.tokens.count(bot_reply)
+            tok_bot = self.tokens.count(bot_message)
             self.messages.append_user(session_id, content=user_message,
                                       translated=eng_msg, flags=flags, tokens_in=tok_user)
-            self.messages.append_assistant(session_id, content=bot_reply,
-                                           translated=bot_eng, reasoning=result,
+            self.messages.append_assistant(session_id, content=bot_message,
+                                           translated=bot_eng, reasoning=eng_response,
                                            tokens_out=tok_bot, latency_ms=latency_ms)
 
             # summarize checkpoint
             meta = self.sessions.get_meta(session_id)
-            if meta and (meta["total_user_messages"] % self.sum_every_n == 0):
+            if meta and (meta["total_user_messages"] % self.sum_every_n == 0) and (meta["total_user_messages"] > 0):
                 self.summarize_session(session_id)
 
-            return bot_reply
+            return bot_message
 
     def _get_flags_dict(self, session_id: str, user_message: str) -> Dict[str, Any]:
         self._validate_inputs(session_id=session_id)
         try:
             # Build context Supervisor expects
             chat_history = self.messages.get_translated_history(session_id, limit=self.message_limit) or []
-            summaries = self.summaries.list(session_id) or []
+            summaries = self.summaries.list(session_id, limit=self.message_limit) or []
             meta = self.sessions.get_meta(session_id) or {}
             memory_context = (meta.get("saved_memories") or "") if isinstance(meta, dict) else ""
 
@@ -238,13 +241,13 @@ class ChatbotManager:
             # Ensure language exists and is supported
             lang = (flags or {}).get("language") or "english"
             if lang not in {"thai", "english"}:
-                lang = "english"
+                lang = "invalid"
             flags["language"] = lang
             return flags
         except Exception as e:
             logger.warning(f"Failed to get flags from supervisor: {e}, using safe defaults")
             # Safe defaults keep the pipeline alive
-            return {"language": "english", "doctor": False, "psychologist": False}
+            return {"language": "invalid", "doctor": False, "psychologist": False}
 
 
     def summarize_session(self, session_id: str) -> str:
@@ -253,11 +256,11 @@ class ChatbotManager:
             if not eng_history:
                 raise ValueError("No chat history found for session")
             eng_summaries = self.summaries.list(session_id)
-            summary = self.orchestrator.summarize_history(
+            eng_summary = self.orchestrator.summarize_history(
                 chat_history=eng_history, eng_summaries=eng_summaries
             )
-            self.summaries.add(session_id, summary)
-            return summary
+            self.summaries.add(session_id, eng_summary)
+            return eng_summary
 
     def get_session_stats(self, session_id: str) -> dict:
         stats, session = self.messages.aggregate_stats(session_id)
