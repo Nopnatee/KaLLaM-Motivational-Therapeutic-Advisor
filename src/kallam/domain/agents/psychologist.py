@@ -57,7 +57,6 @@ Always structure responses to include:
 - Emotional validation and reflection  
 - Psychological assessment (thoughts, emotions, behaviors, risks)  
 - Intervention strategies (evidence-based techniques)  
-- Homework or practice suggestions  
 - Professional referral or safety planning if needed  
 
 **Specific Task:**  
