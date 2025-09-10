@@ -5,7 +5,7 @@ import requests
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import List, Literal, Dict, Any, Optional
+from typing import List, Literal, Dict, Any, Optional, Tuple
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -169,8 +169,8 @@ Remember: Your primary goal is to provide supportive, evidence-based psychologic
         
         return [system_message, user_message]
 
-    def _generate_response(self, messages: List[Dict[str, str]]) -> str:
-        """Generate response using SEA-Lion API"""
+    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> Tuple[str, str]:
+        """Generate response using SEA-Lion API and extract thinking + commentary"""
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
@@ -204,500 +204,214 @@ Remember: Your primary goal is to provide supportive, evidence-based psychologic
             
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "Error in psychological analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
             
             choice = response_data["choices"][0]
             if "message" not in choice or "content" not in choice["message"]:
                 self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "Error in psychological analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
                 
             raw_content = choice["message"]["content"]
             
             if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
                 self.logger.error("SEA-Lion API returned None or empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+                return "No psychological analysis available", "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
             # Extract thinking and answer blocks
             thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
             answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
             
-            reasoning = thinking_match.group(1).strip() if thinking_match else None
-            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            thinking = thinking_match.group(1).strip() if thinking_match else "Therapeutic analysis in progress..."
+            commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
             
-            if reasoning:
-                self.logger.debug(f"Psychologist reasoning:\n{reasoning}")
-            
-            self.logger.info(f"Generated therapeutic response (length: {len(final_answer)} chars)")
-            return final_answer
+            self.logger.info(f"Generated therapeutic response - Thinking: {len(thinking)} chars, Commentary: {len(commentary)} chars")
+            return thinking, commentary
             
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            return "Connection error during psychological analysis", "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
             self.logger.error(f"Error generating response: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            return "Error in psychological analysis", "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
 
-    # Public methods
-    def provide_therapy_session(self, presenting_concerns: str, mental_health_history: Optional[str] = None, language: str = "english") -> str:
-        """Main therapeutic session method for addressing mental health concerns"""
+    def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> Dict[str, str]:
+        """
+        Main analyze method expected by orchestrator
         
-        context = f"Presenting concerns: {presenting_concerns}"
-        if mental_health_history:
-            context += f"\nMental health history: {mental_health_history}"
+        Args:
+            user_message: Current user input
+            chat_history: Previous conversation history
+            chain_of_thoughts: Past analysis chain of thoughts
+            summarized_histories: Summarized conversation histories
+            
+        Returns:
+            Dict with 'thinking' and 'commentary' keys
+        """
+        # Build comprehensive context for psychological analysis
+        context_parts = []
         
+        if summarized_histories:
+            context_parts.append(f"Patient History Summary: {summarized_histories}")
+        
+        if chain_of_thoughts:
+            context_parts.append(f"Previous Therapeutic Considerations: {chain_of_thoughts}")
+        
+        # Extract recent relevant context from chat history
+        recent_context = []
+        for msg in chat_history[-4:]:  # Last 4 messages for therapeutic context
+            if msg.get("role") == "user":
+                recent_context.append(f"Client: {msg.get('content', '')}")
+            elif msg.get("role") == "assistant":
+                recent_context.append(f"Previous Response: {msg.get('content', '')}")
+        
+        if recent_context:
+            context_parts.append("Recent Therapeutic Conversation:\n" + "\n".join(recent_context))
+        
+        full_context = "\n\n".join(context_parts) if context_parts else ""
+        
+        # Create comprehensive psychological analysis prompt
         prompt = f"""
-Please provide therapeutic support for the following case:
+Based on the current psychological query and therapeutic context, provide comprehensive mental health support:
 
-{context}
+**Current Query:** {user_message}
 
-Please apply evidence-based therapeutic approaches:
+**Available Context:**
+{full_context if full_context else "No previous therapeutic context available"}
 
-1. **Active Listening & Validation:**
-   - Reflect back the patient's emotions and experiences
-   - Validate their struggles without judgment
-   - Use empathetic responding to build therapeutic rapport
+Please provide evidence-based psychological support:
 
-2. **CBT Assessment:**
-   - Identify any cognitive distortions (catastrophizing, all-or-nothing thinking, mind reading, etc.)
-   - Help patient recognize unhelpful thought patterns
-   - Use Socratic questioning to challenge negative beliefs
-   - Suggest cognitive restructuring techniques
+1. **Psychological Assessment:**
+   - Emotional state analysis and mood indicators
+   - Cognitive patterns and thought distortions identification
+   - Behavioral patterns and coping mechanisms assessment
+   - Risk factors and protective factors evaluation
 
-3. **Motivational Interviewing:**
-   - Explore patient's ambivalence about change
-   - Use OARS technique (Open questions, Affirmations, Reflections, Summaries)
-   - Elicit patient's own motivations for change
-   - Support patient autonomy and self-efficacy
+2. **Therapeutic Interventions:**
+   - CBT techniques for cognitive restructuring
+   - Behavioral activation strategies
+   - Mindfulness and grounding techniques
+   - Motivational interviewing approaches
+   - Solution-focused interventions
 
-4. **Solution-Focused Approach:**
-   - Identify patient's existing strengths and coping resources
-   - Explore times when the problem was less severe (exceptions)
-   - Use scaling questions (1-10) to assess current state
-   - Set small, achievable therapeutic goals
+3. **Crisis Evaluation:**
+   - Suicide risk assessment if concerning signs present
+   - Self-harm indicators or dangerous behaviors
+   - Psychotic symptoms or severe dissociation
+   - Substance abuse or emergency situations
 
-5. **Mindfulness & Coping Skills:**
-   - Teach grounding techniques (5-4-3-2-1 method: 5 things you see, 4 you touch, etc.)
-   - Guide through breathing exercises or progressive muscle relaxation
-   - Suggest mindfulness practices for emotional regulation
-   - Provide stress management strategies
+4. **Treatment Recommendations:**
+   - Immediate coping strategies and self-care
+   - Between-session homework and practice exercises
+   - Professional referral recommendations
+   - Safety planning if crisis indicators present
 
-6. **Crisis Assessment:**
-   - Screen for suicidal ideation, self-harm, or safety concerns
-   - If crisis indicators present, recommend immediate professional intervention
-   - Develop safety planning strategies
+5. **Therapeutic Relationship:**
+   - Validation of client's experience and emotions
+   - Empathetic responses and active listening
+   - Building therapeutic rapport and trust
+   - Encouraging client autonomy and self-efficacy
 
-Respond in {language} language and provide:
-- Therapeutic reflection and validation
-- Psychological assessment and insights
-- Evidence-based intervention strategies
-- Homework assignments or between-session practices
-- Professional referral guidance if needed
-- Crisis safety recommendations if applicable
+**Response Structure:**
 
-Always include appropriate mental health disclaimers and emphasize the importance of professional care for ongoing support.
+```answer
+[Empathetic, supportive therapeutic response with evidence-based interventions, validation, coping strategies, and appropriate professional recommendations. Maintain warm, non-judgmental tone while providing practical guidance.]
+```
 
-**Structure your response as:**
-**THERAPEUTIC REFLECTION:** [Validation and empathy]
-**ASSESSMENT:** [Key psychological patterns identified]
-**INTERVENTIONS:** [Specific therapeutic strategies]
-**HOMEWORK/PRACTICE:** [Between-session activities]
-**PROFESSIONAL GUIDANCE:** [When to seek additional help]
-**SUPPORT:** [Encouragement and hope]
+Always include crisis assessment when appropriate and emphasize professional mental health care for ongoing support.
 """
+
+        messages = self._format_messages(prompt, full_context)
+        thinking, commentary = self._generate_response_with_thinking(messages)
         
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        return {
+            "thinking": thinking,
+            "commentary": commentary
+        }
+
+    # Keep existing methods for backward compatibility
+    def provide_therapy_session(self, presenting_concerns: str, mental_health_history: Optional[str] = None, language: str = "english") -> str:
+        """Legacy method - returns commentary only for backward compatibility"""
+        fake_history = []
+        if mental_health_history:
+            fake_history.append({"role": "system", "content": f"Mental Health History: {mental_health_history}"})
+        
+        result = self.analyze(presenting_concerns, fake_history, "", mental_health_history or "")
+        return result["commentary"]
 
     def crisis_intervention(self, crisis_situation: str, safety_concerns: str, language: str = "english") -> str:
-        """Handle mental health crisis situations with immediate intervention"""
-        
-        prompt = f"""
-MENTAL HEALTH CRISIS INTERVENTION:
-
-Crisis situation: {crisis_situation}
-Safety concerns: {safety_concerns}
-
-Please provide immediate crisis intervention support:
-
-1. **Immediate Safety Assessment:**
-   - Evaluate suicide risk factors and protective factors
-   - Assess for self-harm intentions or behaviors
-   - Screen for psychotic symptoms or severe dissociation
-   - Check for substance use or medical emergencies
-
-2. **Crisis De-escalation:**
-   - Use calm, supportive, non-judgmental communication
-   - Validate the person's emotional pain while instilling hope
-   - Help ground the person in the present moment
-   - Use active listening to understand their immediate needs
-
-3. **Safety Planning:**
-   - Help identify immediate coping strategies
-   - Develop a step-by-step safety plan
-   - Identify support people who can be contacted
-   - Remove or limit access to means of self-harm
-   - Create a crisis card with emergency contacts
-
-4. **Immediate Resources:**
-   - Strongly recommend immediate professional intervention
-   - Provide crisis hotline numbers and emergency services information
-   - Suggest accompanying person to emergency services if needed
-   - Recommend psychiatric emergency evaluation
-
-5. **Containment Strategies:**
-   - Teach grounding techniques for overwhelming emotions
-   - Guide through box breathing (4-4-4-4 count)
-   - Use progressive muscle relaxation for physical tension
-   - Provide emotional regulation techniques
-
-6. **Follow-up Planning:**
-   - Schedule immediate follow-up with mental health professional
-   - Arrange for 24-hour supervision if needed
-   - Connect with community mental health resources
-   - Ensure medication compliance if applicable
-
-Respond in {language} language with:
-- Immediate crisis intervention strategies
-- Safety planning recommendations
-- Professional emergency referral guidance
-- Specific crisis hotline numbers and resources
-- Step-by-step action plan for the next 24-48 hours
-
-This is a mental health emergency - prioritize immediate safety while providing compassionate support.
-
-**CRITICAL CRISIS RESOURCES:**
-- National Suicide Prevention Lifeline: 988 (US)
-- Crisis Text Line: Text HOME to 741741
-- Emergency Services: Call 911 (US) or local emergency number
-- Local psychiatric emergency services
-
-**Structure your response as:**
-**IMMEDIATE SAFETY:** [Emergency assessment and actions]
-**CRISIS SUPPORT:** [De-escalation and validation]
-**SAFETY PLAN:** [Specific steps to take]
-**RESOURCES:** [Emergency contacts and services]
-**FOLLOW-UP:** [Next 24-48 hour plan]
-"""
-        
-        context = f"Crisis intervention: {crisis_situation} | Safety concerns: {safety_concerns}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        context = f"Crisis situation: {crisis_situation}, Safety concerns: {safety_concerns}"
+        result = self.analyze(f"CRISIS: {crisis_situation}", [], "", context)
+        return result["commentary"]
 
     def cognitive_therapy(self, negative_thoughts: str, emotional_patterns: str, language: str = "english") -> str:
-        """Provide CBT-focused intervention for negative thought patterns"""
-        
-        prompt = f"""
-COGNITIVE BEHAVIORAL THERAPY SESSION:
-
-Negative thoughts: {negative_thoughts}
-Emotional patterns: {emotional_patterns}
-
-Please provide CBT-focused therapeutic intervention:
-
-1. **Cognitive Assessment:**
-   - Identify specific cognitive distortions present:
-     * All-or-nothing thinking (black and white thinking)
-     * Catastrophizing (jumping to worst-case scenarios)
-     * Mind reading (assuming you know what others think)
-     * Fortune telling (predicting negative outcomes)
-     * Emotional reasoning (feelings = facts)
-     * Should statements (rigid expectations)
-     * Labeling (calling yourself names)
-     * Mental filtering (focusing only on negatives)
-     * Discounting positives (minimizing good things)
-     * Personalization (taking blame for things outside your control)
-
-2. **Thought Record Analysis:**
-   - Help identify the connection between thoughts, feelings, and behaviors
-   - Examine evidence for and against negative thoughts
-   - Look for patterns in when these thoughts occur
-   - Assess the impact these thoughts have on daily functioning
-
-3. **Cognitive Restructuring:**
-   - Use Socratic questioning to challenge negative beliefs
-   - Help develop balanced, realistic alternative thoughts
-   - Practice thought-stopping techniques
-   - Create coping statements for difficult situations
-
-4. **Behavioral Experiments:**
-   - Suggest activities to test negative predictions
-   - Design behavioral activation strategies
-   - Plan pleasant activity scheduling
-   - Create exposure exercises for avoidance patterns
-
-5. **Homework Assignments:**
-   - Daily thought records to track patterns
-   - Behavioral experiments to test beliefs
-   - Gratitude journaling or positive event logging
-   - Mindfulness exercises to observe thoughts without judgment
-
-6. **Relapse Prevention:**
-   - Identify early warning signs of negative thinking
-   - Develop a toolkit of coping strategies
-   - Create an action plan for setbacks
-   - Build ongoing self-monitoring skills
-
-Respond in {language} language with:
-- Specific cognitive distortions identified
-- Evidence-based thought challenging techniques
-- Behavioral intervention strategies
-- Specific homework assignments
-- Progress monitoring recommendations
-- Relapse prevention planning
-
-Provide clear, actionable CBT techniques while maintaining therapeutic rapport and validation.
-
-**Structure your response as:**
-**COGNITIVE PATTERNS:** [Distortions identified]
-**THOUGHT CHALLENGING:** [Restructuring techniques]
-**BEHAVIORAL STRATEGIES:** [Activity and exposure plans]
-**HOMEWORK:** [Specific between-session tasks]
-**MONITORING:** [Progress tracking methods]
-**PREVENTION:** [Relapse prevention strategies]
-"""
-        
-        context = f"CBT session - Thoughts: {negative_thoughts} | Emotions: {emotional_patterns}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        context = f"Negative thoughts: {negative_thoughts}, Emotional patterns: {emotional_patterns}"
+        result = self.analyze("I need help with cognitive restructuring for my negative thoughts", [], "", context)
+        return result["commentary"]
 
     def anxiety_management(self, anxiety_symptoms: str, triggers: str, language: str = "english") -> str:
-        """Specialized intervention for anxiety disorders and panic management"""
-        
-        prompt = f"""
-ANXIETY MANAGEMENT THERAPY SESSION:
-
-Anxiety symptoms: {anxiety_symptoms}
-Identified triggers: {triggers}
-
-Please provide specialized anxiety intervention:
-
-1. **Anxiety Psychoeducation:**
-   - Explain the fight-flight-freeze response
-   - Normalize anxiety as a natural survival mechanism
-   - Describe how anxiety maintains itself through avoidance
-   - Explain the anxiety cycle and how to break it
-
-2. **Immediate Anxiety Management:**
-   - Box breathing technique (4-4-4-4 count)
-   - 5-4-3-2-1 grounding technique (senses)
-   - Progressive muscle relaxation (PMR)
-   - Visualization and safe place imagery
-   - Cold water or ice cube technique for panic attacks
-
-3. **Cognitive Techniques for Anxiety:**
-   - Challenge catastrophic thinking patterns
-   - Reality testing anxious predictions
-   - Develop coping self-talk statements
-   - Practice uncertainty tolerance
-   - Use the "So what?" technique for worry thoughts
-
-4. **Exposure Therapy Principles:**
-   - Create anxiety hierarchy (least to most feared situations)
-   - Plan gradual exposure exercises
-   - Practice staying in anxiety-provoking situations
-   - Learn that anxiety peaks and naturally decreases
-   - Build confidence through successful exposures
-
-5. **Lifestyle Modifications:**
-   - Sleep hygiene recommendations
-   - Caffeine and alcohol impact on anxiety
-   - Regular exercise for anxiety reduction
-   - Nutrition's role in mood stability
-   - Stress management and time management skills
-
-6. **Long-term Anxiety Management:**
-   - Develop daily mindfulness practice
-   - Build distress tolerance skills
-   - Create anxiety action plan
-   - Identify support network
-   - Plan for setback management
-
-Respond in {language} language with:
-- Immediate anxiety relief techniques
-- Cognitive restructuring for anxious thoughts
-- Gradual exposure planning
-- Lifestyle modification recommendations
-- Long-term anxiety management strategies
-- Emergency coping plan for panic attacks
-
-Provide compassionate, evidence-based anxiety treatment while validating the patient's experience.
-
-**Structure your response as:**
-**UNDERSTANDING ANXIETY:** [Psychoeducation]
-**IMMEDIATE RELIEF:** [Crisis techniques]
-**THOUGHT WORK:** [Cognitive strategies]
-**EXPOSURE PLAN:** [Gradual facing of fears]
-**LIFESTYLE:** [Daily management strategies]
-**LONG-TERM PLAN:** [Ongoing anxiety management]
-"""
-        
-        context = f"Anxiety management - Symptoms: {anxiety_symptoms} | Triggers: {triggers}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        context = f"Anxiety symptoms: {anxiety_symptoms}, Triggers: {triggers}"
+        result = self.analyze("I need help managing my anxiety symptoms", [], "", context)
+        return result["commentary"]
 
     def depression_support(self, depressive_symptoms: str, motivation_levels: str, language: str = "english") -> str:
-        """Specialized intervention for depression and mood disorders"""
-        
-        prompt = f"""
-DEPRESSION SUPPORT THERAPY SESSION:
-
-Depressive symptoms: {depressive_symptoms}
-Current motivation levels: {motivation_levels}
-
-Please provide specialized depression intervention:
-
-1. **Depression Assessment:**
-   - Evaluate severity of depressive symptoms
-   - Assess impact on daily functioning
-   - Screen for suicidal ideation (ask directly if concerning)
-   - Identify triggers and contributing factors
-   - Assess social support and isolation levels
-
-2. **Behavioral Activation:**
-   - Schedule pleasant activities daily
-   - Break large tasks into smaller, manageable steps
-   - Create activity monitoring charts
-   - Focus on mastery and pleasure activities
-   - Establish daily routine and structure
-
-3. **Cognitive Techniques for Depression:**
-   - Challenge all-or-nothing thinking
-   - Address self-criticism and negative self-talk
-   - Examine evidence for hopeless thoughts
-   - Practice self-compassion exercises
-   - Develop balanced perspective on situations
-
-4. **Motivational Enhancement:**
-   - Explore values and what matters most
-   - Set small, achievable daily goals
-   - Celebrate small wins and progress
-   - Use motivational interviewing techniques
-   - Address ambivalence about change
-
-5. **Social Connection:**
-   - Identify supportive relationships
-   - Plan social activities despite low mood
-   - Address social withdrawal patterns
-   - Practice communication skills
-   - Build new social connections gradually
-
-6. **Self-Care and Routine:**
-   - Establish consistent sleep schedule
-   - Plan regular meals and nutrition
-   - Incorporate gentle physical activity
-   - Create morning and evening routines
-   - Practice good personal hygiene habits
-
-7. **Relapse Prevention:**
-   - Identify early warning signs of depression
-   - Create depression action plan
-   - Build coping skills toolkit
-   - Plan ongoing self-monitoring
-   - Establish professional support network
-
-Respond in {language} language with:
-- Behavioral activation strategies
-- Cognitive restructuring for depressive thoughts
-- Motivation enhancement techniques
-- Social connection recommendations
-- Self-care and routine planning
-- Relapse prevention strategies
-- Professional referral guidance if needed
-
-Provide hope-instilling, evidence-based depression treatment while acknowledging the patient's struggle.
-
-**Structure your response as:**
-**VALIDATION:** [Understanding the depression experience]
-**BEHAVIORAL ACTIVATION:** [Activity and routine strategies]
-**THOUGHT WORK:** [Cognitive restructuring]
-**MOTIVATION:** [Building energy and purpose]
-**CONNECTION:** [Social support strategies]
-**SELF-CARE:** [Daily management routines]
-**PREVENTION:** [Long-term wellness planning]
-"""
-        
-        context = f"Depression support - Symptoms: {depressive_symptoms} | Motivation: {motivation_levels}"
-        messages = self._format_messages(prompt, context)
-        return self._generate_response(messages)
+        """Legacy method - returns commentary only for backward compatibility"""
+        context = f"Depressive symptoms: {depressive_symptoms}, Motivation levels: {motivation_levels}"
+        result = self.analyze("I need help with depression and low motivation", [], "", context)
+        return result["commentary"]
 
     def assess_crisis_level(self, mental_state: str, safety_indicators: str) -> Dict[str, Any]:
         """Assess mental health crisis level and provide structured recommendations"""
-        
-        prompt = f"""
-Perform a mental health crisis assessment:
-
-Mental state: {mental_state}
-Safety indicators: {safety_indicators}
-
-Please provide a structured crisis assessment in the following format:
-
-**CRISIS LEVEL ASSESSMENT:**
-Crisis Level: [none/mild/moderate/severe/emergency]
-
-**RISK FACTORS:**
-[List identified risk factors]
-
-**PROTECTIVE FACTORS:**
-[List identified protective factors]
-
-**IMMEDIATE RECOMMENDATIONS:**
-[Specific actions to take immediately]
-
-**PROFESSIONAL INTERVENTION:**
-[Level of professional care needed]
-
-**SAFETY PLANNING:**
-[Immediate safety measures]
-
-**FOLLOW-UP:**
-[Timeline and follow-up recommendations]
-
-Base your assessment on:
-- **Emergency**: Immediate danger to self or others, active suicidal plan
-- **Severe**: High suicide risk, severe symptoms, impaired functioning
-- **Moderate**: Concerning symptoms, some risk factors, needs intervention
-- **Mild**: Low-level symptoms, good coping, stable support
-- **None**: No significant crisis indicators present
-"""
-        
-        context = f"Crisis assessment - Mental state: {mental_state} | Safety: {safety_indicators}"
-        messages = self._format_messages(prompt, context)
-        response = self._generate_response(messages)
+        result = self.analyze(f"Crisis assessment needed - Mental state: {mental_state}", [], "", f"Safety indicators: {safety_indicators}")
         
         # Parse response to extract crisis level
+        commentary = result["commentary"]
         crisis_level = "moderate"  # default
-        response_lower = response.lower()
+        commentary_lower = commentary.lower()
         
-        if "emergency" in response_lower:
+        if "emergency" in commentary_lower:
             crisis_level = "emergency"
-        elif "severe" in response_lower:
+        elif "severe" in commentary_lower:
             crisis_level = "severe"
-        elif "mild" in response_lower:
+        elif "mild" in commentary_lower:
             crisis_level = "mild"
-        elif "none" in response_lower:
+        elif "none" in commentary_lower or "no crisis" in commentary_lower:
             crisis_level = "none"
         
         return {
             "crisis_level": crisis_level,
-            "full_assessment": response,
+            "full_assessment": commentary,
+            "thinking": result["thinking"],
             "timestamp": datetime.now().isoformat(),
             "requires_immediate_intervention": crisis_level in ["severe", "emergency"]
         }
 
 
 if __name__ == "__main__":
-    # Test the Psychologist Agent
+    # Test the modified Psychologist Agent
     try:
         psychologist = PsychologistAgent(log_level=logging.DEBUG)
         
-        # Test therapy session
-        print("=== TEST: THERAPY SESSION ===")
-        session = psychologist.provide_therapy_session(
-            presenting_concerns="I've been feeling very anxious about work and having trouble sleeping. I keep worrying about making mistakes.",
-            mental_health_history="Previous episodes of anxiety during stressful periods, no formal treatment",
-            language="english"
+        # Test the new analyze method
+        print("=== TEST: ANALYZE METHOD ===")
+        result = psychologist.analyze(
+            user_message="I've been feeling very anxious about work and having trouble sleeping. I keep worrying about making mistakes.",
+            chat_history=[
+                {"role": "user", "content": "I've been stressed lately"},
+                {"role": "assistant", "content": "I understand you're experiencing stress. Can you tell me more about what's been going on?"},
+                {"role": "user", "content": "Work has been overwhelming"},
+                {"role": "assistant", "content": "Work stress can be very challenging. Let's explore some coping strategies together."}
+            ],
+            chain_of_thoughts="Previous session identified work-related anxiety and perfectionist tendencies. Client shows insight and willingness to engage in therapeutic work.",
+            summarized_histories="Client has history of anxiety during high-stress periods, responds well to CBT techniques, strong support system"
         )
-        print(session)
+        
+        print("THINKING:")
+        print(result["thinking"])
+        print("\nCOMMENTARY:")
+        print(result["commentary"])
         
         # Test crisis assessment
         print("\n=== TEST: CRISIS ASSESSMENT ===")
@@ -707,6 +421,14 @@ if __name__ == "__main__":
         )
         print(f"Crisis Level: {assessment['crisis_level']}")
         print(f"Requires Immediate Intervention: {assessment['requires_immediate_intervention']}")
+        
+        # Test legacy method still works
+        print("\n=== TEST: LEGACY METHOD ===")
+        legacy_result = psychologist.provide_therapy_session(
+            presenting_concerns="I feel overwhelmed and anxious about everything",
+            mental_health_history="Previous episodes of anxiety, no formal treatment"
+        )
+        print(legacy_result)
         
     except Exception as e:
         print(f"Error testing Psychologist Agent: {e}")
