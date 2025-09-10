@@ -338,7 +338,6 @@ class ChatbotManager:
                 chat_history=chat_history,
                 user_message=user_message,
                 memory_context=memory_context,
-                task="flag",
                 summarized_histories=summaries
             )
             return flags

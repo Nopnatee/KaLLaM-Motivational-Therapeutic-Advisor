@@ -125,16 +125,19 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 
 **Specific Task:**
 Read the user's request and decide which specialist agent to activate via flags response in json format.
-- You are an expert in routing requests to the right specialists.
-- You can activate multiple of them if clearly needed.
-- Always respond according to the **Output Schema:**.
+Return ONLY a single JSON object and nothing else. No intro, no markdown, no code fences.
 
-**Output Schema:**
+**JSON Schema:**
 {{
-  "language": "[detected language in lowercase, e.g. 'thai', 'english']",
-  "doctor": "[true/false]",
-  "psychologist": "[true/false]"
+  "language": "english" | "thai",
+  "doctor": true | false,
+  "psychologist": true | false
 }}
+
+**Rules:**
+- "language" MUST be exactly "english" or "thai" in lowercase.
+- For "doctor" and "psychologist" MUST be booleans.
+- Output nothing except the JSON object.
 """
                              }
         elif task == "finalize":

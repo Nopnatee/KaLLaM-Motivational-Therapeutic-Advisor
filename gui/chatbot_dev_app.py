@@ -450,7 +450,7 @@ def main():
         share=False,
         server_name="0.0.0.0",
         server_port=7860,
-        debug=True,
+        debug=False,
         show_error=True,
         inbrowser=True,
     )

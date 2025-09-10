@@ -84,7 +84,6 @@ class Orchestrator:
         chat_history: Optional[List[Dict[str, str]]] = None,
         user_message: str = "",
         memory_context: Optional[str] = "",
-        task: str = "flag",
         summarized_histories: Optional[List] = None
     ) -> Dict[str, Any]:
         self.logger.info("Getting flags from SupervisorAgent")
@@ -96,7 +95,7 @@ class Orchestrator:
             chat_history=chat_history,
             user_message=user_message,
             memory_context=memory_context,
-            task=task,
+            task="flag",
             summarized_histories=summarized_histories
         )
         dict_flags = json.loads(string_flags)
