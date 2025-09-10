@@ -120,7 +120,7 @@ class Orchestrator:
 
             if source_lang not in supported_langs:
                 supported = ", ".join(f"'{lang}'" for lang in supported_langs)
-                raise ValueError(f"Invalid translate flag: {source_lang}. Supported: {supported}")
+                raise ValueError(f"Invalid translate flag: '{source_lang}'. Supported: {supported}")
 
             if translation_type == "forward":
                 target_lang = default_target if source_lang != default_target else source_lang
