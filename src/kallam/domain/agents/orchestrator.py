@@ -1,9 +1,8 @@
-import os
 import json
 import logging
-from pathlib import Path
-from datetime import datetime
 from typing import Optional, Dict, Any, List
+from functools import wraps
+import time
 
 # Load agents
 from .supervisor import SupervisorAgent
@@ -12,15 +11,36 @@ from .translator import TranslatorAgent
 from .doctor import DoctorAgent
 from .psychologist import PsychologistAgent
 
-class Orchestrator:
 
+def _trace(level: int = logging.INFO):
+    """Lightweight enter/exit trace with timing; relies on parent handlers/format."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            self.logger.log(level, f"→ {fn.__name__}")
+            t0 = time.time()
+            try:
+                out = fn(self, *args, **kwargs)
+                dt = int((time.time() - t0) * 1000)
+                self.logger.log(level, f"← {fn.__name__} done in {dt} ms")
+                return out
+            except Exception:
+                self.logger.exception(f"✖ {fn.__name__} failed")
+                raise
+        return wrapper
+    return deco
+
+
+class Orchestrator:
     # ----------------------------------------------------------------------------------------------
     # Initialization
 
-    def __init__(self, log_level: int = logging.INFO):
-
-        # Setup logging
-        self._setup_logging(log_level)
+    def __init__(self, log_level: int | None = None, logger_name: str = "kallam.chatbot.orchestrator"):
+        """
+        log_level: if provided, sets this logger's level; otherwise inherit from parent.
+        logger_name: child logger under the manager's logger hierarchy.
+        """
+        self._setup_logging(log_level, logger_name)
 
         # Initialize available agents
         self.supervisor = SupervisorAgent()
@@ -31,53 +51,34 @@ class Orchestrator:
 
         # Optional config (model names, thresholds, etc.)
         self.config = {
-                        "default_model": "gpt-4o",
-                        "translation_model": "gpt-4o",
-                        "summarization_model": "gpt-4o",
-                        "doctor_model": "gpt-4o",
-                        "psychologist_model": "gpt-4o",
-                        "similarity_threshold": 0.75,
-                        "supported_languages": {"thai", "english"},
-                        "agents_language": "english"
-                      }
-        
-        self.logger.info(f"KaLLaM agents manager initialized successfully. Log level: {logging.getLevelName(log_level)}")
+            "default_model": "gpt-4o",
+            "translation_model": "gpt-4o",
+            "summarization_model": "gpt-4o",
+            "doctor_model": "gpt-4o",
+            "psychologist_model": "gpt-4o",
+            "similarity_threshold": 0.75,
+            "supported_languages": {"thai", "english"},
+            "agents_language": "english"
+        }
 
-    def _setup_logging(self, log_level: int) -> None:
-        """Setup file + console logging for the orchestrator."""
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        eff = logging.getLevelName(self.logger.getEffectiveLevel())
+        self.logger.info(f"KaLLaM agents manager initialized. Effective log level: {eff}")
 
-        self.logger = logging.getLogger(f"{__name__}.AgentsManager")
-        self.logger.setLevel(log_level)
-
-        # Remove existing handlers to avoid duplicate logs
-        self.logger.handlers.clear()
-
-        # File handler for detailed logs
-        file_handler = logging.FileHandler(
-            log_dir / f"kallam_{datetime.now().strftime('%Y%m%d')}.log",
-            encoding="utf-8"
-        )
-        file_handler.setLevel(logging.DEBUG)
-
-        # Console handler for immediate feedback
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-
-        # Formatter
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-
-        # Add handlers
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
+    def _setup_logging(self, log_level: int | None, logger_name: str) -> None:
+        """
+        Use a child logger so we inherit handlers/formatters/filters (incl. request_id)
+        from the ChatbotManager root logger setup. We do NOT add handlers here.
+        """
+        self.logger = logging.getLogger(logger_name)
+        # Inherit manager's handlers
+        self.logger.propagate = True
+        # If caller explicitly sets a level, respect it; otherwise leave unset so it inherits.
+        if log_level is not None:
+            self.logger.setLevel(log_level)
 
     # ----------------------------------------------------------------------------------------------
     # Supervisor & Routing
+    @_trace()
     def get_flags_from_supervisor(
         self,
         chat_history: Optional[List[Dict[str, str]]] = None,
@@ -101,45 +102,40 @@ class Orchestrator:
         dict_flags = json.loads(string_flags)
         self.logger.debug(f"Supervisor flags: {dict_flags}")
         return dict_flags
-    
-    # Translation handling
+
+    @_trace()
     def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
         """Translate message based on flags and translation type."""
         try:
             source_lang = flags.get("language")
             default_target = self.config["agents_language"]
             supported_langs = self.config["supported_languages"]
-            
-            # Validate translation type
+
             if translation_type not in {"forward", "backward"}:
                 raise ValueError(f"Invalid translation type: {translation_type}. Allowed: 'forward', 'backward'")
-            
-            # No translation needed if no source language
+
             if source_lang is None:
                 self.logger.debug("No translation flag set, using original message")
                 return message
-            
-            # Validate source language
+
             if source_lang not in supported_langs:
                 supported = ", ".join(f"'{lang}'" for lang in supported_langs)
                 raise ValueError(f"Invalid translate flag: {source_lang}. Supported: {supported}")
-            
-            # Determine target and if translation needed
+
             if translation_type == "forward":
                 target_lang = default_target if source_lang != default_target else source_lang
                 needs_translation = source_lang != default_target
-            else:  # backward
+            else:
                 target_lang = source_lang if source_lang != default_target else default_target
                 needs_translation = source_lang != default_target
-            
-            # Log and execute
+
             if needs_translation:
                 self.logger.debug(f"Translating {translation_type}: '{source_lang}' -> '{target_lang}'")
                 return self.translator.get_translation(message=message, target=target_lang)
             else:
                 self.logger.debug(f"Source '{source_lang}' same as target, using original message")
                 return message
-                
+
         except ValueError:
             raise
         except Exception as e:
@@ -149,49 +145,42 @@ class Orchestrator:
                 "An error occurred while translating. Please make sure you are using a supported language and try again."
             )
 
-    # Main response generation logic
-    def get_response(self, 
-                     chat_history: List[Dict[str, str]], 
-                     user_message: str, 
+    @_trace()
+    def get_response(self,
+                     chat_history: List[Dict[str, str]],
+                     user_message: str,
                      flags: Dict[str, Any],
                      chain_of_thoughts: List[Dict[str, str]],
                      memory_context: Optional[Dict[str, Any]],
                      summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
-        
+
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
-        # Prepare current chain of thought container
         commentary = {}
 
-        # Get specialized agents suggestions via flags with chain_of_thoughts
-        if flags.get("doctor"): # Dummy for now
+        if flags.get("doctor"):  # Dummy for now
             self.logger.debug("Activating DoctorAgent")
-            commentary["doctor"] = self.doctor.analyze(user_message, 
-                                                        chat_history, 
-                                                        chain_of_thoughts,
-                                                        summarized_histories)
+            commentary["doctor"] = self.doctor.analyze(
+                user_message, chat_history, chain_of_thoughts, summarized_histories
+            )
 
-        if flags.get("psychologist"): # Dummy for now
+        if flags.get("psychologist"):  # Dummy for now
             self.logger.debug("Activating PsychologistAgent")
-            commentary["psychologist"] = self.psychologist.analyze(user_message, 
-                                                                    chat_history, 
-                                                                    chain_of_thoughts,
-                                                                    summarized_histories)
+            commentary["psychologist"] = self.psychologist.analyze(
+                user_message, chat_history, chain_of_thoughts, summarized_histories
+            )
 
-        # Get final output from all agents' suggestions
         commentary["final_output"] = self.supervisor.generate_feedback(
-            chat_history=chat_history, 
+            chat_history=chat_history,
             user_message=user_message,
-            memory_context=memory_context, 
-            task="finalize", 
+            memory_context=memory_context,
+            task="finalize",
             summarized_histories=summarized_histories,
             commentary=commentary,
-            )
+        )
         self.logger.info("Routing complete. Returning results.")
-
         return commentary
 
-    # Dummy for now
     def _merge_outputs(self, outputs: dict) -> str:
         """
         Merge multiple agent responses into a single final string.
@@ -202,17 +191,15 @@ class Orchestrator:
             if agent != "final_output":
                 final.append(f"[{agent.upper()}]: {out}")
         return "\n".join(final)
-    
-    # Summarization handling
-    def summarize_history(self, 
+
+    @_trace()
+    def summarize_history(self,
                           chat_history: List[Dict[str, str]],
                           eng_summaries: List[Dict[str, str]]) -> Optional[str]:
-        
         try:
             summary = self.summarizer.summarize(chat_history, eng_summaries)
             self.logger.info("Summarization complete.")
         except Exception as e:
             self.logger.error(f"Error during summarization: {e}", exc_info=True)
             summary = "Error during summarization."
-
         return str(summary)
