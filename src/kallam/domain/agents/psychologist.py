@@ -64,34 +64,53 @@ Provide supportive, structured, evidence-based therapeutic guidance while ensuri
 Your primary purpose is to help clients develop coping skills and encourage appropriate professional care.
 """
 
-    # --- Logging, API, and response methods unchanged below ---
     def _setup_logging(self, log_level: int) -> None:
+        """Setup logging configuration"""
+        # Create logs directory if it doesn't exist
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
+        
+        # Setup logger
         self.logger = logging.getLogger(f"{__name__}.PsychologistAgent")
         self.logger.setLevel(log_level)
+        
+        # Remove existing handlers to avoid duplicates
         if self.logger.handlers:
             self.logger.handlers.clear()
+        
+        # File handler for detailed logs
         file_handler = logging.FileHandler(
             log_dir / f"psychologist_{datetime.now().strftime('%Y%m%d')}.log",
             encoding='utf-8'
         )
         file_handler.setLevel(logging.DEBUG)
+        
+        # Console handler for immediate feedback
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
+        
+        # Add handlers
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
+
         try:
             self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
             self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            
             if not self.sea_lion_api_key:
                 raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+            
             self.logger.info("SEA-Lion API client initialized for Psychologist Agent")
+        
         except Exception as e:
             self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
