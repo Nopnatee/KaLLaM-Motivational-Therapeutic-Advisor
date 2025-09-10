@@ -169,8 +169,8 @@ Remember: Your primary goal is to provide supportive, evidence-based psychologic
         
         return [system_message, user_message]
 
-    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> Tuple[str, str]:
-        """Generate response using SEA-Lion API and extract thinking + commentary"""
+    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> str:
+        """Generate response using SEA-Lion API and return only the final commentary"""
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
@@ -204,37 +204,34 @@ Remember: Your primary goal is to provide supportive, evidence-based psychologic
             
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 self.logger.error(f"Unexpected response structure: {response_data}")
-                return "Error in psychological analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
             
             choice = response_data["choices"][0]
             if "message" not in choice or "content" not in choice["message"]:
                 self.logger.error(f"Unexpected message structure: {choice}")
-                return "Error in psychological analysis", "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
                 
             raw_content = choice["message"]["content"]
             
             if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
                 self.logger.error("SEA-Lion API returned None or empty content")
-                return "No psychological analysis available", "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            # Extract thinking and answer blocks
-            thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
+            # Extract answer block only, ignore thinking
             answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
-            
-            thinking = thinking_match.group(1).strip() if thinking_match else "Therapeutic analysis in progress..."
             commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
             
-            self.logger.info(f"Generated therapeutic response - Thinking: {len(thinking)} chars, Commentary: {len(commentary)} chars")
-            return thinking, commentary
+            self.logger.info(f"Generated therapeutic response - Commentary: {len(commentary)} chars")
+            return commentary
             
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
-            return "Connection error during psychological analysis", "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
             self.logger.error(f"Error generating response: {str(e)}")
-            return "Error in psychological analysis", "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
 
-    def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> Dict[str, str]:
+    def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:
         """
         Main analyze method expected by orchestrator
         
@@ -245,7 +242,7 @@ Remember: Your primary goal is to provide supportive, evidence-based psychologic
             summarized_histories: Summarized conversation histories
             
         Returns:
-            Dict with 'thinking' and 'commentary' keys
+            Single string response for therapeutic guidance
         """
         # Build comprehensive context for psychological analysis
         context_parts = []
@@ -321,69 +318,57 @@ Always include crisis assessment when appropriate and emphasize professional men
 """
 
         messages = self._format_messages(prompt, full_context)
-        thinking, commentary = self._generate_response_with_thinking(messages)
-        
-        return {
-            "thinking": thinking,
-            "commentary": commentary
-        }
+        return self._generate_response_with_thinking(messages)
 
     # Keep existing methods for backward compatibility
     def provide_therapy_session(self, presenting_concerns: str, mental_health_history: Optional[str] = None, language: str = "english") -> str:
-        """Legacy method - returns commentary only for backward compatibility"""
+        """Legacy method - returns single response for backward compatibility"""
         fake_history = []
         if mental_health_history:
             fake_history.append({"role": "system", "content": f"Mental Health History: {mental_health_history}"})
         
-        result = self.analyze(presenting_concerns, fake_history, "", mental_health_history or "")
-        return result["commentary"]
+        return self.analyze(presenting_concerns, fake_history, "", mental_health_history or "")
 
     def crisis_intervention(self, crisis_situation: str, safety_concerns: str, language: str = "english") -> str:
-        """Legacy method - returns commentary only for backward compatibility"""
+        """Legacy method - returns single response for backward compatibility"""
         context = f"Crisis situation: {crisis_situation}, Safety concerns: {safety_concerns}"
-        result = self.analyze(f"CRISIS: {crisis_situation}", [], "", context)
-        return result["commentary"]
+        return self.analyze(f"CRISIS: {crisis_situation}", [], "", context)
 
     def cognitive_therapy(self, negative_thoughts: str, emotional_patterns: str, language: str = "english") -> str:
-        """Legacy method - returns commentary only for backward compatibility"""
+        """Legacy method - returns single response for backward compatibility"""
         context = f"Negative thoughts: {negative_thoughts}, Emotional patterns: {emotional_patterns}"
-        result = self.analyze("I need help with cognitive restructuring for my negative thoughts", [], "", context)
-        return result["commentary"]
+        return self.analyze("I need help with cognitive restructuring for my negative thoughts", [], "", context)
 
     def anxiety_management(self, anxiety_symptoms: str, triggers: str, language: str = "english") -> str:
-        """Legacy method - returns commentary only for backward compatibility"""
+        """Legacy method - returns single response for backward compatibility"""
         context = f"Anxiety symptoms: {anxiety_symptoms}, Triggers: {triggers}"
-        result = self.analyze("I need help managing my anxiety symptoms", [], "", context)
-        return result["commentary"]
+        return self.analyze("I need help managing my anxiety symptoms", [], "", context)
 
     def depression_support(self, depressive_symptoms: str, motivation_levels: str, language: str = "english") -> str:
-        """Legacy method - returns commentary only for backward compatibility"""
+        """Legacy method - returns single response for backward compatibility"""
         context = f"Depressive symptoms: {depressive_symptoms}, Motivation levels: {motivation_levels}"
-        result = self.analyze("I need help with depression and low motivation", [], "", context)
-        return result["commentary"]
+        return self.analyze("I need help with depression and low motivation", [], "", context)
 
     def assess_crisis_level(self, mental_state: str, safety_indicators: str) -> Dict[str, Any]:
         """Assess mental health crisis level and provide structured recommendations"""
-        result = self.analyze(f"Crisis assessment needed - Mental state: {mental_state}", [], "", f"Safety indicators: {safety_indicators}")
+        response = self.analyze(f"Crisis assessment needed - Mental state: {mental_state}", [], "", f"Safety indicators: {safety_indicators}")
         
         # Parse response to extract crisis level
-        commentary = result["commentary"]
         crisis_level = "moderate"  # default
-        commentary_lower = commentary.lower()
+        response_lower = response.lower()
         
-        if "emergency" in commentary_lower:
+        if "emergency" in response_lower:
             crisis_level = "emergency"
-        elif "severe" in commentary_lower:
+        elif "severe" in response_lower:
             crisis_level = "severe"
-        elif "mild" in commentary_lower:
+        elif "mild" in response_lower:
             crisis_level = "mild"
-        elif "none" in commentary_lower or "no crisis" in commentary_lower:
+        elif "none" in response_lower or "no crisis" in response_lower:
             crisis_level = "none"
         
         return {
             "crisis_level": crisis_level,
-            "full_assessment": commentary,
-            "thinking": result["thinking"],
+            "full_assessment": response,
             "timestamp": datetime.now().isoformat(),
             "requires_immediate_intervention": crisis_level in ["severe", "emergency"]
         }
@@ -408,10 +393,8 @@ if __name__ == "__main__":
             summarized_histories="Client has history of anxiety during high-stress periods, responds well to CBT techniques, strong support system"
         )
         
-        print("THINKING:")
-        print(result["thinking"])
-        print("\nCOMMENTARY:")
-        print(result["commentary"])
+        print("SINGLE RESPONSE:")
+        print(result)
         
         # Test crisis assessment
         print("\n=== TEST: CRISIS ASSESSMENT ===")
