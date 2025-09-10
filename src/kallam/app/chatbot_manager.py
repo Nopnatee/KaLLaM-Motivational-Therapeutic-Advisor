@@ -341,11 +341,6 @@ class ChatbotManager:
                 task="flag",
                 summarized_histories=summaries
             )
-            # Ensure language exists and is supported
-            lang = (flags or {}).get("language") or "english"
-            if lang not in {"thai", "english"}:
-                lang = "invalid"
-            flags["language"] = lang
             return flags
         except Exception as e:
             logger.warning(f"Failed to get flags from supervisor: {e}, using safe defaults")
