@@ -151,34 +151,37 @@ class Orchestrator:
 
     # Main response generation logic
     def get_response(self, 
-                     chat_history: List[Dict[str, str]], 
-                     user_message: str, 
-                     flags: Dict[str, Any],
-                     chain_of_thoughts: List[Dict[str, str]],
-                     memory_context: Optional[Dict[str, Any]],
-                     summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
+                    chat_history: List[Dict[str, str]], 
+                    user_message: str, 
+                    flags: Dict[str, Any],
+                    chain_of_thoughts: str,
+                    memory_context: Optional[Dict[str, Any]],
+                    summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
         
         self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
 
-        # Prepare current chain of thought container
         commentary = {}
 
-        # Get specialized agents suggestions via flags with chain_of_thoughts
-        if flags.get("doctor"): # Dummy for now
+        if flags.get("doctor"):
             self.logger.debug("Activating DoctorAgent")
-            commentary["doctor"] = self.doctor.analyze(user_message, 
-                                                        chat_history, 
-                                                        chain_of_thoughts,
-                                                        summarized_histories)
+            doctor_analysis = self.doctor.analyze(user_message, 
+                                                  chat_history, 
+                                                  chain_of_thoughts, 
+                                                  summarized_histories)
+            commentary["doctor"] = doctor_analysis["commentary"]
+            if doctor_analysis.get("thinking"):
+                chain_of_thoughts += f"\n\nDOCTOR ANALYSIS:\n{doctor_analysis['thinking']}"
 
-        if flags.get("psychologist"): # Dummy for now
+        if flags.get("psychologist"):
             self.logger.debug("Activating PsychologistAgent")
-            commentary["psychologist"] = self.psychologist.analyze(user_message, 
-                                                                    chat_history, 
-                                                                    chain_of_thoughts,
-                                                                    summarized_histories)
+            psych_analysis = self.psychologist.analyze(user_message, 
+                                                       chat_history, 
+                                                       chain_of_thoughts, 
+                                                       summarized_histories)
+            commentary["psychologist"] = psych_analysis["commentary"]
+            if psych_analysis.get("thinking"):
+                chain_of_thoughts += f"\n\nPSYCHOLOGIST ANALYSIS:\n{psych_analysis['thinking']}"
 
-        # Get final output from all agents' suggestions
         commentary["final_output"] = self.supervisor.generate_feedback(
             chat_history=chat_history, 
             user_message=user_message,
@@ -186,9 +189,9 @@ class Orchestrator:
             task="finalize", 
             summarized_histories=summarized_histories,
             commentary=commentary,
-            )
-        self.logger.info("Routing complete. Returning results.")
+        )
 
+        self.logger.info("Routing complete. Returning results.")
         return commentary
 
     # Dummy for now
