@@ -145,33 +145,35 @@ class Orchestrator:
             )
 
     @_trace()
-    def get_response(self,
-                     chat_history: List[Dict[str, str]],
-                     user_message: str,
+    def get_commented_response(self,
+                     original_history: List[Dict[str, str]],
+                     original_message: str,
+                     eng_history: List[Dict[str, str]],
+                     eng_message: str,
                      flags: Dict[str, Any],
                      chain_of_thoughts: List[Dict[str, str]],
                      memory_context: Optional[Dict[str, Any]],
                      summarized_histories: List[Dict[str, str]]) -> Dict[str, Any]:
 
-        self.logger.info(f"Routing message: {user_message} | Flags: {flags}")
+        self.logger.info(f"Routing message: {eng_message} | Flags: {flags}")
 
         commentary = {}
 
         if flags.get("doctor"):  # Dummy for now
             self.logger.debug("Activating DoctorAgent")
             commentary["doctor"] = self.doctor.analyze(
-                user_message, chat_history, chain_of_thoughts, summarized_histories
+                eng_message, eng_history, chain_of_thoughts, summarized_histories
             )
 
         if flags.get("psychologist"):  # Dummy for now
             self.logger.debug("Activating PsychologistAgent")
             commentary["psychologist"] = self.psychologist.analyze(
-                user_message, chat_history, chain_of_thoughts, summarized_histories
+                original_message, original_history, chain_of_thoughts, summarized_histories
             )
 
         commentary["final_output"] = self.supervisor.generate_feedback(
-            chat_history=chat_history,
-            user_message=user_message,
+            chat_history=original_history,
+            user_message=original_message,
             memory_context=memory_context,
             task="finalize",
             summarized_histories=summarized_histories,

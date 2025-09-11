@@ -261,6 +261,7 @@ class ChatbotManager:
                 raise ValueError(f"Session {session_id} not found")
 
             # fetch context
+            original_history = self.messages.get_original_history(session_id, limit=self.message_limit)
             eng_history = self.messages.get_translated_history(session_id, limit=self.message_limit)
             eng_summaries = self.summaries.list(session_id, limit=self.summary_limit)
             chain = self.messages.get_reasoning_traces(session_id, limit=self.chain_of_thoughts_limit)
@@ -286,18 +287,20 @@ class ChatbotManager:
             )
 
             # respond
-            eng_response = self.orchestrator.get_response(
-                chat_history=eng_history,
-                user_message=eng_msg,
+            response_commentary = self.orchestrator.get_commented_response(
+                original_history=original_history,
+                original_message=user_message,
+                eng_history=eng_history,
+                eng_message=eng_msg,
                 flags=flags,
                 chain_of_thoughts=chain,
                 memory_context=memory_context,
                 summarized_histories=eng_summaries,
             )
 
-            bot_eng = eng_response["final_output"]
-            bot_message = self.orchestrator.get_translation(
-                message=bot_eng, flags=flags, translation_type="backward"
+            bot_message = response_commentary["final_output"]
+            bot_eng = self.orchestrator.get_translation(
+                message=bot_message, flags=flags, translation_type="forward"
             )
             latency_ms = int((time.time() - t0) * 1000)
 
@@ -308,7 +311,7 @@ class ChatbotManager:
             self.messages.append_user(session_id, content=user_message,
                                       translated=eng_msg, flags=flags, tokens_in=tok_user)
             self.messages.append_assistant(session_id, content=bot_message,
-                                           translated=bot_eng, reasoning=eng_response,
+                                           translated=bot_eng, reasoning=response_commentary,
                                            tokens_out=tok_bot, latency_ms=latency_ms)
 
             if logger.isEnabledFor(logging.DEBUG):
