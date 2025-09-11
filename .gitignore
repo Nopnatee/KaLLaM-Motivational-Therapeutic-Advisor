@@ -8,6 +8,7 @@ data
 exported_sessions
 Dockerfile
 .dockerignore
+dataset
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
