@@ -9,6 +9,14 @@ class MessageStore:
     def __init__(self, db_path: str): 
         self.db_path = db_path.replace("sqlite:///", "")
 
+    def get_original_history(self, session_id: str, limit: int = 10) -> List[Dict[str, str]]:
+        with sqlite_conn(self.db_path) as c:
+            rows = c.execute("""
+                select role, coalesce(content) as content
+                from messages where session_id=? and role in ('user','assistant')
+                order by id desc limit ?""", (session_id, limit)).fetchall()
+        return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
     def get_translated_history(self, session_id: str, limit: int = 10) -> List[Dict[str, str]]:
         with sqlite_conn(self.db_path) as c:
             rows = c.execute("""
