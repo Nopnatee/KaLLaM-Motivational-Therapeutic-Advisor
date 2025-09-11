@@ -179,6 +179,30 @@ Read the given context and response concisely based on commentary of each agents
         
         return messages
     
+    def _clean_json_response(self, raw_content: str) -> str:
+
+        if not raw_content:
+            return raw_content
+        
+        # Remove thinking blocks first (if any)
+        thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
+        if thinking_match:
+            content = re.sub(r".*?</think>\s*", "", raw_content, flags=re.DOTALL).strip()
+        else:
+            content = raw_content.strip()
+        
+        content = re.sub(r'^```(?:json|JSON)?\s*', '', content, flags=re.MULTILINE) #remove json markdown
+        content = re.sub(r'```\s*$', '', content, flags=re.MULTILINE)
+        
+        content = content.strip()
+        
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            content = json_match.group(0)
+        
+        return content
+    
+    
     def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]], show_thinking: bool = False) -> str:
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
@@ -232,24 +256,33 @@ Read the given context and response concisely based on commentary of each agents
                 self.logger.error("SEA-Lion API returned empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            # Handle thinking block 
-            thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
-            if thinking_match:
-                if show_thinking:
-                    # Keep the thinking block visible
-                    final_answer = raw_content.strip()
-                    self.logger.debug("Thinking block found and kept visible")
-                else:
-                    # Remove everything up to and including </think>
-                    final_answer = re.sub(r".*?</think>\s*", "", raw_content, flags=re.DOTALL).strip()
-                    self.logger.debug("Thinking block found and removed from response")
+            # Check if this is a flag task
+            is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "") 
+                        for msg in messages if msg.get("role") == "system")
+            
+            if is_flag_task:
+                # Apply JSON cleaning for flag tasks
+                final_answer = self._clean_json_response(raw_content)
+                self.logger.debug("Applied JSON cleaning for flag task")
             else:
-                self.logger.debug("No thinking block found in response")
-                final_answer = raw_content.strip()
+                # Handle thinking block for non-flag tasks
+                thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
+                if thinking_match:
+                    if show_thinking:
+                        # Keep the thinking block visible
+                        final_answer = raw_content.strip()
+                        self.logger.debug("Thinking block found and kept visible")
+                    else:
+                        # Remove everything up to and including </think>
+                        final_answer = re.sub(r".*?</think>\s*", "", raw_content, flags=re.DOTALL).strip()
+                        self.logger.debug("Thinking block found and removed from response")
+                else:
+                    self.logger.debug("No thinking block found in response")
+                    final_answer = raw_content.strip()
             
             # Log response information
             self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
-            self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
+            # self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
             
             return final_answer
             
