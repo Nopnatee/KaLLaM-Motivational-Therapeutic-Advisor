@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 THIS = Path(__file__).resolve()
-ROOT = THIS.parent   # go up from scripts/
+ROOT = THIS.parent.parent   # go up from scripts/
 BASE = ROOT / "dataset"
 OUT  = BASE / "converted_conversations"
 OUT.mkdir(parents=True, exist_ok=True)   # parents=True fixes it
