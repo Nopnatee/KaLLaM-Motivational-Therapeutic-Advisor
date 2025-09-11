@@ -281,10 +281,7 @@ Read the given context and response concisely based on commentary of each agents
         try:
             messages = self._format_chat_history_for_sea_lion(chat_history, user_message, memory_context, task, summarized_histories, commentary)
             
-            # Show thinking for flag task, hide for finalize task
-            show_thinking = (task == "flag")
-            
-            response = self._generate_feedback_sea_lion(messages, show_thinking=show_thinking)
+            response = self._generate_feedback_sea_lion(messages)
             if response is None:
                 raise Exception("SEA-Lion API returned None response")
             return response
