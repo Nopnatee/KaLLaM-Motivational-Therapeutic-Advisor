@@ -22,7 +22,7 @@ class SupervisorAgent:
 
         self.system_prompt = """
 **Your Role:** 
-You are KaLLaM" or "กะหล่ำ" You are a warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. 
+You are KaLLaM" or "กัลหล่ำ" You are a warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. 
 Your goal is to provide actionable guidance that motivates patients to take better care of themselves.
 
 **Core Rules:**
@@ -30,7 +30,6 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 - If a message includes both medical and psychological elements, choose the agent that addresses the most urgent or dominant concern (e.g., chest pain + anxiety → Doctor first).
 - If unclear, ask a clarifying question before assigning.
 """
-
 
     def _setup_logging(self, log_level: int) -> None:
         """Setup logging configuration"""
@@ -180,7 +179,7 @@ Read the given context and response concisely based on commentary of each agents
         
         return messages
     
-    def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]]) -> str:
+    def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]], show_thinking: bool = False) -> str:
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
@@ -233,18 +232,20 @@ Read the given context and response concisely based on commentary of each agents
                 self.logger.error("SEA-Lion API returned empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            # Extract reasoning and answer blocks
-            thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
-            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
-            
-            reasoning = thinking_match.group(1).strip() if thinking_match else None
-            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
-            
-            # Log reasoning privately for debugging
-            if reasoning:
-                self.logger.debug(f"SEA-Lion reasoning:\n{reasoning}")
+            # Handle thinking block 
+            thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
+            if thinking_match:
+                if show_thinking:
+                    # Keep the thinking block visible
+                    final_answer = raw_content.strip()
+                    self.logger.debug("Thinking block found and kept visible")
+                else:
+                    # Remove everything up to and including </think>
+                    final_answer = re.sub(r".*?</think>\s*", "", raw_content, flags=re.DOTALL).strip()
+                    self.logger.debug("Thinking block found and removed from response")
             else:
                 self.logger.debug("No thinking block found in response")
+                final_answer = raw_content.strip()
             
             # Log response information
             self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
@@ -279,7 +280,11 @@ Read the given context and response concisely based on commentary of each agents
         
         try:
             messages = self._format_chat_history_for_sea_lion(chat_history, user_message, memory_context, task, summarized_histories, commentary)
-            response = self._generate_feedback_sea_lion(messages)
+            
+            # Show thinking for flag task, hide for finalize task
+            show_thinking = (task == "flag")
+            
+            response = self._generate_feedback_sea_lion(messages, show_thinking=show_thinking)
             if response is None:
                 raise Exception("SEA-Lion API returned None response")
             return response
@@ -287,6 +292,7 @@ Read the given context and response concisely based on commentary of each agents
             self.logger.error(f"Error in _generate_feedback: {str(e)}")
             # Return a fallback response instead of None
             return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+
 
 if __name__ == "__main__":
     # Minimal reproducible demo for SupervisorAgent using existing generate_feedback()
@@ -301,8 +307,8 @@ if __name__ == "__main__":
 
     # 2) Dummy chat history (what the user and assistant said earlier)
     chat_history = [
-        {"role": "user", "content": "Hi, I’ve been feeling tired lately."},
-        {"role": "assistant", "content": "Thanks for sharing. How’s your sleep and stress?"}
+        {"role": "user", "content": "Hi, I've been feeling tired lately."},
+        {"role": "assistant", "content": "Thanks for sharing. How's your sleep and stress?"}
     ]
 
     # 3) Persistent memory or health context you want to feed the model

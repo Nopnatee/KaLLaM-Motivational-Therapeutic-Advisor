@@ -28,10 +28,11 @@ Your goal is to provide evidence-based psychological interventions while maintai
 
 **Core Rules:**  
 - You are NOT a replacement for professional mental health care.  
+- Always use a calm and reassuring tone
+- Maintain warmth, empathy, and professional boundaries at all times.  
 - Never provide diagnoses; only supportive guidance and coping strategies.  
 - Always recommend consulting a licensed professional for serious concerns.  
 - In emergencies (suicidal thoughts, self-harm, psychosis), advise immediate professional intervention.  
-- Maintain warmth, empathy, and professional boundaries at all times.  
 
 **Therapeutic Approaches:**  
 1. **Active Listening:** Reflect, paraphrase, validate, and show empathy.  
@@ -45,12 +46,11 @@ Your goal is to provide evidence-based psychological interventions while maintai
 - Use open-ended questions, empathetic tone, and validation.  
 - Provide psychoeducation and coping strategies.  
 - Include evidence-based interventions tailored to the client.  
-- Respond in client’s preferred language when specified.  
+- Respond in client's preferred language when specified.  
 - Always include crisis safety steps when risk is detected.  
 
 **Crisis Assessment Protocol:**  
-- If signs of suicidal ideation, self-harm, psychosis, severe dissociation, substance emergencies, or abuse appear:  
-→ Immediately recommend emergency professional intervention **and** provide supportive guidance.  
+- If signs of suicidal ideation, self-harm, psychosis, severe dissociation, substance emergencies, or abuse appear: Immediately recommend emergency professional intervention **and** provide supportive guidance.  
 
 **Output Format:**  
 Always structure responses to include:  
@@ -176,3 +176,85 @@ Your primary purpose is to help clients develop coping skills and encourage appr
         except Exception as e:
             self.logger.error(f"Error generating response: {str(e)}")
             return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+
+    def provide_therapeutic_guidance(self, user_message: str, therapeutic_context: str = "") -> str:
+        """
+        Main method to provide psychological guidance and support
+        
+        Args:
+            user_message: The client's message or concern
+            therapeutic_context: Additional context about the client's situation
+            
+        Returns:
+            Therapeutic response with guidance and support
+        """
+        self.logger.info("Processing therapeutic guidance request")
+        self.logger.debug(f"User message: {user_message}")
+        self.logger.debug(f"Therapeutic context: {therapeutic_context}")
+        
+        try:
+            messages = self._format_messages(user_message, therapeutic_context)
+            response = self._generate_response_with_thinking(messages)
+            
+            if response is None:
+                raise Exception("SEA-Lion API returned None response")
+                
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error in provide_therapeutic_guidance: {str(e)}")
+            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ หากมีความคิดทำร้ายตัวเอง กรุณาติดต่อแพทย์หรือสายด่วนช่วยเหลือทันที"
+
+
+if __name__ == "__main__":
+    # Minimal reproducible demo for PsychologistAgent
+    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
+
+    # 1) Create the agent
+    try:
+        psychologist = PsychologistAgent(log_level=logging.DEBUG)
+    except Exception as e:
+        print(f"[BOOT ERROR] Unable to start PsychologistAgent: {e}")
+        raise SystemExit(1)
+
+    # 2) Test scenarios for psychological support
+    test_cases = [
+        {
+            "name": "Exam Anxiety",
+            "user_message": "I have a headache and feel anxious about my exams. I can't sleep and keep worrying about failing.",
+            "therapeutic_context": "User: 21 y/o student, midterm week, low sleep (4-5h), high caffeine, history of anxiety during academic stress."
+        },
+        {
+            "name": "General Stress Management", 
+            "user_message": "I've been feeling overwhelmed lately with work and personal life. Everything feels like too much.",
+            "therapeutic_context": "User: Working professional, recent job change, managing family responsibilities, seeking coping strategies."
+        },
+        {
+            "name": "Relationship Issues",
+            "user_message": "My relationship with my partner has been really difficult. We keep arguing and I don't know how to fix it.",
+            "therapeutic_context": "User: In committed relationship, communication difficulties, seeking relationship guidance and conflict resolution strategies."
+        }
+    ]
+
+    # Run tests
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"\n{'='*50}")
+        print(f"TEST {i}: {test_case['name']}")
+        print(f"{'='*50}")
+        
+        print(f"\n User Message: {test_case['user_message']}")
+        print(f" Context: {test_case['therapeutic_context']}")
+        
+        print(f"\n PSYCHOLOGIST RESPONSE:")
+        print("-" * 40)
+        
+        response = psychologist.provide_therapeutic_guidance(
+            user_message=test_case['user_message'],
+            therapeutic_context=test_case['therapeutic_context']
+        )
+        
+        print(response)
+        print("\n" + "="*50)
+
+    print(f"\n All tests completed successfully!")
+    print(" The PsychologistAgent is ready for integration with the supervisor system.")
