@@ -15,7 +15,7 @@ load_dotenv()
 # AWS & Hugging Face Setup
 # --------------------------
 AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")  
-AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-2")
 HF_MODEL_ID = "google/medgemma-27b-it"
 HF_TASK = "text-generation"
 
