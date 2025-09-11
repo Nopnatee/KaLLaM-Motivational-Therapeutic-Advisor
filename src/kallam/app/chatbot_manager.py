@@ -312,7 +312,7 @@ class ChatbotManager:
                                       translated=eng_msg, flags=flags, tokens_in=tok_user)
             self.messages.append_assistant(session_id, content=bot_message,
                                            translated=bot_eng, reasoning=response_commentary,
-                                           tokens_out=tok_bot, latency_ms=latency_ms)
+                                           tokens_out=tok_bot)
 
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
