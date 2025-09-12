@@ -24,7 +24,6 @@ dependencies = [
   "transformers>=4.40.0",         # Hugging Face transformers
   "gradio>=4.0.0",                # UI
   "pyngrok==7.3.0",               # Hosting gradio interface
-  "sagemaker=2.251.1"             # Sagemaker for bedrock market
 ]
 
 [project.optional-dependencies]
