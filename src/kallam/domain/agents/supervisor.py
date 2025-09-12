@@ -71,8 +71,8 @@ Your goal is to provide actionable guidance that motivates patients to take bett
         try:
             # Check for AWS credentials (boto3 will handle the credential resolution)
             aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-            aws_region = os.getenv("AWS_REGION", "sea-2")  # Default to sea-2
+            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")                               ##################NEEDS AWS TOKEN##################
+            aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
             
             if not aws_access_key or not aws_secret_key:
                 raise ValueError("AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
