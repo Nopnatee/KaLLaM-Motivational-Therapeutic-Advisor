@@ -1,12 +1,13 @@
 import os
 import logging
-import requests
-import re
 from pathlib import Path
 from datetime import datetime
 from typing import List, Literal, Dict, Any, Optional
 
 from dotenv import load_dotenv
+from strands import Agent
+from strands.models.openai import OpenAIModel
+
 load_dotenv()
 
 
@@ -16,11 +17,39 @@ class DoctorAgent:
 
     def __init__(self, log_level: int = logging.INFO):
         self._setup_logging(log_level)
-        self._setup_api_clients()
+        self._setup_agent()
         
         self.logger.info("Doctor Agent initialized successfully")
 
-        self.system_prompt = """
+    def _setup_logging(self, log_level: int) -> None:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        self.logger = logging.getLogger(f"{__name__}.DoctorAgent")
+        self.logger.setLevel(log_level)
+        if self.logger.handlers:
+            self.logger.handlers.clear()
+        file_handler = logging.FileHandler(
+            log_dir / f"doctor_{datetime.now().strftime('%Y%m%d')}.log",
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+
+    def _setup_agent(self) -> None:
+        """Setup Strands Agent with GPT-4o"""
+        try:
+            # Verify OpenAI API key is available
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise ValueError("OPENAI_API_KEY not found in environment variables")
+            
+            system_prompt = """
 **Your Role:**  
 You are a Medical Assistant AI Doctor. You provide helpful medical information and guidance while being extremely careful about medical advice.
 
@@ -60,123 +89,52 @@ Provide structured responses including:
 - Next steps
 - Medical disclaimer
 """
-
-    def _setup_logging(self, log_level: int) -> None:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        self.logger = logging.getLogger(f"{__name__}.DoctorAgent")
-        self.logger.setLevel(log_level)
-        if self.logger.handlers:
-            self.logger.handlers.clear()
-        file_handler = logging.FileHandler(
-            log_dir / f"doctor_{datetime.now().strftime('%Y%m%d')}.log",
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.DEBUG)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
-
-    def _setup_api_clients(self) -> None:
-        try:
-            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-            if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
-            self.logger.info("SEA-Lion API client initialized for Doctor Agent")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize API clients: {str(e)}")
-            raise
-
-    def _format_messages(self, prompt: str, context: str = "") -> List[Dict[str, str]]:
-        now = datetime.now()
-        context_info = f"""
-**Current Context:**
-- Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
-- Medical Context: {context}
-"""
-        system_message = {"role": "system", "content": f"{self.system_prompt}\n\n{context_info}"}
-        user_message = {"role": "user", "content": prompt}
-        return [system_message, user_message]
-
-    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
-            headers = {"Authorization": f"Bearer {self.sea_lion_api_key}", "Content-Type": "application/json"}
-            payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
-                "messages": messages,
-                "chat_template_kwargs": {"thinking_mode": "on"},
-                "max_tokens": 2000,
-                "temperature": 0.3,
-                "top_p": 0.8,
-                "frequency_penalty": 0.1,
-                "presence_penalty": 0.1
-            }
-            response = requests.post(
-                f"{self.sea_lion_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30
+            
+            # Create Strands Agent with GPT-4o
+            self.agent = Agent(
+                name="DoctorAgent",
+                instructions=system_prompt,
+                model="gpt-4o",
+                temperature=0.3,
+                max_tokens=2000
             )
-            response.raise_for_status()
-            response_data = response.json()
-
-            if "choices" not in response_data or len(response_data["choices"]) == 0:
-                self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
             
-            choice = response_data["choices"][0]
-            if "message" not in choice or "content" not in choice["message"]:
-                self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
-            
-            raw_content = choice["message"]["content"]
-            if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
-                self.logger.error("SEA-Lion API returned None or empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
-            
-            # Extract only the answer block
-            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
-            commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
-
-            self.logger.info(f"Generated medical response - Commentary: {len(commentary)} chars")
-            return commentary
-
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            self.logger.info("Strands Agent initialized with GPT-4o")
+                
         except Exception as e:
-            self.logger.error(f"Error generating response: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            self.logger.error(f"Failed to initialize Strands Agent: {str(e)}")
+            raise
 
     def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:
         """
         Main analyze method expected by orchestrator.
-        Returns a single commentary string (like PsychologistAgent).
+        Returns a single commentary string.
         """
-        context_parts = []
-        if summarized_histories:
-            context_parts.append(f"Patient History Summary: {summarized_histories}")
-        if chain_of_thoughts:
-            context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
+        try:
+            # Build context
+            context_parts = []
+            now = datetime.now()
+            context_parts.append(f"Current Date/Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            if summarized_histories:
+                context_parts.append(f"Patient History Summary: {summarized_histories}")
+            if chain_of_thoughts:
+                context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
 
-        recent_context = []
-        for msg in chat_history[-3:]:
-            if msg.get("role") == "user":
-                recent_context.append(f"Patient: {msg.get('content', '')}")
-            elif msg.get("role") == "assistant":
-                recent_context.append(f"Previous Response: {msg.get('content', '')}")
-        if recent_context:
-            context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
+            # Add recent conversation context
+            recent_context = []
+            for msg in chat_history[-3:]:
+                if msg.get("role") == "user":
+                    recent_context.append(f"Patient: {msg.get('content', '')}")
+                elif msg.get("role") == "assistant":
+                    recent_context.append(f"Previous Response: {msg.get('content', '')}")
+            if recent_context:
+                context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
 
-        full_context = "\n\n".join(context_parts) if context_parts else ""
+            full_context = "\n\n".join(context_parts) if context_parts else ""
 
-        prompt = f"""
+            # Create comprehensive prompt
+            prompt = f"""
 Based on the current medical query and available context, provide comprehensive medical guidance:
 
 **Current Query:** {user_message}
@@ -191,19 +149,36 @@ Please provide:
 3. **Patient Education**
 4. **Safety Considerations**
 
-**Response Structure:**
+Please provide concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.
+"""
 
-```answer
-[Concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.]
-```"""
+            # Use Strands Agent to generate response
+            response = self.agent.run(prompt)
+            
+            # Extract the text content from the response
+            if hasattr(response, 'messages') and response.messages:
+                # Get the last message content
+                last_message = response.messages[-1]
+                if hasattr(last_message, 'text'):
+                    medical_response = last_message.text
+                elif hasattr(last_message, 'content'):
+                    medical_response = last_message.content
+                else:
+                    medical_response = str(last_message)
+            else:
+                medical_response = str(response)
+            
+            self.logger.info(f"Generated medical response - Length: {len(medical_response)} chars")
+            return medical_response
 
-        messages = self._format_messages(prompt, full_context)
-        return self._generate_response_with_thinking(messages)
+        except Exception as e:
+            self.logger.error(f"Error in analyze method: {str(e)}")
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ"
 
 
 if __name__ == "__main__":
     # Minimal reproducible demo for DoctorAgent using existing analyze() method
-    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
+    # Requires OPENAI_API_KEY in your environment, otherwise the class will raise.
 
     # 1) Create the agent
     try:

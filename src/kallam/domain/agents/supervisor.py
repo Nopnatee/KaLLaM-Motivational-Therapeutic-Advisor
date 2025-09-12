@@ -1,4 +1,3 @@
-# pip install "strands-agents[openai]" "python-dotenv"
 import os
 from dotenv import load_dotenv
 load_dotenv()
