@@ -2,6 +2,14 @@
 - Building Trust in Mental Health Chatbots: Safety Metrics and
 LLM-Based Evaluation https://arxiv.org/pdf/2408.04650
 
+# Sealion
+@misc{sea_lion_2024,
+  title={SEA-LION (Southeast Asian Languages In One Network): A Family of Large Language Models for Southeast Asia},
+  author={AI Singapore},
+  year={2024},
+  howpublished={\url{https://github.com/aisingapore/sealion}}
+}
+
 # examples
 @article{Xie2024Scoring,
 title={Scoring with Large Language Models: A Study on Measuring Empathy of Responses in Dialogues},
