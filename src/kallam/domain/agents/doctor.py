@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Literal, Dict, Any, Optional
 
 from dotenv import load_dotenv
-from strands import Agent
+from strands import Agent, tool
 from strands.models.openai import OpenAIModel
 
 load_dotenv()

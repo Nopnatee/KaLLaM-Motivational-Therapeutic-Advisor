@@ -15,9 +15,9 @@ class SupervisorAgent:
     def __init__(self, log_level: int = logging.INFO):
 
         self._setup_logging(log_level)
-        self._setup_api_clients()
+        self._setup_agents()
         
-        self.logger.info(f"KaLLaM chatbot initialized successfully using ")
+        self.logger.info(f"KaLLaM chatbot initialized successfully using Strands Agent with Amazon Bedrock")
 
         self.system_prompt = """
 **Your Role:** 
@@ -66,23 +66,28 @@ Your goal is to provide actionable guidance that motivates patients to take bett
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
 
-    def _setup_api_clients(self) -> None:
-        """Setup API clients - always setup both for mixed usage"""
+    def _setup_agents(self) -> None:
+        """Setup Strands agents - using Amazon Bedrock with AWS credentials"""
         try:
-            # Setup SEA-Lion API (for main chat)
-            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            # Check for AWS credentials (boto3 will handle the credential resolution)
+            aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+            aws_region = os.getenv("AWS_REGION", "sea-2")  # Default to sea-2
             
-            if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+            if not aws_access_key or not aws_secret_key:
+                raise ValueError("AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
+            
+            # Initialize Strands agent with Amazon Bedrock (default provider)
+            # The agent will use boto3's credential resolution system
+            self.agent = Agent()  # Uses default Amazon Bedrock with Claude 4 Sonnet
                 
-            self.logger.info("SEA-Lion API client initialized")
+            self.logger.info(f"Strands Agent with Amazon Bedrock initialized successfully (region: {aws_region})")
                 
         except Exception as e:
-            self.logger.error(f"Failed to initialize API clients: {str(e)}")
+            self.logger.error(f"Failed to initialize Strands agent with Amazon Bedrock: {str(e)}")
             raise
 
-    def _format_chat_history_for_sea_lion(
+    def _format_chat_history_for_strands(
             self, 
             chat_histories: List[Dict[str, str]], 
             user_message: str, 
@@ -90,7 +95,7 @@ Your goal is to provide actionable guidance that motivates patients to take bett
             task: str,
             summarized_histories: Optional[List] = None,
             commentary: Optional[Dict[str, str]] = None
-            ) -> List[Dict[str, str]]:
+            ) -> str:
         
         # Create system message with context
         now = datetime.now()
@@ -107,9 +112,7 @@ Your goal is to provide actionable guidance that motivates patients to take bett
             context_info += f"- Previous Session Summaries: {summarized_text}\n"
         
         if task == "flag":
-            system_message = {
-                "role": "system",
-                "content": f"""
+            system_content = f"""
 {self.system_prompt}
 
 {context_info}
@@ -133,13 +136,10 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 - For "doctor" and "psychologist" MUST be booleans.
 - Output nothing except the JSON object.
 """
-                             }
         elif task == "finalize":
             commentaries = f"{commentary}" if commentary else ""
             context_info += f"- Commentary from each agents: {commentaries}\n"
-            system_message = {
-                "role": "system",
-                "content": f"""
+            system_content = f"""
 {self.system_prompt}
 
 {context_info}
@@ -153,30 +153,23 @@ Read the given context and response concisely based on commentary of each agents
 - Always answer in the same language the user used.  
 
 """
-                             }
         
-        # Format messages
-        messages = [system_message]
+        # Build conversation context
+        conversation_history = ""
         
         # Add full chat history (no truncation)
         for msg in chat_histories:
-            # Ensure proper role mapping
             role = msg.get('role', 'user')
-            if role not in ['user', 'assistant', 'system']:
-                role = 'user' if role != 'assistant' else 'assistant'
-            
-            messages.append({
-                "role": role,
-                "content": msg.get('content', '')
-            })
+            content = msg.get('content', '')
+            conversation_history += f"{role}: {content}\n"
         
         # Add current user message
-        messages.append({
-            "role": "user", 
-            "content": user_message
-        })
+        conversation_history += f"user: {user_message}\n"
         
-        return messages
+        # Combine system prompt with conversation
+        full_prompt = f"{system_content}\n\n**Conversation History:**\n{conversation_history}\n\nPlease respond:"
+        
+        return full_prompt
     
     def _clean_json_response(self, raw_content: str) -> str:
 
@@ -202,62 +195,25 @@ Read the given context and response concisely based on commentary of each agents
         return content
     
     
-    def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]], show_thinking: bool = False) -> str:
+    def _generate_feedback_strands(self, prompt: str, show_thinking: bool = False) -> str:
         try:
-            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
+            self.logger.debug(f"Sending prompt to Strands Agent with Amazon Bedrock (length: {len(prompt)} chars)")
             
-            headers = {
-                "Authorization": f"Bearer {self.sea_lion_api_key}",
-                "Content-Type": "application/json"
-            }
+            # Use Strands agent to generate response
+            response = self.agent.chat(prompt)
             
-            payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
-                "messages": messages,
-                "chat_template_kwargs": {
-                    "thinking_mode": "on"
-                },
-                "max_tokens": 2000,  # for thinking and answering
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "frequency_penalty": 0.1,  # prevent repetition
-                "presence_penalty": 0.1    # Encourage new topics
-            }
-            
-            response = requests.post(
-                f"{self.sea_lion_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            response.raise_for_status()
-            response_data = response.json()
-            
-            # Check if response has expected structure
-            if "choices" not in response_data or len(response_data["choices"]) == 0:
-                self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
-            
-            choice = response_data["choices"][0]
-            if "message" not in choice or "content" not in choice["message"]:
-                self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
-                
-            raw_content = choice["message"]["content"]
-            
-            # Check if response is None or empty
-            if raw_content is None:
-                self.logger.error("SEA-Lion API returned None content")
+            if response is None:
+                self.logger.error("Strands Agent with Amazon Bedrock returned None response")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            if isinstance(raw_content, str) and raw_content.strip() == "":
-                self.logger.error("SEA-Lion API returned empty content")
+            if isinstance(response, str) and response.strip() == "":
+                self.logger.error("Strands Agent with Amazon Bedrock returned empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+            
+            raw_content = str(response)
             
             # Check if this is a flag task
-            is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "") 
-                        for msg in messages if msg.get("role") == "system")
+            is_flag_task = "Return ONLY a single JSON object" in prompt
             
             if is_flag_task:
                 # Apply JSON cleaning for flag tasks
@@ -280,19 +236,12 @@ Read the given context and response concisely based on commentary of each agents
                     final_answer = raw_content.strip()
             
             # Log response information
-            self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
-            # self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
+            self.logger.info(f"Received response from Strands Agent with Amazon Bedrock (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
             
             return final_answer
             
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
-        except KeyError as e:
-            self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ รูปแบบข้อมูลไม่ถูกต้อง"
         except Exception as e:
-            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
+            self.logger.error(f"Error generating feedback from Strands Agent with Amazon Bedrock: {str(e)}")
             return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
         
     def generate_feedback(
@@ -311,11 +260,11 @@ Read the given context and response concisely based on commentary of each agents
         self.logger.debug(f"Chat history length: {len(chat_history)}")
         
         try:
-            messages = self._format_chat_history_for_sea_lion(chat_history, user_message, memory_context, task, summarized_histories, commentary)
+            prompt = self._format_chat_history_for_strands(chat_history, user_message, memory_context, task, summarized_histories, commentary)
             
-            response = self._generate_feedback_sea_lion(messages)
+            response = self._generate_feedback_strands(prompt)
             if response is None:
-                raise Exception("SEA-Lion API returned None response")
+                raise Exception("Strands Agent with Amazon Bedrock returned None response")
             return response
         except Exception as e:
             self.logger.error(f"Error in _generate_feedback: {str(e)}")
@@ -325,7 +274,7 @@ Read the given context and response concisely based on commentary of each agents
 
 if __name__ == "__main__":
     # Minimal reproducible demo for SupervisorAgent using existing generate_feedback()
-    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
+    # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optionally AWS_REGION in your environment, otherwise the class will raise.
 
     # 1) Create the agent
     try:
@@ -341,7 +290,7 @@ if __name__ == "__main__":
     ]
 
     # 3) Persistent memory or health context you want to feed the model
-    memory_context = "User: 21 y/o student, midterm week, low sleep (4–5h), high caffeine, history of migraines."
+    memory_context = "User: 21 y/o student, midterm week, low sleep (4—5h), high caffeine, history of migraines."
 
     # 4) Optional: previous sessions summarized
     summarized_histories = [
