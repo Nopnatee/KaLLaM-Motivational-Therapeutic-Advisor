@@ -162,7 +162,7 @@ class Orchestrator:
         if flags.get("doctor"):  # Dummy for now
             self.logger.debug("Activating DoctorAgent")
             commentary["doctor"] = self.doctor.analyze(
-                eng_message, eng_history, chain_of_thoughts, summarized_histories
+                eng_message, eng_history, json.dumps(chain_of_thoughts), json.dumps(summarized_histories)
             )
 
         if flags.get("psychologist"):  # Dummy for now
@@ -174,7 +174,7 @@ class Orchestrator:
         commentary["final_output"] = self.supervisor.generate_feedback(
             chat_history=original_history,
             user_message=original_message,
-            memory_context=memory_context,
+            memory_context=json.dumps(memory_context) if memory_context else "",
             task="finalize",
             summarized_histories=summarized_histories,
             commentary=commentary,
