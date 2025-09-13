@@ -3,6 +3,13 @@
 logs
 *.json
 .env
+.gradio/
+data
+exported_sessions
+Dockerfile
+.dockerignore
+*.csv
+*.jsonl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kallam"
+version = "0.1.0"
+description = "KaLLaM: Multi-agent chatbot with orchestration, LLM evaluation, and SQLite persistence"
+authors = [
+  { name = "Koalar" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+  "python-dotenv>=1.0.1",         # for load_dotenv
+  "strands-agents>=0.1.0",        # strands Agent + BedrockModel
+  "strands-agents-tools",
+  "strands-agents-builder",
+  "strands-agents[openai]>=1.0.0",
+  "google-genai",                 # google cloud api
+  "openai>=1.40.0",
+  "boto3>=1.34.0",                # AWS SDK (brings in botocore)
+  "numpy>=1.26.0",                # numerical utils
+  "sentence-transformers>=2.6.0", # embeddings
+  "transformers>=4.40.0",         # Hugging Face transformers
+  "gradio>=4.0.0",                # UI
+  "pyngrok==7.3.0",               # Hosting gradio interface
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",                  # testing
+  "pytest-cov>=4.0",              # coverage reports
+  "ruff>=0.4.0",                  # linting
+  "mypy>=1.10.0",                 # static typing
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
