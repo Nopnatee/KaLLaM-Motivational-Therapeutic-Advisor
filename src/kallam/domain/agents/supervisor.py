@@ -4,6 +4,7 @@ load_dotenv()
 import logging
 import requests
 import re
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -26,6 +27,7 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 
 **Core Rules:**
 - You are the supervisor agent that decides which specialized agent should handle each user message
+- You ALWAYS need to respond with the language the user used (English or Thai)
 - If a message includes both medical and psychological elements, choose the agent that addresses the most urgent or dominant concern (e.g., chest pain + anxiety → Doctor first).
 - If unclear, ask a clarifying question before assigning.
 """
@@ -128,12 +130,16 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 }}
 
 **Rules:**
-- "language" MUST be exactly "english" or "thai" in lowercase.
-- If both medical and psychological aspects are present, you may activate both.  
-- For "doctor" and "psychologist" MUST be booleans.
-- Output nothing except the JSON object.
+- If the user reports physical symptoms, illnesses, treatments, or medications → set "doctor": true
+- If the user reports emotional struggles, thoughts, relationships, or psychological concerns → set "psychologist": true  
+- "language" MUST be exactly "english" or "thai" (lowercase)
+- Both "doctor" and "psychologist" can be true if both aspects are present
+- Do not include ANY text before or after the JSON object
+- Do not use markdown code blocks or backticks
+- Do not add explanations, commentary, or additional text
+- Return ONLY the raw JSON object
 """
-                             }
+            }
         elif task == "finalize":
             commentaries = f"{commentary}" if commentary else ""
             context_info += f"- Commentary from each agents: {commentaries}\n"
@@ -153,7 +159,7 @@ Read the given context and response concisely based on commentary of each agents
 - Always answer in the same language the user used.  
 
 """
-                             }
+            }
         
         # Format messages
         messages = [system_message]
@@ -178,29 +184,89 @@ Read the given context and response concisely based on commentary of each agents
         
         return messages
     
-    def _clean_json_response(self, raw_content: str) -> str:
-
+    def _extract_and_validate_json(self, raw_content: str) -> str:
+        """Enhanced JSON extraction and validation with fallback"""
         if not raw_content:
-            return raw_content
+            self.logger.warning("Empty response received, returning default JSON")
+            return '{"language": "english", "doctor": false, "psychologist": false}'
         
         # Remove thinking blocks first (if any)
-        thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
+        content = raw_content
+        thinking_match = re.search(r"</think>", content, re.DOTALL)
         if thinking_match:
-            content = re.sub(r".*?</think>\s*", "", raw_content, flags=re.DOTALL).strip()
-        else:
-            content = raw_content.strip()
+            content = re.sub(r".*?</think>\s*", "", content, flags=re.DOTALL).strip()
         
-        content = re.sub(r'^```(?:json|JSON)?\s*', '', content, flags=re.MULTILINE) #remove json markdown
+        # Remove markdown code blocks
+        content = re.sub(r'^```(?:json|JSON)?\s*', '', content, flags=re.MULTILINE)
         content = re.sub(r'```\s*$', '', content, flags=re.MULTILINE)
-        
         content = content.strip()
         
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            content = json_match.group(0)
+        # Extract JSON object using multiple strategies
+        json_candidates = []
         
-        return content
+        # Strategy 1: Find complete JSON objects
+        json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        matches = re.findall(json_pattern, content, re.DOTALL)
+        json_candidates.extend(matches)
+        
+        # Strategy 2: Look for specific schema pattern
+        schema_pattern = r'\{\s*"language"\s*:\s*"(?:english|thai)"\s*,\s*"doctor"\s*:\s*(?:true|false)\s*,\s*"psychologist"\s*:\s*(?:true|false)\s*\}'
+        schema_matches = re.findall(schema_pattern, content, re.IGNORECASE | re.DOTALL)
+        json_candidates.extend(schema_matches)
+        
+        # Strategy 3: If no complete JSON found, try to construct from parts
+        if not json_candidates:
+            language_match = re.search(r'"language"\s*:\s*"(english|thai)"', content, re.IGNORECASE)
+            doctor_match = re.search(r'"doctor"\s*:\s*(true|false)', content, re.IGNORECASE)
+            psychologist_match = re.search(r'"psychologist"\s*:\s*(true|false)', content, re.IGNORECASE)
+            
+            if language_match and doctor_match and psychologist_match:
+                constructed_json = f'{{"language": "{language_match.group(1).lower()}", "doctor": {doctor_match.group(1).lower()}, "psychologist": {psychologist_match.group(1).lower()}}}'
+                json_candidates.append(constructed_json)
+        
+        # Validate and return the first working JSON
+        for candidate in json_candidates:
+            try:
+                # Clean up the candidate
+                candidate = candidate.strip()
+                
+                # Parse to validate structure
+                parsed = json.loads(candidate)
+                
+                # Validate schema
+                if not isinstance(parsed, dict):
+                    continue
+                    
+                required_keys = {"language", "doctor", "psychologist"}
+                if not required_keys.issubset(parsed.keys()):
+                    continue
+                    
+                # Validate language field
+                if parsed["language"] not in ["english", "thai"]:
+                    continue
+                    
+                # Validate boolean fields
+                if not isinstance(parsed["doctor"], bool) or not isinstance(parsed["psychologist"], bool):
+                    continue
+                
+                # If we reach here, the JSON is valid
+                self.logger.debug(f"Successfully validated JSON: {candidate}")
+                return candidate
+                
+            except json.JSONDecodeError as e:
+                self.logger.debug(f"JSON parse failed for candidate: {candidate[:100]}... Error: {e}")
+                continue
+            except Exception as e:
+                self.logger.debug(f"Validation failed for candidate: {candidate[:100]}... Error: {e}")
+                continue
+        
+       # If all strategies fail, return a safe default
+        self.logger.error("Could not extract valid JSON from response, using safe default")
+        return '{"language": "english", "doctor": false, "psychologist": false}'
     
+    def _clean_json_response(self, raw_content: str) -> str:
+        """Legacy method - now delegates to enhanced extraction"""
+        return self._extract_and_validate_json(raw_content)
     
     def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]], show_thinking: bool = False) -> str:
         try:
@@ -256,13 +322,13 @@ Read the given context and response concisely based on commentary of each agents
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
             # Check if this is a flag task
-            is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "") 
+            is_flag_task = any("JSON-ONLY RESPONSE REQUIRED" in msg.get("content", "") 
                         for msg in messages if msg.get("role") == "system")
             
             if is_flag_task:
-                # Apply JSON cleaning for flag tasks
-                final_answer = self._clean_json_response(raw_content)
-                self.logger.debug("Applied JSON cleaning for flag task")
+                # Apply enhanced JSON extraction and validation for flag tasks
+                final_answer = self._extract_and_validate_json(raw_content)
+                self.logger.debug("Applied enhanced JSON extraction for flag task")
             else:
                 # Handle thinking block for non-flag tasks
                 thinking_match = re.search(r"</think>", raw_content, re.DOTALL)
@@ -281,7 +347,6 @@ Read the given context and response concisely based on commentary of each agents
             
             # Log response information
             self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
-            # self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
             
             return final_answer
             
@@ -320,63 +385,84 @@ Read the given context and response concisely based on commentary of each agents
         except Exception as e:
             self.logger.error(f"Error in _generate_feedback: {str(e)}")
             # Return a fallback response instead of None
-            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+            if task == "flag":
+                # For flag tasks, return a valid JSON structure
+                return '{"language": "english", "doctor": false, "psychologist": false}'
+            else:
+                return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
 
 
 if __name__ == "__main__":
-    # Minimal reproducible demo for SupervisorAgent using existing generate_feedback()
-    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
-
-    # 1) Create the agent
+    # Enhanced demo with JSON validation testing
     try:
         sup = SupervisorAgent(log_level=logging.DEBUG)
     except Exception as e:
         print(f"[BOOT ERROR] Unable to start SupervisorAgent: {e}")
         raise SystemExit(1)
 
-    # 2) Dummy chat history (what the user and assistant said earlier)
+    # Test cases for JSON validation
+    test_cases = [
+        {
+            "name": "Medical + Psychological",
+            "message": "I have a headache and feel anxious about my exams.",
+            "expected": {"doctor": True, "psychologist": True}
+        },
+        {
+            "name": "Thai Medical Only",
+            "message": "ปวดหัวมากครับ แล้วก็มีไข้ด้วย",
+            "expected": {"doctor": True, "psychologist": False, "language": "thai"}
+        },
+        {
+            "name": "Psychological Only",
+            "message": "I'm feeling very stressed and worried about my future.",
+            "expected": {"doctor": False, "psychologist": True}
+        }
+    ]
+
     chat_history = [
         {"role": "user", "content": "Hi, I've been feeling tired lately."},
         {"role": "assistant", "content": "Thanks for sharing. How's your sleep and stress?"}
     ]
-
-    # 3) Persistent memory or health context you want to feed the model
     memory_context = "User: 21 y/o student, midterm week, low sleep (4–5h), high caffeine, history of migraines."
 
-    # 4) Optional: previous sessions summarized
-    summarized_histories = [
-        {"role": "assistant", "content": "Session 1: sleep hygiene tips; suggested hydration and screen breaks."},
-        {"role": "assistant", "content": "Session 2: recommended keeping a headache diary; advised limiting caffeine after 2 PM."}
-    ]
+    print("=== TESTING ENHANCED JSON SUPERVISOR ===\n")
+    
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"Test {i}: {test_case['name']}")
+        print(f"Message: {test_case['message']}")
+        
+        flag_output = sup.generate_feedback(
+            chat_history=chat_history,
+            user_message=test_case['message'],
+            memory_context=memory_context,
+            task="flag"
+        )
+        
+        print(f"{flag_output}")
+        
+        # Validate the JSON
+        try:
+            parsed = json.loads(flag_output)
+            print(f"Language: {parsed.get('language')}")
+            print(f"Doctor: {parsed.get('doctor')}")
+            print(f"Psychologist: {parsed.get('psychologist')}")
+        except json.JSONDecodeError as e:
+            print(f"❌ Invalid JSON: {e}")
+        
+        print("-" * 50)
 
-    # 5) The current user message we want to route/answer
-    user_message = "I have a headache and feel anxious about my exams."
-
-    # ===== Test 1: Routing flags (task='flag') =====
-    print("\n=== TEST: FLAG DECISION ===")
-    flag_output = sup.generate_feedback(
-        chat_history=chat_history,
-        user_message=user_message,
-        memory_context=memory_context,
-        task="flag",
-        summarized_histories=summarized_histories
-    )
-    print(flag_output)
-
-    # ===== Test 2: Finalize response (task='finalize') =====
-    # Pretend you have per-specialist comments you aggregated elsewhere
+    # Test finalize task
+    print("\n=== TEST: FINALIZED RESPONSE ===")
     commentary = {
         "doctor": "Likely tension-type headache aggravated by stress and poor sleep. Suggest hydration, rest, OTC analgesic if not contraindicated.",
         "psychologist": "Teach 4-7-8 breathing, short cognitive reframing for exam anxiety, and a 20-minute study-break cycle."
     }
 
-    print("\n=== TEST: FINALIZED RESPONSE ===")
     final_output = sup.generate_feedback(
         chat_history=chat_history,
-        user_message=user_message,
+        user_message="I have a headache and feel anxious about my exams.",
         memory_context=memory_context,
         task="finalize",
-        summarized_histories=summarized_histories,
         commentary=commentary
     )
     print(final_output)
