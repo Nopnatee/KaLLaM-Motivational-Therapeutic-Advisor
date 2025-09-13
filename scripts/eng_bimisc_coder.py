@@ -296,7 +296,7 @@ def _generate_response(
     top_p: float = 1.0,
     timeout: int = 45,
     max_retries: int = 6,
-) -> str:
+) -> str: # type: ignore
     headers = {
         "Authorization": f"Bearer {SEA_LION_API_KEY}",
         "Content-Type": "application/json",
