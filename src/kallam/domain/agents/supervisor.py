@@ -321,8 +321,7 @@ Read the given context and response concisely based on commentary of each agents
                 self.logger.error("SEA-Lion API returned empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            # Check if this is a flag task
-            is_flag_task = any("JSON-ONLY RESPONSE REQUIRED" in msg.get("content", "") 
+            is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "") 
                         for msg in messages if msg.get("role") == "system")
             
             if is_flag_task:
@@ -438,16 +437,17 @@ if __name__ == "__main__":
             task="flag"
         )
         
-        print(f"{flag_output}")
+        print(f"JSON Output: {flag_output}")
         
         # Validate the JSON
         try:
             parsed = json.loads(flag_output)
+            print(f"Valid JSON structure")
             print(f"Language: {parsed.get('language')}")
             print(f"Doctor: {parsed.get('doctor')}")
             print(f"Psychologist: {parsed.get('psychologist')}")
         except json.JSONDecodeError as e:
-            print(f"❌ Invalid JSON: {e}")
+            print(f"Invalid JSON: {e}")
         
         print("-" * 50)
 
