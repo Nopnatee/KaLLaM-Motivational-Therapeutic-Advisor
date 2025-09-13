@@ -71,8 +71,9 @@ Your goal is to provide actionable guidance that motivates patients to take bett
         try:
             # Check for AWS credentials (boto3 will handle the credential resolution)
             aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-            aws_region = os.getenv("AWS_REGION", "sea-2")  # Default to sea-2
+            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")                               
+            aws_session_token = os.getenv("AWS_SESSION_TOKEN")
+            aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
             
             if not aws_access_key or not aws_secret_key:
                 raise ValueError("AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
@@ -200,7 +201,7 @@ Read the given context and response concisely based on commentary of each agents
             self.logger.debug(f"Sending prompt to Strands Agent with Amazon Bedrock (length: {len(prompt)} chars)")
             
             # Use Strands agent to generate response
-            response = self.agent.chat(prompt)
+            response = self.agent(prompt)
             
             if response is None:
                 self.logger.error("Strands Agent with Amazon Bedrock returned None response")
