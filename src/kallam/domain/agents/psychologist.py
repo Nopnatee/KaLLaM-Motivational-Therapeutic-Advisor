@@ -16,70 +16,57 @@ class PsychologistAgent:
     TherapyApproach = Literal["cbt", "dbt", "act", "motivational", "solution_focused", "mindfulness"]
     CrisisLevel = Literal["none", "mild", "moderate", "severe", "emergency"]
 
-    def __init__(self, api_provider: Optional[str] = None, log_level: int = logging.INFO):
-        if api_provider not in ["sea_lion", "gemini"]:
-            raise ValueError("api_provider must be either 'sea_lion' or 'gemini'")
-            
-        self.api_provider = api_provider
+    def __init__(self, log_level: int = logging.INFO):
         self._setup_logging(log_level)
         self._setup_api_clients()
-        self._setup_base_config()
-        
-        self.logger.info(f"KaLLaM chatbot initialized successfully using {self.api_provider} API for main chat, Gemini for summarization")
+        self.logger.info(f"PsychologistAgent initialized successfully - Thai->SEA-Lion, English->Gemini")
 
     def _setup_logging(self, log_level: int) -> None:
         """Setup logging configuration"""
-        # Create logs directory if it doesn't exist
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
         
-        # Setup logger
-        self.logger = logging.getLogger(f"{__name__}.KaLLaMChatbot")
+        self.logger = logging.getLogger(f"{__name__}.PsychologistAgent")
         self.logger.setLevel(log_level)
         
-        # Remove existing handlers to avoid duplicates
         if self.logger.handlers:
             self.logger.handlers.clear()
         
-        # File handler for detailed logs
         file_handler = logging.FileHandler(
-            log_dir / f"kallam_{datetime.now().strftime('%Y%m%d')}.log",
+            log_dir / f"psychologist_{datetime.now().strftime('%Y%m%d')}.log",
             encoding='utf-8'
         )
         file_handler.setLevel(logging.DEBUG)
         
-        # Console handler for immediate feedback
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         
-        # Formatter
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
         
-        # Add handlers
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
-        """Setup API clients - always setup both for mixed usage"""
+        """Setup both API clients"""
         try:
-            # Setup SEA-Lion API (for main chat)
+            # Setup SEA-Lion API
             self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
             self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
             
             if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+                raise ValueError("SEA_LION_API_KEY not found in environment variables")
                 
             self.logger.info("SEA-Lion API client initialized")
             
-            # Setup Gemini API (for summarization only)
+            # Setup Gemini API
             self.gemini_api_key = os.getenv("GEMINI_API_KEY")
             
             if not self.gemini_api_key:
-                raise ValueError("GEMINI_API_KEY not provided and not found in environment variables - required for summarization")
+                raise ValueError("GEMINI_API_KEY not found in environment variables")
                 
             self.gemini_client = genai.Client(api_key=self.gemini_api_key)
             self.gemini_model_name = "gemini-2.5-flash-preview-05-20"
@@ -89,10 +76,182 @@ class PsychologistAgent:
             self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
 
-    def _setup_base_config(self) -> None:
-        """Setup base configuration for KaLLaM"""
-        self.base_config = {
+    ##############USE PROMPT ENGINERING LATER#################
+    def _detect_language(self, text: str) -> str:
+        """
+        Detect if the text is primarily Thai or English
+        """
+        # Count Thai characters (Unicode range for Thai)
+        thai_chars = len(re.findall(r'[\u0E00-\u0E7F]', text))
+        # Count English characters (basic Latin letters)
+        english_chars = len(re.findall(r'[a-zA-Z]', text))
+        
+        total_chars = thai_chars + english_chars
+        
+        if total_chars == 0:
+            # Default to English if no detectable characters
+            return 'english'
+        
+        thai_ratio = thai_chars / total_chars
+        
+        # If more than 10% Thai characters, consider it Thai
+        if thai_ratio > 0.1:
+            detected = 'thai'
+        else:
+            detected = 'english'
+            
+        self.logger.debug(f"Language detection: {detected} (Thai: {thai_chars}, English: {english_chars}, Ratio: {thai_ratio:.2f})")
+        return detected
+    ##############USE PROMPT ENGINERING LATER#################
+    
+    # ===== SEA-LION BLOCK (THAI) =====
+    def _get_sealion_prompt(self) -> str:
+        """Thai therapeutic prompt for SEA-Lion"""
+        return """
+**บทบาทของคุณ:**  
+คุณคือนักจิตวิทยาให้คำปรึกษาเชี่ยวชาญด้านการสนับสนุนสุขภาพจิตและการให้คำแนะนำเชิงบำบัด  
+เป้าหมายของคุณคือให้การแทรกแซงทางจิตวิทยาที่อิงหลักฐานเชิงประจักษ์พร้อมรักษาขอบเขตทางวิชาชีพ
+
+**กฎหลัก:**  
+- คุณไม่ใช่ทางเลือกแทนการดูแลสุขภาพจิตแบบมืออาชีพ  
+- ใช้น้ำเสียงที่สงบและให้ความมั่นใจเสมอ
+- รักษาความอบอุ่น ความเข้าใจ และขอบเขตทางวิชาชีพตลอดเวลา  
+- ไม่เคยให้การวินิจฉัย เพียงแค่ให้คำแนะนำที่สนับสนุนและกลยุทธ์การรับมือ  
+- แนะนำให้ปรึกษานักจิตวิทยาที่ได้รับใบอนุญาตเสมอสำหรับความกังวลที่จริงจัง  
+- ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญทันที  
+
+**แนวทางการบำบัด:**  
+1. **การฟังอย่างมีประสิทธิภาพ:** สะท้อน ถอดความ ยืนยัน และแสดงความเข้าใจ  
+2. **CBT (การบำบัดเชิงพุทธิปัญญาพฤติกรรม):** ระบุการบิดเบือน ปรับกรอบความคิด มอบหมายงานเชิงพฤติกรรม  
+3. **การสัมภาษณ์เชิงการจูงใจ:** สำรวจความลังเล กระตุ้นการพูดถึงการเปลี่ยนแปลง สนับสนุนความเป็นอิสระ  
+4. **การบำบัดที่มุ่งเน้นทางออก:** เน้นจุดแข็ง คำถามการให้คะแนน ตั้งเป้าหมายเล็กๆ คำถามปาฏิหาริย์  
+5. **สติและการจัดการความเครียด:** การดึงสติ การหายใจ สมาธิ การผ่อนคลาย การเตรียมตัวรับมือความเครียด  
+6. **การแทรกแซงในภาวะวิกฤต:** ประเมินความเสี่ยง ลดความตึงเครียด วางแผนความปลอดภัย เชื่อมต่อกับแหล่งช่วยเหลือ  
+
+**แนวทางการตอบสนอง:**  
+- ใช้คำถามปลายเปิด น้ำเสียงที่เข้าใจ และการยืนยัน  
+- ให้การศึกษาเรื่องจิตใจและกลยุทธ์การรับมือ  
+- รวมการแทรกแซงที่อิงหลักฐานเชิงประจักษ์ที่เหมาะกับผู้รับการปรึกษา  
+- ตอบสนองเป็นภาษาไทยเสมอ  
+- รวมขั้นตอนความปลอดภัยในภาวะวิกฤตเมื่อตรวจพบความเสี่ยง  
+
+**โพรโทคอลการประเมินภาวะวิกฤต:**  
+- หากพบสัญญาณของความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต การแยกตัว ภาวะฉุกเฉินสารเสพติด หรือการทารุณกรรม: แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน **และ** ให้คำแนะนำที่สนับสนุน  
+
+**รูปแบบผลลัพธ์:**  
+จัดโครงสร้างการตอบสนองให้รวม:  
+- การยืนยันและสะท้อนทางอารมณ์  
+- การประเมินทางจิตวิทยา (ความคิด อารมณ์ พฤติกรรม ความเสี่ยง)  
+- กลยุทธ์การแทรกแซง (เทคนิคที่อิงหลักฐานเชิงประจักษ์)  
+- การส่งต่อผู้เชี่ยวชาญหรือการวางแผนความปลอดภัยตามความจำเป็น  
+
+**งานเฉพาะ:**  
+ให้คำแนะนำเชิงบำบัดที่สนับสนุน มีโครงสร้าง และอิงหลักฐานเชิงประจักษ์ พร้อมทั้งมั่นใจในความปลอดภัยของผู้รับการปรึกษา  
+วัตถุประสงค์หลักของคุณคือช่วยให้ผู้รับการปรึกษาพัฒนาทักษะการรับมือและส่งเสริมการดูแลจากผู้เชี่ยวชาพที่เหมาะสม
 """
+
+    def _format_messages_sealion(self, user_message: str, therapeutic_context: str = "") -> List[Dict[str, str]]:
+        """Format messages for SEA-Lion API (Thai)"""
+        now = datetime.now()
+        
+        context_info = f"""
+**บริบทปัจจุบัน:**
+- วันที่/เวลา: {now.strftime("%Y-%m-%d %H:%M:%S")}
+- บริบทการบำบัด: {therapeutic_context}
+"""
+        
+        system_message = {
+            "role": "system", 
+            "content": f"{self._get_sealion_prompt()}\n\n{context_info}"
+        }
+        
+        user_message_formatted = {
+            "role": "user", 
+            "content": user_message
+        }
+        
+        return [system_message, user_message_formatted]
+
+    def _generate_response_sealion(self, messages: List[Dict[str, str]]) -> str:
+        """Generate response using SEA-Lion API for Thai"""
+        try:
+            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
+            
+            headers = {
+                "Authorization": f"Bearer {self.sea_lion_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Add thinking mode prompt to last user message
+            if messages and messages[-1]["role"] == "user":
+                messages[-1]["content"] += (
+                    "\n\nกรุณาแสดงผลในรูปแบบต่อไปนี้:\n"
+                    "```thinking\n{การใคร่ครวญทีละขั้นตอน - วิเคราะห์อาการของผู้ป่วย สภาพทางอารมณ์ และกำหนดแนวทางที่ดีที่สุด}\n```\n"
+                    "```answer\n{การตอบสนองขั้นสุดท้าย - คำแนะนำที่อบอุ่น เข้าใจ และปฏิบัติได้}\n```\n\n"
+                    "**สำคัญ**: คิดผ่านด้านทางการแพทย์และจิตวิทยาเป็นภาษาอังกฤษเพื่อการใคร่ครวญที่ดีขึ้น แล้วให้การตอบสนองผู้ป่วยเป็นภาषาไทย"
+                )
+            
+            payload = {
+                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "messages": messages,
+                "chat_template_kwargs": {
+                    "thinking_mode": "on"
+                },
+                "max_tokens": 2000,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "frequency_penalty": 0.1,
+                "presence_penalty": 0.1
+            }
+            
+            response = requests.post(
+                f"{self.sea_lion_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            response_data = response.json()
+            
+            if "choices" not in response_data or len(response_data["choices"]) == 0:
+                self.logger.error(f"Unexpected response structure: {response_data}")
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+            
+            choice = response_data["choices"][0]
+            if "message" not in choice or "content" not in choice["message"]:
+                self.logger.error(f"Unexpected message structure: {choice}")
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                
+            raw_content = choice["message"]["content"]
+            
+            if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
+                self.logger.error("SEA-Lion API returned None or empty content")
+                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+            
+            # Extract answer block
+            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
+            final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            
+            # Log thinking privately
+            thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
+            if thinking_match:
+                self.logger.debug(f"SEA-Lion thinking:\n{thinking_match.group(1).strip()}")
+            
+            self.logger.info(f"Received SEA-Lion response (length: {len(final_answer)} chars)")
+            return final_answer
+            
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error with SEA-Lion API: {str(e)}")
+            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+        except Exception as e:
+            self.logger.error(f"Error generating SEA-Lion response: {str(e)}")
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+
+    # ===== GEMINI BLOCK (ENGLISH) =====
+    def _get_gemini_prompt(self) -> str:
+        """English therapeutic prompt for Gemini"""
+        return """
 **Your Role:**  
 You are a Professional Psychological Counselor AI specializing in mental health support and therapeutic guidance.  
 Your goal is to provide evidence-based psychological interventions while maintaining professional boundaries.
@@ -117,7 +276,7 @@ Your goal is to provide evidence-based psychological interventions while maintai
 - Use open-ended questions, empathetic tone, and validation.  
 - Provide psychoeducation and coping strategies.  
 - Include evidence-based interventions tailored to the client.  
-- Respond in client's preferred language when specified.  
+- Always respond in English.  
 - Always include crisis safety steps when risk is detected.  
 
 **Crisis Assessment Protocol:**  
@@ -134,148 +293,29 @@ Always structure responses to include:
 Provide supportive, structured, evidence-based therapeutic guidance while ensuring client safety.  
 Your primary purpose is to help clients develop coping skills and encourage appropriate professional care.
 """
-        }
-        
-        self.logger.debug("Base configuration loaded successfully")
 
-    def _format_chat_history_for_sea_lion(self, chat_history: List[Dict[str, str]], user_message: str, health_status: str, summarized_histories: Optional[List] = None) -> List[Dict[str, str]]:
-        """
-        Format chat history properly for SEA-Lion API
-        
-        Args:
-            chat_history: List of message dictionaries
-            user_message: Current user message
-            health_status: User's health status
-            summarized_histories: Optional summarized history
-            
-        Returns:
-            Properly formatted messages for SEA-Lion API
-        """
-        
-        # Remove existing handlers to avoid duplicates
-        if self.logger.handlers:
-            self.logger.handlers.clear()
-        
-    def _format_messages(self, prompt: str, context: str = "") -> List[Dict[str, str]]:
+    def _format_prompt_gemini(self, user_message: str, therapeutic_context: str = "") -> str:
+        """Format prompt for Gemini API (English)"""
         now = datetime.now()
+        
         context_info = f"""
 **Current Context:**
 - Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
-- Therapeutic Context: {context}
+- Therapeutic Context: {therapeutic_context}
 """
-        system_message = {"role": "system", "content": f"{self.system_prompt}\n\n{context_info}"}
-        user_message = {"role": "user", "content": prompt}
-        return [system_message, user_message]
-
-        def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]]) -> str:
-            """
-            Generate feedback using SEA-Lion API with proper message formatting and thinking/answer parsing
-            
-            Args:
-                messages: Properly formatted messages for the API
-                
-            Returns:
-                Generated response text (only the answer portion)
-            """
-            try:
-                self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
-                
-                headers = {
-                    "Authorization": f"Bearer {self.sea_lion_api_key}",
-                    "Content-Type": "application/json"
-                }
-                
-                if messages and messages[-1]["role"] == "user":
-                    messages[-1]["content"] += (
-                        "\n\nPlease output in the following format:\n"
-                        "```thinking\n{your step-by-step reasoning - analyze the patient's condition, symptoms, emotional state, and determine the best approach}\n```\n"
-                        "```answer\n{your final response - warm, empathetic, and actionable guidance}\n```\n\n"
-                        "**Important**: Think through the medical and psychological aspects in English for better reasoning, then provide your patient response either Thai or English depending on the user's first message."
-                    )
-                
-                payload = {
-                    "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
-                    "messages": messages,
-                    "chat_template_kwargs": {
-                        "thinking_mode": "on"
-                    },
-                    "max_tokens": 2000,  # for thinking and answering
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "frequency_penalty": 0.1,  # prevent repetition
-                    "presence_penalty": 0.1    # Encourage new topics
-                }
-                
-                response = requests.post(
-                    f"{self.sea_lion_base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=30
-                )
-                
-                response.raise_for_status()
-                response_data = response.json()
-                
-                # Check if response has expected structure
-                if "choices" not in response_data or len(response_data["choices"]) == 0:
-                    self.logger.error(f"Unexpected response structure: {response_data}")
-                    return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
-                
-                choice = response_data["choices"][0]
-                if "message" not in choice or "content" not in choice["message"]:
-                    self.logger.error(f"Unexpected message structure: {choice}")
-                    return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
-                    
-                raw_content = choice["message"]["content"]
-                
-                # Check if response is None or empty
-                if raw_content is None:
-                    self.logger.error("SEA-Lion API returned None content")
-                    return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
-                
-                if isinstance(raw_content, str) and raw_content.strip() == "":
-                    self.logger.error("SEA-Lion API returned empty content")
-                    return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
-                
-                # Extract reasoning and answer blocks
-                thinking_match = re.search(r"```thinking\s*(.*?)\s*```", raw_content, re.DOTALL)
-                answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
-                
-                reasoning = thinking_match.group(1).strip() if thinking_match else None
-                final_answer = answer_match.group(1).strip() if answer_match else raw_content.strip()
-                
-                # Log reasoning privately for debugging
-                if reasoning:
-                    self.logger.debug(f"SEA-Lion reasoning:\n{reasoning}")
-                else:
-                    self.logger.debug("No thinking block found in response")
-                
-                # Log response information
-                self.logger.info(f"Received response from SEA-Lion API (raw length: {len(raw_content)} chars, final answer length: {len(final_answer)} chars)")
-                self.logger.debug(f"SEA-Lion Final Answer: {final_answer[:200]}..." if len(final_answer) > 200 else f"SEA-Lion Final Answer: {final_answer}")
-                
-                return final_answer
-                
-            except requests.exceptions.RequestException as e:
-                self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-                return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
-            except KeyError as e:
-                self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
-                return "ขออภัยค่ะ รูปแบบข้อมูลไม่ถูกต้อง"
-            except Exception as e:
-                self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-                return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
-
-    def _generate_feedback_gemini(self, prompt: str) -> str:
-        """
-        Generate feedback using Gemini API
         
-        Args:
-            prompt: The prompt to send to the API
-            
-        Returns:
-            Generated response text
-        """
+        prompt = f"""{self._get_gemini_prompt()}
+
+{context_info}
+
+**Client Message:** {user_message}
+
+Please provide your therapeutic response following the guidelines above."""
+        
+        return prompt
+
+    def _generate_response_gemini(self, prompt: str) -> str:
+        """Generate response using Gemini API for English"""
         try:
             self.logger.debug(f"Sending prompt to Gemini API (length: {len(prompt)} chars)")
             
@@ -286,66 +326,21 @@ Your primary purpose is to help clients develop coping skills and encourage appr
             
             response_text = response.text
             
-            # Check if response is None or empty
-            if response_text is None:
-                self.logger.error("Gemini API returned None content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+            if response_text is None or (isinstance(response_text, str) and response_text.strip() == ""):
+                self.logger.error("Gemini API returned None or empty content")
+                return "I apologize, but I'm unable to generate a response at this time. Please try again later."
             
-            if isinstance(response_text, str) and response_text.strip() == "":
-                self.logger.error("Gemini API returned empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
-            
-            self.logger.info(f"Received response from Gemini API (length: {len(response_text)} chars)")
-            self.logger.debug(f"Gemini Response: {response_text[:200]}..." if len(response_text) > 200 else f"Gemini Response: {response_text}")
-            
+            self.logger.info(f"Received Gemini response (length: {len(response_text)} chars)")
             return str(response_text).strip()
             
         except Exception as e:
-            self.logger.error(f"Error generating feedback from Gemini API: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ"
-    def _generate_feedback(self, chat_history: List[Dict[str, str]], user_message: str, health_status: str, summarized_histories: Optional[List] = None) -> str:
-        """
-        Generate feedback using the selected API provider
-        
-        Args:
-            chat_history: Previous conversation history
-            user_message: Current user message
-            health_status: User's health status
-            summarized_histories: Optional summarized history
-            
-        Returns:
-            Generated response text
-        """
-        try:
-            if self.api_provider == "sea_lion":
-                messages = self._format_chat_history_for_sea_lion(chat_history, user_message, health_status, summarized_histories)
-                response = self._generate_feedback_sea_lion(messages)
-                if response is None:
-                    raise Exception("SEA-Lion API returned None response")
-                return response
-            elif self.api_provider == "gemini":
-                # Keep the original prompt-based approach for Gemini
-                prompt = self._build_prompt_for_gemini(chat_history, user_message, health_status, summarized_histories)
-                response = self._generate_feedback_gemini(prompt)
-                if response is None:
-                    raise Exception("Gemini API returned None response")
-                return response
-            else:
-                raise ValueError(f"Unknown API provider: {self.api_provider}")
-        except Exception as e:
-            self.logger.error(f"Error in _generate_feedback: {str(e)}")
-            # Return a fallback response instead of None
-            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+            self.logger.error(f"Error generating Gemini response: {str(e)}")
+            return "I apologize, but I'm experiencing technical difficulties. Please try again later, and if you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
 
-    def _build_prompt_for_gemini(self, chat_history: List[Dict[str, str]], user_message: str, health_status: str, summarized_histories: Optional[List] = None) -> str:
-        """
-        Build prompt for Gemini API (keeping original approach)
-        """
-    ########################################### GEMINI APPROACH (ORIGINAL) ###########################################
-    
+    # ===== MAIN OUTPUT METHODS =====
     def provide_therapeutic_guidance(self, user_message: str, therapeutic_context: str = "") -> str:
         """
-        Main method to provide psychological guidance and support
+        Main method to provide psychological guidance with language-based API routing
         
         Args:
             user_message: The client's message or concern
@@ -359,60 +354,97 @@ Your primary purpose is to help clients develop coping skills and encourage appr
         self.logger.debug(f"Therapeutic context: {therapeutic_context}")
         
         try:
-            messages = self._format_messages(user_message, therapeutic_context)
-            response = self._generate_response_with_thinking(messages)
+            # Detect language
+            detected_language = self._detect_language(user_message)
+            self.logger.info(f"Detected language: {detected_language}")
+            
+            if detected_language == 'thai':
+                # Use SEA-Lion for Thai
+                messages = self._format_messages_sealion(user_message, therapeutic_context)
+                response = self._generate_response_sealion(messages)
+            else:
+                # Use Gemini for English
+                prompt = self._format_prompt_gemini(user_message, therapeutic_context)
+                response = self._generate_response_gemini(prompt)
             
             if response is None:
-                raise Exception("SEA-Lion API returned None response")
+                raise Exception(f"{detected_language} API returned None response")
                 
             return response
             
         except Exception as e:
             self.logger.error(f"Error in provide_therapeutic_guidance: {str(e)}")
-            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ หากมีความคิดทำร้ายตัวเอง กรุณาติดต่อแพทย์หรือสายด่วนช่วยเหลือทันที"
+            # Return fallback based on detected language
+            try:
+                lang = self._detect_language(user_message)
+                if lang == 'thai':
+                    return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว หากมีความคิดทำร้ายตัวเองหรืออยู่ในภาวะวิกฤต กรุณาติดต่อนักจิตวิทยาหรือหน่วยงานฉุกเฉินทันที"
+                else:
+                    return "I apologize for the technical issue. If you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
+            except:
+                return "Technical difficulties. If in crisis, seek immediate professional help."
+
+    def get_health_status(self) -> Dict[str, Any]:
+        """Get current agent health status"""
+        status = {
+            "status": "healthy",
+            "language_routing": "thai->SEA-Lion, english->Gemini",
+            "sea_lion_configured": hasattr(self, 'sea_lion_api_key') and self.sea_lion_api_key,
+            "gemini_configured": hasattr(self, 'gemini_api_key') and self.gemini_api_key,
+            "sea_lion_model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+            "gemini_model": self.gemini_model_name,
+            "timestamp": datetime.now().isoformat(),
+            "logging_enabled": True,
+            "log_level": self.logger.level
+        }
+        
+        self.logger.debug(f"Health status check: {status}")
+        return status
 
 
 if __name__ == "__main__":
-    # Minimal reproducible demo for PsychologistAgent
-    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
-
-    # 1) Create the agent
+    # Test the completed PsychologistAgent
     try:
         psychologist = PsychologistAgent(log_level=logging.DEBUG)
     except Exception as e:
         print(f"[BOOT ERROR] Unable to start PsychologistAgent: {e}")
         raise SystemExit(1)
 
-    # 2) Test scenarios for psychological support
+    # Test cases for both languages
     test_cases = [
         {
-            "name": "Exam Anxiety",
-            "user_message": "I have a headache and feel anxious about my exams. I can't sleep and keep worrying about failing.",
-            "therapeutic_context": "User: 21 y/o student, midterm week, low sleep (4-5h), high caffeine, history of anxiety during academic stress."
+            "name": "Thai - Exam Anxiety",
+            "user_message": "หนูปวดหัวและกังวลเรื่องสอบค่ะ นอนไม่หลับและกังวลว่าจะสอบตก",
+            "therapeutic_context": "User: นักศึกษาอายุ 21 ปี ช่วงสอบกลางเทอม นอนน้อย (4-5 ชั่วโมง) กาแฟมาก มีประวัติวิตกกังวลในช่วงความเครียดทางการศึกษา"
         },
         {
-            "name": "General Stress Management", 
-            "user_message": "I've been feeling overwhelmed lately with work and personal life. Everything feels like too much.",
+            "name": "English - Work Stress", 
+            "user_message": "I've been feeling overwhelmed lately with work and personal life. Everything feels like too much and I can't cope.",
             "therapeutic_context": "User: Working professional, recent job change, managing family responsibilities, seeking coping strategies."
         },
         {
-            "name": "Relationship Issues",
-            "user_message": "My relationship with my partner has been really difficult. We keep arguing and I don't know how to fix it.",
-            "therapeutic_context": "User: In committed relationship, communication difficulties, seeking relationship guidance and conflict resolution strategies."
+            "name": "Thai - Relationship Issues",
+            "user_message": "ความสัมพันธ์กับแฟนมีปัญหามากค่ะ เราทะเลาะกันบ่อยๆ ไม่รู้จะแก้ไขยังไง",
+            "therapeutic_context": "User: อยู่ในความสัมพันธ์ที่มั่นคง มีปัญหาการสื่อสาร ขอคำแนะนำเรื่องความสัมพันธ์และการแก้ปัญหาความขัดแย้ง"
+        },
+        {
+            "name": "English - Anxiety Management",
+            "user_message": "I keep having panic attacks and I don't know how to control them. It's affecting my daily life and work performance.",
+            "therapeutic_context": "User: Experiencing frequent panic attacks, seeking anxiety management techniques, work performance concerns."
         }
     ]
 
     # Run tests
     for i, test_case in enumerate(test_cases, 1):
-        print(f"\n{'='*50}")
+        print(f"\n{'='*60}")
         print(f"TEST {i}: {test_case['name']}")
-        print(f"{'='*50}")
+        print(f"{'='*60}")
         
         print(f"\n User Message: {test_case['user_message']}")
         print(f" Context: {test_case['therapeutic_context']}")
         
         print(f"\n PSYCHOLOGIST RESPONSE:")
-        print("-" * 40)
+        print("-" * 50)
         
         response = psychologist.provide_therapeutic_guidance(
             user_message=test_case['user_message'],
@@ -420,7 +452,14 @@ if __name__ == "__main__":
         )
         
         print(response)
-        print("\n" + "="*50)
+        print("\n" + "="*60)
+
+    # Test health status
+    print(f"\n{'='*60}")
+    print("HEALTH STATUS CHECK")
+    print(f"{'='*60}")
+    status = psychologist.get_health_status()
+    print(json.dumps(status, indent=2, ensure_ascii=False))
 
     print(f"\n All tests completed successfully!")
-    print(" The PsychologistAgent is ready for integration with the supervisor system.")
+    print(" The PsychologistAgent is ready with language-based API routing:")
