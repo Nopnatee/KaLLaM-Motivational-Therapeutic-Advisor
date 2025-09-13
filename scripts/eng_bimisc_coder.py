@@ -520,7 +520,7 @@ if __name__ == "__main__":
         role="THERAPIST",
         request_coarse=True,
         threshold=0.50,
-        limit=1,            # set an integer for smoke tests, e.g., 100
+        limit=100,            # set an integer for smoke tests, e.g., 100
         save_path=str(OUT_PATH),
         history_window=6,
         model=SEA_LION_MODEL,
