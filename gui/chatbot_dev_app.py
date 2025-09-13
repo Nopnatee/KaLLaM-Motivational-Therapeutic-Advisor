@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class AppState:
     def __init__(self):
-        self.current_session_id: str
+        self.current_session_id: str = ""
         self.message_count: int = 0
         self.followup_note: str = "Request follow-up analysis..."
 
