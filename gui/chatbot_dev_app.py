@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 
 class AppState:
     def __init__(self):
-        self.current_session_id: Optional[str] = None
+        self.current_session_id: str
         self.message_count: int = 0
         self.followup_note: str = "Request follow-up analysis..."
 
     def reset(self):
-        self.current_session_id = None
+        self.current_session_id = ""
         self.message_count = 0
 
 app_state = AppState()
@@ -83,7 +83,7 @@ def extract_session_id(dropdown_value: str) -> Optional[str]:
         return None
     return dropdown_value.split(" | ")[0]
 
-def refresh_session_list() -> gr.update:
+def refresh_session_list():
     sessions = get_session_list()
     return gr.update(choices=sessions, value=sessions[0] if sessions else None)
 
@@ -234,7 +234,7 @@ def process_chat_message(user_message: str, history: List) -> Tuple[List, str]:
         history.append({"role": "assistant", "content": f"❌ **ข้อผิดพลาด:** {e}"})
         return history, ""
 
-def generate_followup(history: List) -> Tuple[List]:
+def generate_followup(history: List) -> List:
     # No dedicated handle_followup in new manager.
     # We just inject the follow-up note as a plain user turn.
     if not app_state.current_session_id:
@@ -316,7 +316,7 @@ def create_app() -> gr.Blocks:
     """
 
     with gr.Blocks(title="🌟 DEMO ระบบจำลองการคุยกับลูกและให้คำแนะนำสำหรับผู้ปกครอง",
-                   theme=gr.themes.Soft(), css=custom_css) as app:
+                   css=custom_css) as app:
 
         gr.Markdown("""
 # 🌟 ระบบจำลองการคุยกับลูกและให้คำแนะนำสำหรับผู้ปกครอง
