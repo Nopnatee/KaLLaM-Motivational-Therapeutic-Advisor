@@ -6,7 +6,6 @@ from typing import List, Literal, Dict, Any, Optional
 
 from dotenv import load_dotenv
 from strands import Agent, tool
-from strands.models.openai import OpenAIModel
 
 load_dotenv()
 
@@ -42,12 +41,16 @@ class DoctorAgent:
         self.logger.addHandler(console_handler)
 
     def _setup_agent(self) -> None:
-        """Setup Strands Agent with GPT-4o"""
+        """Setup Strands Agent with AWS Bedrock (same as supervisor)"""
         try:
-            # Verify OpenAI API key is available
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise ValueError("OPENAI_API_KEY not found in environment variables")
+            # Check for AWS credentials (same as supervisor agent)
+            aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+            aws_session_token = os.getenv("AWS_SESSION_TOKEN")
+            aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
+            
+            if not aws_access_key or not aws_secret_key:
+                raise ValueError("AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
             
             system_prompt = """
 **Your Role:**  
@@ -90,19 +93,18 @@ Provide structured responses including:
 - Medical disclaimer
 """
             
-            # Create Strands Agent with GPT-4o
+            # Create Strands Agent with AWS Bedrock (default provider, same as supervisor)
+            # The agent will use boto3's credential resolution system
             self.agent = Agent(
                 name="DoctorAgent",
                 instructions=system_prompt,
-                model="gpt-4o",
-                temperature=0.3,
-                max_tokens=2000
+                # Using default AWS Bedrock with Claude 4 Sonnet (same as supervisor)
             )
             
-            self.logger.info("Strands Agent initialized with GPT-4o")
+            self.logger.info(f"Strands Agent with Amazon Bedrock initialized successfully (region: {aws_region})")
                 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Strands Agent: {str(e)}")
+            self.logger.error(f"Failed to initialize Strands Agent with Amazon Bedrock: {str(e)}")
             raise
 
     def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:
@@ -152,21 +154,19 @@ Please provide:
 Please provide concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.
 """
 
-            # Use Strands Agent to generate response
-            response = self.agent.run(prompt)
+            # Use Strands Agent with AWS Bedrock to generate response (same as supervisor)
+            response = self.agent.chat(prompt)
             
-            # Extract the text content from the response
-            if hasattr(response, 'messages') and response.messages:
-                # Get the last message content
-                last_message = response.messages[-1]
-                if hasattr(last_message, 'text'):
-                    medical_response = last_message.text
-                elif hasattr(last_message, 'content'):
-                    medical_response = last_message.content
-                else:
-                    medical_response = str(last_message)
-            else:
-                medical_response = str(response)
+            if response is None:
+                self.logger.error("Strands Agent with Amazon Bedrock returned None response")
+                return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ"
+            
+            # Convert response to string
+            medical_response = str(response).strip()
+            
+            if medical_response == "":
+                self.logger.error("Strands Agent with Amazon Bedrock returned empty content")
+                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
             self.logger.info(f"Generated medical response - Length: {len(medical_response)} chars")
             return medical_response
@@ -178,7 +178,7 @@ Please provide concise, patient-friendly medical guidance with clear recommendat
 
 if __name__ == "__main__":
     # Minimal reproducible demo for DoctorAgent using existing analyze() method
-    # Requires OPENAI_API_KEY in your environment, otherwise the class will raise.
+    # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, and optionally AWS_REGION in your environment, otherwise the class will raise.
 
     # 1) Create the agent
     try:
