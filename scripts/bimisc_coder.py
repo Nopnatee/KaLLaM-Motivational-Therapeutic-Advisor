@@ -115,7 +115,7 @@ def build_prompt(
     utterance_text: str,
     misc_manual: Dict[str, str],
     examples: Dict[str, List[Tuple[str, str]]],
-    request_coarse: bool = False,
+    request_coarse: bool = True,
 ) -> str:
     assert role in ("THERAPIST", "CLIENT")
     role_header = "Therapist" if role == "THERAPIST" else "Client"
@@ -274,7 +274,7 @@ def multilabel_scores(y_true: List[List[str]], y_pred: List[List[str]], label_se
 
 def run_bimisc(jsonl_path: str,
                role: str,
-               request_coarse: bool = False,
+               request_coarse: bool = True,
                threshold: float = 0.50) -> Dict[str, Any]:
     """
     jsonl schema expectation per item:
@@ -338,5 +338,5 @@ def run_bimisc(jsonl_path: str,
 if __name__ == "__main__":
     # Example run with your uploaded file
     # Replace role with "CLIENT" to evaluate client codes.
-    out = run_bimisc(jsonl_path="../data/test.jsonl", role="THERAPIST", request_coarse=True, threshold=0.50)
+    out = run_bimisc(jsonl_path="../dataset/test.jsonl", role="THERAPIST", request_coarse=True, threshold=0.50)
     print(json.dumps(out, ensure_ascii=False, indent=2))
