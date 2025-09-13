@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
-from kallam.app.chatbot_manager import ChatbotManager
+from data_manager import ChatbotManager
 
 # key improvement: - delete notification
 # key improvement: - color
@@ -37,7 +37,7 @@ CABBAGE_SVG = """
 
 
 # Initialize the chatbot manager
-chatbot_manager = ChatbotManager()
+chatbot_manager = ChatbotManager(api_provider="sea_lion")
 current_session_id = None
 
 # Configure logging
@@ -70,11 +70,11 @@ def get_current_session_status() -> str:
         avg_latency = stats.get('avg_latency')
         latency_str = f"{float(avg_latency):.1f}" if avg_latency is not None else "0.0"
         
-        saved_memories = session_info.get('saved_memories')
-        saved_memories_str = saved_memories if saved_memories else 'Not specified'
+        condition = session_info.get('condition')
+        condition_str = condition if condition else 'Not specified'
         
         return f"""
-### 🏥 **Health saved_memories:** {saved_memories_str}  
+### 🏥 **Health Condition:** {condition_str}  
 🟢 **Current Session:** `{app_state.current_session_id}`  
 📅 **Created on:** {session_info.get('timestamp', 'N/A')}  
 💬 **Messages:** {stats.get('message_count', 0) or 0} messages  
@@ -94,11 +94,11 @@ def get_session_list() -> List[str]:
         session_options = []
         
         for session in sessions:
-            saved_memories = (session.get('saved_memories') or 'Unspecified')[:20]
+            condition = (session.get('condition') or 'Unspecified')[:20]
             msg_count = session.get('total_messages', 0)
             summary_count = session.get('total_summaries', 0)
             
-            display_name = f"{session['session_id']} | {msg_count}💬 {summary_count}📋 | {saved_memories}"
+            display_name = f"{session['session_id']} | {msg_count}💬 {summary_count}📋 | {condition}"
             session_options.append(display_name)
         
         return session_options if session_options else ["No Sessions"]
@@ -117,17 +117,17 @@ def refresh_session_list() -> gr.update:
     session_list = get_session_list()
     return gr.update(choices=session_list, value=session_list[0] if session_list else None)
 
-def create_new_session(saved_memories: str = "") -> Tuple[List, str, str, str, str]:
+def create_new_session(condition: str = "") -> Tuple[List, str, str, str, str]:
     """Create a new session."""
     try:
-        session_id = chatbot_manager.start_session(saved_memories=saved_memories or None)
+        session_id = chatbot_manager.start_session(condition=condition or None)
         app_state.current_session_id = session_id
         app_state.message_count = 0
         
         status = get_current_session_status()
         result_msg = f"✅ **New session created successfully!**\n\n🆔 Session ID: `{session_id}`"
         
-        return [], "", result_msg, status, saved_memories
+        return [], "", result_msg, status, condition
     except Exception as e:
         logger.error(f"Error creating new session: {e}")
         error_msg = f"❌ **Could not create new session:** {str(e)}"
@@ -149,7 +149,7 @@ def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
         app_state.message_count = session.get('total_messages', 0)
         
         # Load chat history
-        chat_history = chatbot_manager._get_original_chat_history(session_id)
+        chat_history = chatbot_manager._get_chat_history(session_id)
         gradio_history = []
         
         for msg in chat_history:
@@ -160,9 +160,9 @@ def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
         
         status = get_current_session_status()
         result_msg = f"✅ **Switched session successfully!**\n\n🆔 Session ID: `{session_id}`"
-        saved_memories = session.get('saved_memories', '')
+        condition = session.get('condition', '')
         
-        return gradio_history, "", result_msg, status, saved_memories
+        return gradio_history, "", result_msg, status, condition
     except Exception as e:
         logger.error(f"Error switching session: {e}")
         error_msg = f"❌ **Could not switch session:** {str(e)}"
@@ -185,8 +185,8 @@ def get_session_info() -> str:
         total_tokens_in = stats.get('total_tokens_in') or 0
         total_tokens_out = stats.get('total_tokens_out') or 0
         
-        saved_memories = session_info.get('saved_memories')
-        saved_memories_str = saved_memories if saved_memories else 'Not specified'
+        condition = session_info.get('condition')
+        condition_str = condition if condition else 'Not specified'
         
         summarized_history = session_info.get('summarized_history')
         summary_str = summarized_history if summarized_history else 'No summary yet'
@@ -202,7 +202,7 @@ def get_session_info() -> str:
 - **Status:** {'🟢 Active' if session_info.get('is_active') else '🔴 Inactive'}
 
 ### 🏥 Health Information
-- **Health saved_memories:** {saved_memories_str}
+- **Health Condition:** {condition_str}
 
 ### 📈 Usage Statistics
 - **Total messages:** {stats.get('message_count', 0) or 0} messages
@@ -234,14 +234,14 @@ def get_all_sessions_info() -> str:
         
         for i, session in enumerate(sessions, 1):
             status_icon = "🟢" if session.get('is_active') else "🔴"
-            saved_memories = session.get('saved_memories', 'Unspecified')[:30]
+            condition = session.get('condition', 'Unspecified')[:30]
             
             session_info = f"""
 ## {i}. {status_icon} `{session['session_id']}`
 - **Created:** {session.get('timestamp', 'N/A')}
 - **Last activity:** {session.get('last_activity', 'N/A')}
 - **Messages:** {session.get('total_messages', 0)} | **Summaries:** {session.get('total_summaries', 0)}
-- **saved_memories:** {saved_memories}
+- **Condition:** {condition}
 - **Model:** {session.get('model_used', 'N/A')}
             """.strip()
             
@@ -252,31 +252,31 @@ def get_all_sessions_info() -> str:
         logger.error(f"Error getting all sessions info: {e}")
         return f"❌ **Error:** {str(e)}"
 
-def update_medical_saved_memories(saved_memories: str) -> Tuple[str, str]:
-    """Update medical saved_memories for current session."""
+def update_medical_condition(condition: str) -> Tuple[str, str]:
+    """Update medical condition for current session."""
     if not app_state.current_session_id:
         return get_current_session_status(), "❌ **No active session**"
     
-    if not saved_memories.strip():
-        return get_current_session_status(), "❌ **Please specify the health saved_memories**"
+    if not condition.strip():
+        return get_current_session_status(), "❌ **Please specify the health condition**"
     
     try:
-        # Update saved_memories in database
+        # Update condition in database
         with chatbot_manager._get_connection() as conn:
             conn.execute("""
                 UPDATE sessions 
-                SET saved_memories = ?, last_activity = ? 
+                SET condition = ?, last_activity = ? 
                 WHERE session_id = ?
-            """, (saved_memories.strip(), datetime.now().isoformat(), app_state.current_session_id))
+            """, (condition.strip(), datetime.now().isoformat(), app_state.current_session_id))
             conn.commit()
         
         status = get_current_session_status()
-        result = f"✅ **Health saved_memories updated successfully!**\n\n📝 **New data:** {saved_memories.strip()}"
+        result = f"✅ **Health condition updated successfully!**\n\n📝 **New data:** {condition.strip()}"
         
         return status, result
     except Exception as e:
-        logger.error(f"Error updating medical saved_memories: {e}")
-        return get_current_session_status(), f"❌ **Could not update health saved_memories:** {str(e)}"
+        logger.error(f"Error updating medical condition: {e}")
+        return get_current_session_status(), f"❌ **Could not update health condition:** {str(e)}"
 
 def process_chat_message(message: str, history: List, health_context: str) -> Tuple[List, str]:
     """Process chat message and return updated history."""
@@ -295,7 +295,7 @@ def process_chat_message(message: str, history: List, health_context: str) -> Tu
         bot_response = chatbot_manager.handle_message(
             session_id=app_state.current_session_id,
             user_message=message,
-            health_context=health_context
+            health_status=health_context
         )
         
         # Add bot response to history
@@ -455,7 +455,7 @@ def create_app() -> gr.Blocks:
         color: white;
         font-weight: 500;
     }
-    .saved_memories-box {
+    .condition-box {
         border-radius: 8px;
         padding: 10px;
         margin: 5px 0;
@@ -542,9 +542,9 @@ def create_app() -> gr.Blocks:
                     max_lines=5,
                     lines=3,
                     info="ข้อมูลนี้จะถูกเก็บใน session และใช้ปรับแต่งคำแนะนำ",
-                    elem_classes=["saved_memories-box"]
+                    elem_classes=["condition-box"]
                 )
-                update_saved_memories_btn = gr.Button("💾 อัปเดตข้อมูลสุขภาพ", variant="primary")
+                update_condition_btn = gr.Button("💾 อัปเดตข้อมูลสุขภาพ", variant="primary")
                 back_btn_1 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
 
             with gr.Column() as chatbot_window:
@@ -654,8 +654,8 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            update_saved_memories_btn.click(
-                fn=update_medical_saved_memories,
+            update_condition_btn.click(
+                fn=update_medical_condition,
                 inputs=[health_context],
                 outputs=[session_status, session_result]
             ).then(
@@ -800,9 +800,9 @@ def create_app() -> gr.Blocks:
                     max_lines=5,
                     lines=3,
                     info="This information will be saved in the session and used to personalize advice",
-                    elem_classes=["saved_memories-box"]
+                    elem_classes=["condition-box"]
                 )
-                update_saved_memories_btn = gr.Button("💾 Update Health Information", variant="primary")
+                update_condition_btn = gr.Button("💾 Update Health Information", variant="primary")
                 back_btn_1 = gr.Button("⏪ Back to Chat", variant="primary")
             with gr.Column() as chatbot_window:
                 # Chat Interface Section
@@ -912,8 +912,8 @@ def create_app() -> gr.Blocks:
                 outputs=[session_dropdown]
             )
 
-            update_saved_memories_btn.click(
-                fn=update_medical_saved_memories,
+            update_condition_btn.click(
+                fn=update_medical_condition,
                 inputs=[health_context],
                 outputs=[session_status, session_result]
             ).then(
@@ -1118,11 +1118,11 @@ response = doctor.get_chatbot_response(
 
 ## Why This POC Matters
 
-Thailand’s Universal Coverage Scheme (UCS) offers highly affordable healthcare, often requiring only a 30 THB co-payment per visit. While this ensures accessibility, it has led to overutilization, with many individuals seeking hospital care for saved_memoriess that could be managed at home. This pattern places immense strain on medical professionals, who face overwhelming patient loads while receiving relatively low compensation, prompting many to seek employment in private institutions. The problem is further exacerbated by uneven resource distribution, with rural areas experiencing a significant shortage of medical personnel compared to urban centers. Additionally, lifestyle changes in rural communities, such as increased consumption of processed foods and reduced physical activity, have contributed to a rise in chronic diseases. Many individuals in these areas lack adequate health literacy, hindering their ability to manage their health effectively and leading to poor self-care practices.
+Thailand’s Universal Coverage Scheme (UCS) offers highly affordable healthcare, often requiring only a 30 THB co-payment per visit. While this ensures accessibility, it has led to overutilization, with many individuals seeking hospital care for conditions that could be managed at home. This pattern places immense strain on medical professionals, who face overwhelming patient loads while receiving relatively low compensation, prompting many to seek employment in private institutions. The problem is further exacerbated by uneven resource distribution, with rural areas experiencing a significant shortage of medical personnel compared to urban centers. Additionally, lifestyle changes in rural communities, such as increased consumption of processed foods and reduced physical activity, have contributed to a rise in chronic diseases. Many individuals in these areas lack adequate health literacy, hindering their ability to manage their health effectively and leading to poor self-care practices.
 
 To address these multifaceted challenges, we propose KaLLaM—a Thai Motivational Therapeutic Advisor chatbot powered by a large language model (LLM). KaLLaM is designed to act as an empathetic and supportive healthcare advisor, guiding patients in managing their health while reducing unnecessary hospital visits. By collecting medical history, symptoms, and lifestyle information, the chatbot provides users with personalized, evidence-based guidance tailored to their unique situation. This approach aims to bridge the gap between patients and healthcare providers, especially in underserved rural areas.
 
-KaLLaM offers a comprehensive approach to patient engagement. It provides actionable recommendations for both physical and mental well-being, using motivational and empathetic prompts to encourage healthy habits. The system can communicate in Thai or English, adapting its responses to cultural and linguistic context. Beyond advice, KaLLaM educates users about their own saved_memoriess, promoting self-care, disease prevention, and early intervention strategies—all in a patient-friendly conversational format. This feature is particularly crucial in rural areas, where access to healthcare professionals is limited, and health literacy is often low.
+KaLLaM offers a comprehensive approach to patient engagement. It provides actionable recommendations for both physical and mental well-being, using motivational and empathetic prompts to encourage healthy habits. The system can communicate in Thai or English, adapting its responses to cultural and linguistic context. Beyond advice, KaLLaM educates users about their own conditions, promoting self-care, disease prevention, and early intervention strategies—all in a patient-friendly conversational format. This feature is particularly crucial in rural areas, where access to healthcare professionals is limited, and health literacy is often low.
 
 By simulating a trusted healthcare adviser, KaLLaM empowers patients to take proactive steps toward managing their health. It has the potential to reduce unnecessary hospital visits, ease the workload of medical professionals, and optimize healthcare resource allocation. Furthermore, by enhancing health literacy and encouraging preventive care, the chatbot contributes to long-term improvements in public health and supports a more sustainable, equitable healthcare system across Thailand. In rural communities, where lifestyle changes and limited health education have led to increased chronic diseases, KaLLaM can play a pivotal role in reversing these trends and promoting healthier living.
 
