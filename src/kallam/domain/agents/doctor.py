@@ -1,12 +1,12 @@
 import os
 import logging
+import requests
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import List, Literal, Dict, Any, Optional
 
 from dotenv import load_dotenv
-from strands import Agent, tool
-
 load_dotenv()
 
 
@@ -16,43 +16,11 @@ class DoctorAgent:
 
     def __init__(self, log_level: int = logging.INFO):
         self._setup_logging(log_level)
-        self._setup_agent()
+        self._setup_api_clients()
         
         self.logger.info("Doctor Agent initialized successfully")
 
-    def _setup_logging(self, log_level: int) -> None:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        self.logger = logging.getLogger(f"{__name__}.DoctorAgent")
-        self.logger.setLevel(log_level)
-        if self.logger.handlers:
-            self.logger.handlers.clear()
-        file_handler = logging.FileHandler(
-            log_dir / f"doctor_{datetime.now().strftime('%Y%m%d')}.log",
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.DEBUG)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
-
-    def _setup_agent(self) -> None:
-        """Setup Strands Agent with AWS Bedrock (same as supervisor)"""
-        try:
-            # Check for AWS credentials (same as supervisor agent)
-            aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-            aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-            aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-            aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
-            
-            if not aws_access_key or not aws_secret_key:
-                raise ValueError("AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
-            
-            system_prompt = """
+        self.system_prompt = """
 **Your Role:**  
 You are a Medical Assistant AI Doctor. You provide helpful medical information and guidance while being extremely careful about medical advice.
 
@@ -92,51 +60,123 @@ Provide structured responses including:
 - Next steps
 - Medical disclaimer
 """
-            
-            # Create Strands Agent with AWS Bedrock (default provider, same as supervisor)
-            # The agent will use boto3's credential resolution system
-            self.agent = Agent(
-                name="DoctorAgent",
-                instructions=system_prompt,
-                # Using default AWS Bedrock with Claude 4 Sonnet (same as supervisor)
-            )
-            
-            self.logger.info(f"Strands Agent with Amazon Bedrock initialized successfully (region: {aws_region})")
-                
+
+    def _setup_logging(self, log_level: int) -> None:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        self.logger = logging.getLogger(f"{__name__}.DoctorAgent")
+        self.logger.setLevel(log_level)
+        if self.logger.handlers:
+            self.logger.handlers.clear()
+        file_handler = logging.FileHandler(
+            log_dir / f"doctor_{datetime.now().strftime('%Y%m%d')}.log",
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+
+    def _setup_api_clients(self) -> None:
+        try:
+            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
+            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+            if not self.sea_lion_api_key:
+                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
+            self.logger.info("SEA-Lion API client initialized for Doctor Agent")
         except Exception as e:
-            self.logger.error(f"Failed to initialize Strands Agent with Amazon Bedrock: {str(e)}")
+            self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
+
+    def _format_messages(self, prompt: str, context: str = "") -> List[Dict[str, str]]:
+        now = datetime.now()
+        context_info = f"""
+**Current Context:**
+- Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
+- Medical Context: {context}
+"""
+        system_message = {"role": "system", "content": f"{self.system_prompt}\n\n{context_info}"}
+        user_message = {"role": "user", "content": prompt}
+        return [system_message, user_message]
+
+    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> str:
+        try:
+            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
+            headers = {"Authorization": f"Bearer {self.sea_lion_api_key}", "Content-Type": "application/json"}
+            payload = {
+                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "messages": messages,
+                "chat_template_kwargs": {"thinking_mode": "on"},
+                "max_tokens": 2000,
+                "temperature": 0.3,
+                "top_p": 0.8,
+                "frequency_penalty": 0.1,
+                "presence_penalty": 0.1
+            }
+            response = requests.post(
+                f"{self.sea_lion_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            response_data = response.json()
+
+            if "choices" not in response_data or len(response_data["choices"]) == 0:
+                self.logger.error(f"Unexpected response structure: {response_data}")
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+            
+            choice = response_data["choices"][0]
+            if "message" not in choice or "content" not in choice["message"]:
+                self.logger.error(f"Unexpected message structure: {choice}")
+                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+            
+            raw_content = choice["message"]["content"]
+            if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
+                self.logger.error("SEA-Lion API returned None or empty content")
+                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+            
+            # Extract only the answer block
+            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
+            commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
+
+            self.logger.info(f"Generated medical response - Commentary: {len(commentary)} chars")
+            return commentary
+
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
+            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+        except Exception as e:
+            self.logger.error(f"Error generating response: {str(e)}")
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
 
     def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:
         """
         Main analyze method expected by orchestrator.
-        Returns a single commentary string.
+        Returns a single commentary string (like PsychologistAgent).
         """
-        try:
-            # Build context
-            context_parts = []
-            now = datetime.now()
-            context_parts.append(f"Current Date/Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            if summarized_histories:
-                context_parts.append(f"Patient History Summary: {summarized_histories}")
-            if chain_of_thoughts:
-                context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
+        context_parts = []
+        if summarized_histories:
+            context_parts.append(f"Patient History Summary: {summarized_histories}")
+        if chain_of_thoughts:
+            context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
 
-            # Add recent conversation context
-            recent_context = []
-            for msg in chat_history[-3:]:
-                if msg.get("role") == "user":
-                    recent_context.append(f"Patient: {msg.get('content', '')}")
-                elif msg.get("role") == "assistant":
-                    recent_context.append(f"Previous Response: {msg.get('content', '')}")
-            if recent_context:
-                context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
+        recent_context = []
+        for msg in chat_history[-3:]:
+            if msg.get("role") == "user":
+                recent_context.append(f"Patient: {msg.get('content', '')}")
+            elif msg.get("role") == "assistant":
+                recent_context.append(f"Previous Response: {msg.get('content', '')}")
+        if recent_context:
+            context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
 
-            full_context = "\n\n".join(context_parts) if context_parts else ""
+        full_context = "\n\n".join(context_parts) if context_parts else ""
 
-            # Create comprehensive prompt
-            prompt = f"""
+        prompt = f"""
 Based on the current medical query and available context, provide comprehensive medical guidance:
 
 **Current Query:** {user_message}
@@ -151,34 +191,19 @@ Please provide:
 3. **Patient Education**
 4. **Safety Considerations**
 
-Please provide concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.
-"""
+**Response Structure:**
 
-            # Use Strands Agent with AWS Bedrock to generate response (same as supervisor)
-            response = self.agent.chat(prompt)
-            
-            if response is None:
-                self.logger.error("Strands Agent with Amazon Bedrock returned None response")
-                return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ"
-            
-            # Convert response to string
-            medical_response = str(response).strip()
-            
-            if medical_response == "":
-                self.logger.error("Strands Agent with Amazon Bedrock returned empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
-            
-            self.logger.info(f"Generated medical response - Length: {len(medical_response)} chars")
-            return medical_response
+```answer
+[Concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.]
+```"""
 
-        except Exception as e:
-            self.logger.error(f"Error in analyze method: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ"
+        messages = self._format_messages(prompt, full_context)
+        return self._generate_response_with_thinking(messages)
 
 
 if __name__ == "__main__":
     # Minimal reproducible demo for DoctorAgent using existing analyze() method
-    # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, and optionally AWS_REGION in your environment, otherwise the class will raise.
+    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
 
     # 1) Create the agent
     try:
