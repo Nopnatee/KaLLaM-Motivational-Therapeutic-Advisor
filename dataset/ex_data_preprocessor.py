@@ -165,8 +165,6 @@ def yield_items(turns: List[Tuple[str, str]], history_window: int = 6) -> Iterab
 # ----------------------------
 def main():
     inputs = {
-        "train.csv": "train.jsonl",
-        "valid.csv": "valid.jsonl",
         "test.csv":  "test.jsonl",
     }
 
