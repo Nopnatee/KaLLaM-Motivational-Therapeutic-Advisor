@@ -338,5 +338,5 @@ def run_bimisc(jsonl_path: str,
 if __name__ == "__main__":
     # Example run with your uploaded file
     # Replace role with "CLIENT" to evaluate client codes.
-    out = run_bimisc(jsonl_path="/mnt/data/test.jsonl", role="THERAPIST", request_coarse=True, threshold=0.50)
+    out = run_bimisc(jsonl_path="../data/test.jsonl", role="THERAPIST", request_coarse=True, threshold=0.50)
     print(json.dumps(out, ensure_ascii=False, indent=2))
