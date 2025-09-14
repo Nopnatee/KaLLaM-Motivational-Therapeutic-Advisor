@@ -110,7 +110,7 @@ class PsychologistAgent:
         return """
 **บทบาทของคุณ:**  
 คุณคือนักจิตวิทยาให้คำปรึกษาเชี่ยวชาญด้านการสนับสนุนสุขภาพจิตและการให้คำแนะนำเชิงบำบัด  
-เป้าหมายของคุณคือให้การแทรกแซงทางจิตวิทยาที่อิงหลักฐานเชิงประจักษ์พร้อมรักษาขอบเขตทางวิชาชีพ
+เป้าหมายของคุณคือให้การแทรกแซงทางจิตวิทยาที่อิงหลักฐานพร้อมรักษาขอบเขตทางวิชาชีพ
 
 **กฎหลัก:**  
 - คุณไม่ใช่ทางเลือกแทนการดูแลสุขภาพจิตแบบมืออาชีพ  
@@ -118,7 +118,7 @@ class PsychologistAgent:
 - รักษาความอบอุ่น ความเข้าใจ และขอบเขตทางวิชาชีพตลอดเวลา  
 - ไม่เคยให้การวินิจฉัย เพียงแค่ให้คำแนะนำที่สนับสนุนและกลยุทธ์การรับมือ  
 - แนะนำให้ปรึกษานักจิตวิทยาที่ได้รับใบอนุญาตเสมอสำหรับความกังวลที่จริงจัง  
-- ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญทันที  
+- ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน ร่วมกับให้เบอร์โทรหรือแหล่งช่วยเหลือที่เหมาะสม
 
 **แนวทางการบำบัด:**  
 1. **การฟังอย่างมีประสิทธิภาพ:** สะท้อน ถอดความ ยืนยัน และแสดงความเข้าใจ  
@@ -131,23 +131,23 @@ class PsychologistAgent:
 **แนวทางการตอบสนอง:**  
 - ใช้คำถามปลายเปิด น้ำเสียงที่เข้าใจ และการยืนยัน  
 - ให้การศึกษาเรื่องจิตใจและกลยุทธ์การรับมือ  
-- รวมการแทรกแซงที่อิงหลักฐานเชิงประจักษ์ที่เหมาะกับผู้รับการปรึกษา  
+- รวมการแทรกแซงที่อิงหลักฐานที่เหมาะกับผู้รับการปรึกษา  
 - ตอบสนองเป็นภาษาไทยเสมอ  
 - รวมขั้นตอนความปลอดภัยในภาวะวิกฤตเมื่อตรวจพบความเสี่ยง  
 
 **โพรโทคอลการประเมินภาวะวิกฤต:**  
-- หากพบสัญญาณของความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต การแยกตัว ภาวะฉุกเฉินสารเสพติด หรือการทารุณกรรม: แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน **และ** ให้คำแนะนำที่สนับสนุน  
+- หากพบสัญญาณของความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต การแยกตัว ภาวะฉุกเฉินสารเสพติด หรือการทำร้ายกรรม: แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน **และ** ให้คำแนะนำที่สนับสนุน  
 
 **รูปแบบผลลัพธ์:**  
 จัดโครงสร้างการตอบสนองให้รวม:  
 - การยืนยันและสะท้อนทางอารมณ์  
 - การประเมินทางจิตวิทยา (ความคิด อารมณ์ พฤติกรรม ความเสี่ยง)  
-- กลยุทธ์การแทรกแซง (เทคนิคที่อิงหลักฐานเชิงประจักษ์)  
+- กลยุทธ์การแทรกแซง (เทคนิคที่อิงหลักฐาน)  
 - การส่งต่อผู้เชี่ยวชาญหรือการวางแผนความปลอดภัยตามความจำเป็น  
 
 **งานเฉพาะ:**  
-ให้คำแนะนำเชิงบำบัดที่สนับสนุน มีโครงสร้าง และอิงหลักฐานเชิงประจักษ์ พร้อมทั้งมั่นใจในความปลอดภัยของผู้รับการปรึกษา  
-วัตถุประสงค์หลักของคุณคือช่วยให้ผู้รับการปรึกษาพัฒนาทักษะการรับมือและส่งเสริมการดูแลจากผู้เชี่ยวชาพที่เหมาะสม
+ให้คำแนะนำเชิงบำบัดที่สนับสนุน มีโครงสร้าง และอิงหลักฐาน พร้อมทั้งมั่นใจในความปลอดภัยของผู้รับการปรึกษา  
+วัตถุประสงค์หลักของคุณคือช่วยให้ผู้รับการปรึกษาพัฒนาทักษะการรับมือและส่งเสริมการดูแลจากผู้เชี่ยวชาญที่เหมาะสม
 """
 
     def _format_messages_sealion(self, user_message: str, therapeutic_context: str = "") -> List[Dict[str, str]]:
@@ -188,11 +188,11 @@ class PsychologistAgent:
                     "\n\nกรุณาแสดงผลในรูปแบบต่อไปนี้:\n"
                     "```thinking\n{การใคร่ครวญทีละขั้นตอน - วิเคราะห์อาการของผู้ป่วย สภาพทางอารมณ์ และกำหนดแนวทางที่ดีที่สุด}\n```\n"
                     "```answer\n{การตอบสนองขั้นสุดท้าย - คำแนะนำที่อบอุ่น เข้าใจ และปฏิบัติได้}\n```\n\n"
-                    "**สำคัญ**: คิดผ่านด้านทางการแพทย์และจิตวิทยาเป็นภาษาอังกฤษเพื่อการใคร่ครวญที่ดีขึ้น แล้วให้การตอบสนองผู้ป่วยเป็นภาषาไทย"
+                    "**สำคัญ**: คิดผ่านด้านทางการแพทย์และจิตวิทยาเป็นภาษาอังกฤษเพื่อการใคร่ครวญที่ดีขึ้น แล้วให้การตอบสนองผู้ป่วยเป็นภาษาไทย"
                 )
             
             payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "model": "aisingapore/Llama-SEA-LION-v3.5-70B-R",
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "on"
@@ -337,6 +337,45 @@ Please provide your therapeutic response following the guidelines above."""
             self.logger.error(f"Error generating Gemini response: {str(e)}")
             return "I apologize, but I'm experiencing technical difficulties. Please try again later, and if you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
 
+    # ===== ANALYSIS METHODS FOR ORCHESTRATOR =====
+    def analyze(self, message: str, context: str = "") -> str:
+        """
+        Analyze method expected by the orchestrator
+        Provides psychological analysis and therapeutic guidance
+        
+        Args:
+            message: The client's message to analyze
+            context: Additional context about the conversation/client
+            
+        Returns:
+            Therapeutic analysis and guidance response
+        """
+        self.logger.info("Starting psychological analysis")
+        self.logger.debug(f"Analyzing message: {message}")
+        self.logger.debug(f"Context: {context}")
+        
+        try:
+            # Use the main therapeutic guidance method
+            response = self.provide_therapeutic_guidance(
+                user_message=message,
+                therapeutic_context=context
+            )
+            
+            self.logger.info("Psychological analysis completed successfully")
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error in analyze method: {str(e)}")
+            # Return fallback based on detected language
+            try:
+                lang = self._detect_language(message)
+                if lang == 'thai':
+                    return "ขออภัยค่ะ เกิดปัญหาทางเทคนิค หากมีความคิดฆ่าตัวตายหรืออยู่ในภาวะฉุกเฉิน กรุณาติดต่อนักจิตวิทยาหรือหน่วยงานฉุกเฉินทันที"
+                else:
+                    return "I apologize for the technical issue. If you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
+            except:
+                return "Technical difficulties. If in crisis, seek immediate professional help."
+
     # ===== MAIN OUTPUT METHODS =====
     def provide_therapeutic_guidance(self, user_message: str, therapeutic_context: str = "") -> str:
         """
@@ -395,7 +434,8 @@ Please provide your therapeutic response following the guidelines above."""
             "gemini_model": self.gemini_model_name,
             "timestamp": datetime.now().isoformat(),
             "logging_enabled": True,
-            "log_level": self.logger.level
+            "log_level": self.logger.level,
+            "methods_available": ["analyze", "provide_therapeutic_guidance", "get_health_status"]
         }
         
         self.logger.debug(f"Health status check: {status}")
@@ -415,7 +455,7 @@ if __name__ == "__main__":
         {
             "name": "Thai - Exam Anxiety",
             "user_message": "หนูปวดหัวและกังวลเรื่องสอบค่ะ นอนไม่หลับและกังวลว่าจะสอบตก",
-            "therapeutic_context": "User: นักศึกษาอายุ 21 ปี ช่วงสอบกลางเทอม นอนน้อย (4-5 ชั่วโมง) กาแฟมาก มีประวัติวิตกกังวลในช่วงความเครียดทางการศึกษา"
+            "therapeutic_context": "User: นักศึกษาอายุ 21 ปี ช่วงสอบกลางเทอม นอนน้อย (4-5 ชั่วโมง) ดื่มกาแฟมาก มีประวัติวิตกกังวลในช่วงความเครียดทางการศึกษา"
         },
         {
             "name": "English - Work Stress", 
@@ -434,7 +474,24 @@ if __name__ == "__main__":
         }
     ]
 
-    # Run tests
+    # Test the analyze method specifically
+    print(f"\n{'='*60}")
+    print("TESTING ANALYZE METHOD (Required by Orchestrator)")
+    print(f"{'='*60}")
+    
+    test_message = "hello im kinda sad"
+    test_context = "User expressing mild sadness, needs supportive guidance"
+    
+    print(f"\n Test Message: {test_message}")
+    print(f" Context: {test_context}")
+    
+    print(f"\n ANALYZE METHOD RESPONSE:")
+    print("-" * 50)
+    
+    analyze_response = psychologist.analyze(test_message, test_context)
+    print(analyze_response)
+
+    # Run other tests
     for i, test_case in enumerate(test_cases, 1):
         print(f"\n{'='*60}")
         print(f"TEST {i}: {test_case['name']}")
@@ -460,6 +517,3 @@ if __name__ == "__main__":
     print(f"{'='*60}")
     status = psychologist.get_health_status()
     print(json.dumps(status, indent=2, ensure_ascii=False))
-
-    print(f"\n All tests completed successfully!")
-    print(" The PsychologistAgent is ready with language-based API routing:")
