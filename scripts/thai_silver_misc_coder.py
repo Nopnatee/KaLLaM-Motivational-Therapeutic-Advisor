@@ -383,7 +383,7 @@ def build_prompt(
 งานที่ต้องทำ:
 ระบุรหัส MISC โดยละเอียดทั้งหมดที่เกี่ยวข้องสำหรับคำพูดนี้อย่างเคร่งครัดจาก {allowed}.
 ตอบด้วยโครงสร้าง JSON เท่านั้นโดยโครงสร้างที่กำหนดให้รวมถึงระบุค่าความมั่นใจในคำตอบ (confidence) ห้ามสุ่มขึ้นมา:
-{{"รหัส":[{{"รหัส":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
+{{"codes":[{{"code":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
 
 {json_guard}
 """
@@ -663,8 +663,8 @@ def run_bimisc(
 
 if __name__ == "__main__":
     REPO_ROOT = Path(__file__).resolve().parents[1]
-    DATA_PATH = REPO_ROOT / "dataset" / "thai_test.jsonl"
-    OUT_PATH = REPO_ROOT / "dataset" / "thai_test_silver.jsonl"
+    DATA_PATH = REPO_ROOT / "data" / "orchestrated" / "pre_annotate.jsonl"
+    OUT_PATH = REPO_ROOT / "data" / "orchestrated" / "post_annotate.jsonl"
 
     log.info("Run config: %s", json.dumps({
         "model": SEA_LION_MODEL,

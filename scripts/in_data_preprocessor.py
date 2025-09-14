@@ -7,9 +7,9 @@ import re
 from pathlib import Path
 from datetime import datetime
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
 IN_PATH = REPO_ROOT / "exported_sessions" / "all_sessions.json"
-OUT_PATH = REPO_ROOT / "exported_sessions" / "pretest_sessions.jsonl"
+OUT_PATH = REPO_ROOT / "data" / "orchestrated" / "pre_annotate.jsonl"
 
 # Map your roles to the target schema
 ROLE_MAP = {

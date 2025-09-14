@@ -208,8 +208,8 @@ def compute_misc_stats(
 
 if __name__ == "__main__":
     # >>> EDIT THESE PATHS <<<
-    IN_PATH = "dataset/test_silver.jsonl"
-    OUT_PATH = "dataset/test_silver_report.json"
+    IN_PATH = "data/orchestrated/post_annotate.jsonl"
+    OUT_PATH = "data/orchestrated/report.json"
 
     # IN_PATH = "dataset/thai_test_silver.jsonl"
     # OUT_PATH = "dataset/thai_test_silver_report.json"

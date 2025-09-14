@@ -664,8 +664,8 @@ def run_bimisc(
 
 if __name__ == "__main__":
     REPO_ROOT = Path(__file__).resolve().parents[1]
-    DATA_PATH = REPO_ROOT / "dataset" / "test.jsonl"
-    OUT_PATH = REPO_ROOT / "dataset" / "test_silver.jsonl"
+    DATA_PATH = REPO_ROOT / "data" / "psychologist" / "pre_annotate.jsonl"
+    OUT_PATH = REPO_ROOT / "data" / "psychologist" / "post_annotate.jsonl"
 
     log.info("Run config: %s", json.dumps({
         "model": SEA_LION_MODEL,

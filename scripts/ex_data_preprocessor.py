@@ -17,6 +17,10 @@ from typing import Dict, Any, List, Tuple, Iterable
 
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+IN_PATH = REPO_ROOT / "data" / "psychologist" / "test.csv"
+OUT_PATH = REPO_ROOT / "data" / "psychologist" / "pre_annotate.jsonl"
+
 # ----------------------------
 # I/O args
 # ----------------------------
@@ -164,31 +168,26 @@ def yield_items(turns: List[Tuple[str, str]], history_window: int = 6) -> Iterab
 # End-to-end
 # ----------------------------
 def main():
-    inputs = {
-        "test.csv":  "test.jsonl",
-    }
+    in_path = IN_PATH
+    out_path = OUT_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    for in_file, out_file in inputs.items():
-        in_path  = Path("dataset") / in_file
-        out_path = Path("dataset") / out_file
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+    df = smart_load_csv(in_path)
+    df = clean_text(df)
+    conv_df = build_conversation_only(df)
 
-        df = smart_load_csv(in_path)
-        df = clean_text(df)
-        conv_df = build_conversation_only(df)
+    written = 0
+    with out_path.open("w", encoding="utf-8") as fout:
+        for _, row in conv_df.iterrows():
+            conv_text = (row.get("conversation") or "").strip()
+            if not conv_text:
+                continue
+            turns = parse_turns(conv_text)
+            for item in yield_items(turns, history_window=6):
+                fout.write(json.dumps(item, ensure_ascii=False) + "\n")
+                written += 1
 
-        written = 0
-        with out_path.open("w", encoding="utf-8") as fout:
-            for _, row in conv_df.iterrows():
-                conv_text = (row.get("conversation") or "").strip()
-                if not conv_text:
-                    continue
-                turns = parse_turns(conv_text)
-                for item in yield_items(turns, history_window=6):
-                    fout.write(json.dumps(item, ensure_ascii=False) + "\n")
-                    written += 1
-
-        print(f"{in_file} -> {out_file} | wrote {written} items")
+    print(f"{in_path} -> {out_path} | wrote {written} items")
 
 if __name__ == "__main__":
     main()
