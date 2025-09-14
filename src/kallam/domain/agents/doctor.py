@@ -2,6 +2,7 @@ import os
 import logging
 import requests
 import re
+from google import genai
 from pathlib import Path
 from datetime import datetime
 from typing import List, Literal, Dict, Any, Optional
@@ -18,7 +19,7 @@ class DoctorAgent:
         self._setup_logging(log_level)
         self._setup_api_clients()
         
-        self.logger.info("Doctor Agent initialized successfully")
+        self.logger.info("Doctor Agent initialized successfully with Gemini API")
 
         self.system_prompt = """
 **Your Role:**  
@@ -83,81 +84,65 @@ Provide structured responses including:
 
     def _setup_api_clients(self) -> None:
         try:
-            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-            if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
-            self.logger.info("SEA-Lion API client initialized for Doctor Agent")
+            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+            if not self.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY not found in environment variables")
+            
+            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+            self.gemini_model_name = "gemini-1.5-flash"
+            self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
         except Exception as e:
             self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
 
-    def _format_messages(self, prompt: str, context: str = "") -> List[Dict[str, str]]:
+    def _format_prompt_gemini(self, user_message: str, medical_context: str = "") -> str:
         now = datetime.now()
         context_info = f"""
 **Current Context:**
 - Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
-- Medical Context: {context}
+- Medical Context: {medical_context}
 """
-        system_message = {"role": "system", "content": f"{self.system_prompt}\n\n{context_info}"}
-        user_message = {"role": "user", "content": prompt}
-        return [system_message, user_message]
+        
+        prompt = f"""{self.system_prompt}
 
-    def _generate_response_with_thinking(self, messages: List[Dict[str, str]]) -> str:
+{context_info}
+
+**Patient Query:** {user_message}
+
+Please provide your medical guidance following the guidelines above."""
+        
+        return prompt
+
+    def _generate_response_gemini(self, prompt: str) -> str:
         try:
-            self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
-            headers = {"Authorization": f"Bearer {self.sea_lion_api_key}", "Content-Type": "application/json"}
-            payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
-                "messages": messages,
-                "chat_template_kwargs": {"thinking_mode": "on"},
-                "max_tokens": 2000,
-                "temperature": 0.3,
-                "top_p": 0.8,
-                "frequency_penalty": 0.1,
-                "presence_penalty": 0.1
-            }
-            response = requests.post(
-                f"{self.sea_lion_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30
+            self.logger.debug(f"Sending prompt to Gemini API (length: {len(prompt)} chars)")
+            
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_name,
+                contents=[prompt],
             )
-            response.raise_for_status()
-            response_data = response.json()
-
-            if "choices" not in response_data or len(response_data["choices"]) == 0:
-                self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
             
-            choice = response_data["choices"][0]
-            if "message" not in choice or "content" not in choice["message"]:
-                self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+            response_text = response.text
             
-            raw_content = choice["message"]["content"]
-            if raw_content is None or (isinstance(raw_content, str) and raw_content.strip() == ""):
-                self.logger.error("SEA-Lion API returned None or empty content")
+            if response_text is None or (isinstance(response_text, str) and response_text.strip() == ""):
+                self.logger.error("Gemini API returned None or empty content")
                 return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
             
-            # Extract only the answer block
-            answer_match = re.search(r"```answer\s*(.*?)\s*```", raw_content, re.DOTALL)
-            commentary = answer_match.group(1).strip() if answer_match else raw_content.strip()
+            # Extract answer block if present
+            answer_match = re.search(r"```answer\s*(.*?)\s*```", response_text, re.DOTALL)
+            commentary = answer_match.group(1).strip() if answer_match else response_text.strip()
 
             self.logger.info(f"Generated medical response - Commentary: {len(commentary)} chars")
             return commentary
-
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating response from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            
         except Exception as e:
-            self.logger.error(f"Error generating response: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            self.logger.error(f"Error generating Gemini response: {str(e)}")
+            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
 
     def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:
         """
         Main analyze method expected by orchestrator.
-        Returns a single commentary string (like PsychologistAgent).
+        Returns a single commentary string.
         """
         context_parts = []
         if summarized_histories:
@@ -176,7 +161,7 @@ Provide structured responses including:
 
         full_context = "\n\n".join(context_parts) if context_parts else ""
 
-        prompt = f"""
+        prompt_content = f"""
 Based on the current medical query and available context, provide comprehensive medical guidance:
 
 **Current Query:** {user_message}
@@ -197,13 +182,12 @@ Please provide:
 [Concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.]
 ```"""
 
-        messages = self._format_messages(prompt, full_context)
-        return self._generate_response_with_thinking(messages)
+        prompt = self._format_prompt_gemini(prompt_content, full_context)
+        return self._generate_response_gemini(prompt)
 
 
 if __name__ == "__main__":
     # Minimal reproducible demo for DoctorAgent using existing analyze() method
-    # Requires SEA_LION_API_KEY in your environment, otherwise the class will raise.
 
     # 1) Create the agent
     try:
