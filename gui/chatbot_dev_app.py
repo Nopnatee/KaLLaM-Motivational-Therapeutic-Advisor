@@ -297,7 +297,14 @@ def export_session() -> str:
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
         return f"❌ **ไม่สามารถส่งออกข้อมูล:** {e}"
-
+    
+def export_all_sessions() -> str:
+    try:
+        chatbot_manager.export_all_sessions_json()
+        return "✅ **ส่งออกข้อมูลสำเร็จ!**"
+    except Exception as e:
+        logger.error(f"Error exporting session: {e}")
+        return f"❌ **ไม่สามารถส่งออกข้อมูล:** {e}"
 # -----------------------
 # UI
 # -----------------------
@@ -347,7 +354,7 @@ def create_app() -> gr.Blocks:
         with gr.Row():
             session_info_btn = gr.Button("👀 ข้อมูล Session", variant="secondary")
             all_sessions_btn = gr.Button("📁 ดู Session ทั้งหมด", variant="secondary")
-            export_btn = gr.Button("📤 ส่งออกข้อมูลเป็น.json (dev)", variant="secondary")
+            export_btn = gr.Button("📤 ส่งออกข้อมูลทั้งหมดเป็น.json (dev)", variant="secondary")
 
         with gr.Accordion("📊 ข้อมูลรายละเอียด Session", open=False):
             session_result = gr.Markdown(value="**กำลังรอการอัปเดต...**", elem_classes=["summary-box"])
@@ -413,6 +420,10 @@ def create_app() -> gr.Blocks:
 
         session_info_btn.click(fn=get_session_info, outputs=[session_info_display])
         all_sessions_btn.click(fn=get_all_sessions_info, outputs=[session_info_display])
+        export_btn.click(fn=export_all_sessions, outputs=[session_info_display])
+        export_btn.click(fn=lambda: set_button_loading("⏳ ประมวลผล..."), outputs=[export_btn]) \
+            .then(fn=export_all_sessions) \
+            .then(fn=lambda: reset_button("📤 ส่งออกข้อมูลทั้งหมดเป็น.json (dev)", variant="secondary"), outputs=[export_btn])
 
         update_saved_memories_btn.click(
             fn=update_medical_saved_memories,

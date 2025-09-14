@@ -55,8 +55,8 @@ class MessageStore:
                          translated_content,chain_of_thoughts,tokens_input,tokens_output,latency_ms,flags)
                          values (?,?,?,?,?,?,?,?,?,?,?)""",
                       (session_id, message_id, now, role, content,
-                       translated, json.dumps(reasoning) if reasoning else None,
-                       tok_in, tok_out, latency_ms, json.dumps(flags) if flags else None))
+                       translated, json.dumps(reasoning, ensure_ascii=False) if reasoning else None,
+                       tok_in, tok_out, latency_ms, json.dumps(flags, ensure_ascii=False) if flags else None))
             if role == "user":
                 c.execute("""update sessions set total_messages=total_messages+1,
                              total_user_messages=coalesce(total_user_messages,0)+1,

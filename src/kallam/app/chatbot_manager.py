@@ -406,7 +406,7 @@ class ChatbotManager:
         return path
     
     @_with_trace()
-    def export_all_session_json(self) -> str:
+    def export_all_sessions_json(self) -> str:
         path = self.exporter.export_all_sessions_json()
         logger.info(f"exported session to {path}")
         return path
