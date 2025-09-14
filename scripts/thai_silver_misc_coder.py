@@ -52,6 +52,8 @@ except ImportError:
     def tqdm(iterable, *args, **kwargs):
         return iterable
 
+DEFAULT_IN_PATH = Path("data/orchestrated/pre_annotate.jsonl")
+DEFAULT_OUT_PATH = Path("data/orchestrated/post_annotate.jsonl")
 # ----------------------------
 # Environment & logging
 # ----------------------------
@@ -85,7 +87,7 @@ PER_CODE_THRESHOLDS = {
     "ADW": 0.70, "RCW": 0.70, "CO": 0.65, "WA": 0.60,   # high cost of FP
     "CR": 0.55, "RF": 0.65, "ADP": 0.60, "RCP": 0.60,   # trickier semantics
     "FA": 0.50, "FI": 0.50, "ST": 0.50, "OQ": 0.55,     # easy stuff
-    "CQ": 0.65,
+    "CQ": 0.65, "SU": 0.90
 }
 
 # Accept BiMISC-era aliases from the model and normalize to MISC 2.5
@@ -657,15 +659,7 @@ def run_bimisc(
         "preds_coarse": preds_coarse if request_coarse else None,
     }
 
-# ----------------------------
-# CLI entry
-# ----------------------------
-
-if __name__ == "__main__":
-    REPO_ROOT = Path(__file__).resolve().parents[1]
-    DATA_PATH = REPO_ROOT / "data" / "orchestrated" / "pre_annotate.jsonl"
-    OUT_PATH = REPO_ROOT / "data" / "orchestrated" / "post_annotate.jsonl"
-
+def main(in_path: Path = DEFAULT_IN_PATH, out_path: Path = DEFAULT_OUT_PATH):
     log.info("Run config: %s", json.dumps({
         "model": SEA_LION_MODEL,
         "temperature": 0.0,
@@ -677,11 +671,18 @@ if __name__ == "__main__":
     }, ensure_ascii=False))
 
     out = run_bimisc(
-        jsonl_path=str(DATA_PATH),
+        jsonl_path=str(in_path),
         request_coarse=True,
         limit=500,
-        save_path=str(OUT_PATH),
+        save_path=str(out_path),
         history_window=6,
         model=SEA_LION_MODEL,
     )
     print(json.dumps(out, ensure_ascii=False, indent=2))
+
+# ----------------------------
+# CLI entry
+# ----------------------------
+
+if __name__ == "__main__":
+    main()

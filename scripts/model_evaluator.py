@@ -31,6 +31,10 @@ from pathlib import Path
 from collections import Counter
 from typing import Dict, Any, List, Iterable
 
+
+DEFAULT_IN_PATH = "data/orchestrated/post_annotate.jsonl"
+DEFAULT_OUT_PATH = "data/orchestrated/report.json"
+
 # ---------- Helper / config ----------
 
 def _safe_list(x) -> List[str]:
@@ -205,18 +209,14 @@ def compute_misc_stats(
     }
     return report
 
-
-if __name__ == "__main__":
-    # >>> EDIT THESE PATHS <<<
-    IN_PATH = "data/orchestrated/post_annotate.jsonl"
-    OUT_PATH = "data/orchestrated/report.json"
-
-    # IN_PATH = "dataset/thai_test_silver.jsonl"
-    # OUT_PATH = "dataset/thai_test_silver_report.json"
-
-    stats = compute_misc_stats(IN_PATH, use_coarse=True)
+def main(in_path: Path = DEFAULT_IN_PATH, out_path: Path = DEFAULT_OUT_PATH): # type: ignore
+    stats = compute_misc_stats(in_path, use_coarse=True) # type: ignore
     text = json.dumps(stats, ensure_ascii=False, indent=2)
     print(text)
 
-    Path(OUT_PATH).write_text(text, encoding="utf-8")
-    print(f"\nReport written to {OUT_PATH}")
+    Path(out_path).write_text(text, encoding="utf-8")
+    print(f"\nReport written to {out_path}")
+
+if __name__ == "__main__":
+    main()
+
