@@ -29,3 +29,11 @@ Rashkin, H., Smith, E. M., Li, M., & Boureau, Y.-L. (2019). Towards Empathetic O
   pages={5370--5381},
   year={2019}
 }
+
+# MISC 2.5 Codes Definitions
+@manual{houck2010misc25,
+  title     = {Motivational Interviewing Skill Code (MISC) 2.5},
+  author    = {Houck, Jon M. and Moyers, Theresa B. and Miller, William R. and Glynn, Lisa H. and Hallgren, Kevin A.},
+  year      = {2010},
+  institution = {University of New Mexico, Center on Alcoholism, Substance Abuse, and Addictions (CASAA)},
+}
