@@ -214,7 +214,7 @@ Remember: Your summaries support continuity of care and help healthcare provider
     def summarize_conversation_history(
         self, 
         response_history: List[Dict[str, str]], 
-        summarized_histories: List[Dict[str, str]] = None,
+        summarized_histories: Optional[List[Dict[str, str]]] = None,
         language: str = "thai"
     ) -> str:
         """
@@ -275,7 +275,7 @@ Response Format:
         self, 
         session_history: List[Dict[str, str]], 
         session_type: str = "general",
-        focus_areas: List[str] = None,
+        focus_areas: Optional[List[str]] = None,
         language: str = "thai"
     ) -> str:
         """
@@ -437,7 +437,7 @@ Respond primarily in {language} with actionable healthcare insights.
         self, 
         baseline_summary: str, 
         recent_conversations: List[Dict[str, str]], 
-        metrics_focus: List[str] = None,
+        metrics_focus: Optional[List[str]] = None,
         language: str = "thai"
     ) -> str:
         """
@@ -527,7 +527,7 @@ Respond primarily in {language} with clear progress indicators and actionable re
         self,
         session_content: str,
         session_type: str = "consultation",
-        clinical_focus: List[str] = None,
+        clinical_focus: Optional[List[str]] = None,
         language: str = "english"
     ) -> str:
         """
