@@ -187,140 +187,140 @@ EXAMPLES = {
     "THERAPIST": {
         # Open Question: invites elaboration, not answerable with yes/no
         "OQ": [
-            ("Client: I think I should cut down.\nTherapist:", "What makes cutting down important to you right now?"),
-            ("Client: I'm torn about my meds.\nTherapist:", "How are you weighing the pros and cons of taking them?"),
-            ("Client: I'm so pissed at myself right now.\nTherapist:", "Can you tell me more?")
+            ("Client: ผมว่าผมควรลดมันดูบ้าง\nTherapist:", "อะไรคือสิ่งที่ทำให้คุณคิดว่าการลดนั้นสำคัญ?"),
+            ("Client: ชั้นเบื่อยาแล้ว\nTherapist:", "คุณคิดว่าข้อดีและข้อเสียของการกินยาคืออะไร?"),
+            ("Client: ผมโคตรจะเบื่อตัวเองเลยหว่ะ.\nTherapist:", "เพราะอะไรหรอครับ?")
         ],
 
         # Closed Question: seeks specific fact, yes/no, or detail
         "CQ": [
-            ("Client: I missed my meds.\nTherapist:", "Did you miss them yesterday?"),
-            ("Client: I might go tomorrow.\nTherapist:", "Will you go tomorrow?"),
+            ("Client: ฉันลืมกินยา\nTherapist:", "คุณลืมกินเมื่อวานหรอคะ?"),
+            ("Client: ผมอาจจะไปพรุ่งนี้\nTherapist:", "คุณจะไปพรุ่งนี้หรอครับ?"),
         ],
 
         # Simple Reflection: repeats/rephrases client, adds little new meaning
         "SR": [
-            ("Client: I'm overwhelmed.\nTherapist:", "You're feeling swamped by all this."),
-            ("Client: It's been a lot lately.\nTherapist:", "It's been heavy and nonstop for you."),
+            ("Client: ฉันรู้สึกเหนื่อย\nTherapist:", "คุณกำลังรู้สึกหนักอึ้งกับทุกสิ่งที่เกิดขึ้น"),
+            ("Client: ที่ผ่านมามีเรื่องเยอะมาก\nTherapist:", "มันมีอะไรมากมายอย่างไม่หยุดหย่อนโถมเข้ามาหาคุณ"),
         ],
 
         # Complex Reflection: adds significant meaning, emotion, or new framing
         "CR": [
-            ("Client: Work drains me.\nTherapist:", "The stress at work is leaving you exhausted and irritable."),
-            ("Client: I fail every time.\nTherapist:", "Each setback has been chipping away at your confidence."),
+            ("Client: งานทำให้ชั้นเหนื่อย\nTherapist:", "ความเครียดในการทำงานทำให้คุณรู้สึกไม่เป็นตัวเอง"),
+            ("Client: ผมล้มเหลวตลอด\nTherapist:", "ทุกความผิดพลาดค่อยๆกัดกินความมั่นใจของคุณ"),
         ],
 
         # Advise with Permission (ADP): gives advice after asking or when client invites it
         "ADP": [
-            ("Client: Could you suggest something?\nTherapist:", "You could try a 10-minute walk after dinner to get started."),
-            ("Client: Is there a way to sleep better?\nTherapist:", "You might keep a fixed bedtime and avoid screens before bed."),
+            ("Client: ช่วยผมที\nTherapist:", "คุณลองไปเดินเล่นซัก 10 นาทีดูมั้ยหล่ะ"),
+            ("Client: มีวิธีช่วยให้นอนง่ายขึ้นมั้ย?\nTherapist:", "คุณลองนอนเวลาเดิมและไม่ดูจอก่อนนอนครับ"),
         ],
 
         # Advise without Permission (ADW): gives advice without first asking or invitation
         "ADW": [
-            ("Client: My sleep is a mess.\nTherapist:", "You should start a sleep schedule and cut caffeine after noon."),
-            ("Client: I have been stressed lately.\nTherapist:", "You could join a mindfulness class this week."),
+            ("Client: ผมนอนมั่วมาก\nTherapist:", "คุณควรปรับเวลานอนให้เป็นระบบนะครับ"),
+            ("Client: ชั้นเครียดมากในช่วงนี้\nTherapist:", "คุณลองไปเข้ากิจกรรมผ่อนคลายต่างๆสิ"),
         ],
 
         # Affirm: compliments, expresses confidence, or appreciates effort
         "AF": [
-            ("Client: I booked an appointment.\nTherapist:", "That took initiative. Nice work."),
-            ("Client: I told my partner.\nTherapist:", "That was brave and constructive."),
+            ("Client: ฉันนัดหมอแล้ว\nTherapist:", "ดีเลยครับ"),
+            ("Client: ผมบอกแฟนผมแล้ว\nTherapist:", "คุณกล้าหาญมากค่ะ"),
         ],
 
         # Confront: disagrees, criticizes, shames, judges, or argues
         "CO": [
-            ("Client: I looked for a job this week.\nTherapist:", "Sure you did. Right."),
-            ("Client: I don't think alcohol is a problem.\nTherapist:", "So you think there's nothing wrong at all?"),
+            ("Client: ชั้นเพิ่งหางานมาเมื่อสัปดาห์ที่แล้ว\nTherapist:", "จริงหรอครับ"),
+            ("Client: ผมไม่คิดว่าปัญหามันอยู่ที่เหล้า\nTherapist:", "งั้นคุณจะบอกว่าไม่มีอะไรที่เป็นปัญหาเลยหรอคะ"),
         ],
 
         # Direct: commands or imperative language
         "DI": [
-            ("Client: I keep skipping doses.\nTherapist:", "Set an alarm and take it tonight."),
-            ("Client: I can't decide.\nTherapist:", "Call your clinic today."),
+            ("Client: ผมชอบลืมทานยา\nTherapist:", "ตั้งนาฬิกาปลุกแล้วกินคืนนี้"),
+            ("Client: ฉันตัดสินใจไม่ได้\nTherapist:", "โทรหาคลินิกวันนี้"),
         ],
 
         # Emphasize Control: underscores client's autonomy, includes permission-seeking
         "EC": [
-            ("Client: I'm unsure.\nTherapist:", "It's your call how you want to proceed."),
-            ("Client: I don't like being told.\nTherapist:", "You're in charge, we'll go at your pace."),
-            ("Client: Not sure about advice.\nTherapist:", "Is it okay if I share a suggestion?"),
+            ("Client: ชั้นไม่มั่นใจ\nTherapist:", "จริงๆ ก็ขึ้นอยู่กับคุณว่าจะทำอย่างไร"),
+            ("Client: ฉันไม่ชอบให้ใครมาบอก\nTherapist:", "คุณคือคนนำ เราจะเอาอย่างที่คุณว่าละกัน"),
+            ("Client: ผมไม่ค่อยมั่นใจในคำแนะนำของคุณ\nTherapist:", "ไม่เป็นไร แต่ผมขอแนะนำอะไรอีกอย่างได้ไหม"),
         ],
 
         # Facilitate: short encouragers or backchannels ("mm-hmm", "okay")
         "FA": [
-            ("Client: ...\nTherapist:", "Mm-hmm."),
-            ("Client: I don't know.\nTherapist:", "Okay."),
+            ("Client: ...\nTherapist:", "อืม"),
+            ("Client: ผมไม่รู้\nTherapist:", "โอเค"),
         ],
 
         # Filler: small talk or pleasantries, not substantive
         "FI": [
-            ("Therapist:", "Good morning."),
-            ("Therapist:", "Nice to see you."),
+            ("Therapist:", "สวัสดีค่ะ"),
+            ("Therapist:", "ยินดีที่ได้พบคุณครับ"),
         ],
 
         # Giving Information: factual, explanatory, or feedback statements
         "GI": [
-            ("Client: What does this med do?\nTherapist:", "It lowers inflammation and pain."),
-            ("Client: How often should I take it?\nTherapist:", "Once daily with food."),
+            ("Client: ยาตัวนี้เอาไว้ทำอะไร?\nTherapist:", "ช่วยในการลดปวดและการบวมค่ะ"),
+            ("Client: ฉันควรกินอย่างไร\nTherapist:", "วันละครั้งหลังทานข้าวครับ"),
         ],
 
         # Support: sympathetic or compassionate statements ("hug" not "praise")
         "SU": [
-            ("Client: I feel alone.\nTherapist:", "That sounds really hard. I'm with you in this."),
-            ("Client: I'm scared to slip.\nTherapist:", "It makes sense you'd feel worried about that."),
+            ("Client: ผมรู้สึกเหมือนอยู่คนเดียว\nTherapist:", "นั่นฟังดูไม่ค่อยดีเลย ผมจะคอยรับฟังคุณเองครับ"),
+            ("Client: ชั้นกลัวที่จะล้มเหลว\nTherapist:", "จริงๆนั่นเป็นเรื่องปกติมากเลยค่ะ"),
         ],
 
         # Structure: tells client what will happen in session, transitions topics
         "ST": [
-            ("Therapist:", "First we'll review your week, then plan next steps."),
-            ("Therapist:", "Let's switch to goals, then barriers, then actions."),
+            ("Therapist:", "เราจะเริ่มจากการทบทวนสัปดาห์ที่แล้ว และวางแผนสำหรับครั้งนี้กันค่ะ"),
+            ("Therapist:", "เราจะเปลี่ยนเป้าหมาย แล้วค่อยข้อจำกัด แล้วจึงลงมือกันครับ"),
         ],
 
         # Warn: threat or prediction of negative consequence
         "WA": [
-            ("Therapist:", "If you keep skipping insulin, you could end up hospitalized."),
-            ("Therapist:", "Driving after drinking puts you at real risk of losing your license."),
+            ("Therapist:", "ถ้าคุณยังไม่ทานยาอีก คุณจะได้เข้าโรงพยาบาลสักวันแน่"),
+            ("Therapist:", "การขับรถหลังดื่มจะลงเอยด้วยการเจ็บตัวและเสียใบขับขี่"),
         ],
 
         # Raise Concern with Permission (RCP): names a concern after asking or being invited
         "RCP": [
-            ("Client: What do you think of that plan?\nTherapist:", "I'm concerned it might put you near old triggers."),
-            ("Client: Is there anything I'm missing?\nTherapist:", "I'm a bit worried moving back could make staying sober harder."),
+            ("Client: คุณคิดว่าไง?\nTherapist:", "ฉันกลัวว่ามันจะทำให้คุณได้รับการกระตุ้น Trigger"),
+            ("Client: ผมพลาดอะไรไปรึเปล่า?\nTherapist:", "ฉันกังวลนิดหน่อยว่าการกลับมาอาจทำให้การเลิกเหล้าเป็นเรื่องยากขึ้น"),
         ],
 
         # Raise Concern without Permission (RCW): expresses a concern without asking first
         "RCW": [
-            ("Client: I'll hang with the same crowd.\nTherapist:", "I'm concerned that could pull you back into using."),
-            ("Client: I'll just skip the dose if I forget.\nTherapist:", "That worries me given your recent symptoms."),
+            ("Client: ฉันจะไปกับแก้งเดิม\nTherapist:", "ผมไม่คิดว่านั่นเป็นไอเดียที่ดีนะครับ"),
+            ("Client: ผมจะข้ามถ้าผมลืมทานยา\nTherapist:", "นั่นทำให้ฉันกังวลเกี่ยวกับอาการของคุณค่ะ"),
         ],
 
         # Reframe: changes the meaning or emotional valence of client's statement
         "RF": [
-            ("Client: My husband keeps nagging me about meds.\nTherapist:", "He sounds really concerned about your health."),
-            ("Client: I failed again.\nTherapist:", "Each attempt has taught you something you're using now."),
+            ("Client: ผัวชั้นเอาแต่บอกให้ชั้นกินยา\nTherapist:", "เขาฟังดูเป็นห่วงคุณมากเลยนะครับ"),
+            ("Client: ผมล้มเหลวอีกแล้ว\nTherapist:", "ทุกความพยายามสอนบางอย่างที่คุณใช้อยู่ในปัจจุบัน"),
         ],
     },
 
     "CLIENT": {
         # Follow/Neutral: neutral info, history, or off-target statements
-        "FN": ["Yeah.", "Okay.", "I usually drink 4–5 days a week.", "Mmm"],
+        "FN": ["ได้", "เคร", "ผมดื่มนานๆครั้ว", "อืม"],
 
         # Commitment to change (+) or sustain (–)
-        "CM+": ["I'll cut down to two drinks tonight.", "I'm going to start tomorrow.", "I'll try."],
-        "CM-": ["I won't commit to that right now.", "I'm not planning to stop."],
+        "CM+": ["งั้นผมจะลองลดดูละกัน", "ฉันจะเริ่มพรุ่งนี้", "ชั้นจะลองดู"],
+        "CM-": ["ผมจะไม่ทำอะไรตอนนี้", "ชั้นไม่คิดที่จะเลิก"],
 
         # Taking steps toward change (+) or against change (–)
-        "TS+": ["I tossed out my cigarettes yesterday.", "I set up my pillbox today."],
-        "TS-": ["I bought another pack this morning.", "I skipped the appointment again."],
+        "TS+": ["ผมทิ้งบุหรี่เมื่อวาน", "ฉันจัดยาเมื่อวาน"],
+        "TS-": ["ฉันเพิ่งซื้อบุหรี่มา", "ชั้นบิดหมอเมื่อสัปดาห์ที่แล้ว"],
 
         # Reason for change (+) or reason against (–)
-        "R+": ["It would help my kids if I quit.", "I want my energy back."],
-        "R-": ["I need the drinks to sleep.", "It's the only way I relax."],
+        "R+": ["มันน่าจะช่วยลูกผม ถ้าผมเลิก", "ชั้นอยากมีพลังอีกครั้ง"],
+        "R-": ["ฉันต้องดื่มเพื่อที่จะนอน", "นั้นเป็นทางผ่่อนคลายเดียว"],
 
         # Other change intent (+) or sustain intent (–)
-        "O+": ["I'm ready to change.", "This time I'm serious."],
-        "O-": ["I'm not changing anything.", "This is just who I am."],
+        "O+": ["ผมพร้อมเปลี่ยนตัวเองแล้ว", "ถึงเวลาเอาจริงแล้ว"],
+        "O-": ["ชั้นจะไปเปลี่ยนอะไร", "สันดานคนเรามันเปลี่ยนไม่ได้"],
     },
 }
 
@@ -382,9 +382,8 @@ def build_prompt(
 
 งานที่ต้องทำ:
 ระบุรหัส MISC โดยละเอียดทั้งหมดที่เกี่ยวข้องสำหรับคำพูดนี้อย่างเคร่งครัดจาก {allowed}.
-ตอบด้วยโครงสร้าง JSON เท่านั้นโดยโครงสร้างที่กำหนดให้:
+ตอบด้วยโครงสร้าง JSON เท่านั้นโดยโครงสร้างที่กำหนดให้รวมถึงระบุค่าความมั่นใจในคำตอบ (confidence) ห้ามสุ่มขึ้นมา:
 {{"รหัส":[{{"รหัส":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
-ระบุค่าความมั่นใจในคำตอบ (confidence), ห้ามสุ่มขึ้นมา.
 
 {json_guard}
 """
@@ -396,7 +395,7 @@ def build_prompt(
 def _format_messages(task_prompt: str) -> List[Dict[str, str]]:
     # System defines output discipline, user carries the concrete task
     return [
-        {"role": "system", "content": "You are a strict grader that outputs only JSON."},
+        {"role": "system", "content": "คุณคือผู้ตัดสินจำแนกที่เคร่งครัดและตอบสนองด้วย JSON เท่านั้น"},
         {"role": "user", "content": task_prompt},
     ]
 
@@ -664,8 +663,8 @@ def run_bimisc(
 
 if __name__ == "__main__":
     REPO_ROOT = Path(__file__).resolve().parents[1]
-    DATA_PATH = REPO_ROOT / "dataset" / "test.jsonl"
-    OUT_PATH = REPO_ROOT / "dataset" / "test_silver.jsonl"
+    DATA_PATH = REPO_ROOT / "dataset" / "thai_test.jsonl"
+    OUT_PATH = REPO_ROOT / "dataset" / "thai_test_silver.jsonl"
 
     log.info("Run config: %s", json.dumps({
         "model": SEA_LION_MODEL,
