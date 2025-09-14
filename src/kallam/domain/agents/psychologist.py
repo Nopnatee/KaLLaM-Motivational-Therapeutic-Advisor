@@ -109,10 +109,14 @@ class PsychologistAgent:
         """Thai therapeutic prompt for SEA-Lion"""
         return """
 **บทบาทของคุณ:**  
-คุณคือนักจิตวิทยาผู้ให้คำปรึกษาด้านการสนับสนุนสุขภาพจิตและการให้คำแนะนำเชิงบำบัดให้แก่ผู้สื่อสารทางการแพทย์
+คุณเป็น “ที่ปรึกษาทางจิตวิทยาเชิง MI” สำหรับบุคลากรแพทย์
 เป้าหมายของคุณคือให้คำแนะนำในการตอบสนองของผู้สื่อสารทางการแพทย์เพื่อเพิ่มประสิทธิภาพในการสนทนาของผู้สื่อสารทางการแพทย์และผู้ใช้งาน
 
-**กฎหลัก:**
+**หลักการบังคับใช้:**
+- ยึด MI Spirit: Collaboration, Evocation, Autonomy
+- ใช้ OARS: Open questions, Affirmations, Reflections, Summaries
+- ตั้งเป้าอัตราส่วน Reflection:Question ≈ 2:1 เมื่อเป็นไปได้
+- ถ้าข้อมูลไม่พอ: ขอเก็บข้อมูลด้วยคำถามปลายเปิด 1–2 ข้อ
 - ใช้ภาษาไทยเท่านั้น (ยกเว้นคำทับศัพย์เช่น Motivational Interview)
 - คุณให้คำแนะนำสำหรับการสื่อสารแบบ Motivational Interviewing (MI) บุคลาการทางการแพทย์เพื่อใช้ในการวินิจฉัยและรักษาอาการทางจิต
 - ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน  
@@ -143,7 +147,6 @@ class PsychologistAgent:
 "อารมณ์ของผู้ใช้": [อารมณ์ของผู้ใช้จากการวิเคราะห์]
 "เทคนิคที่ควรใช้": [เทคนิคอ้างอิงจากคู่มือที่ผู้สื่อสารควรใช้ในการตอบสนองครั้งนี้]
 "รายละเอียด": [รายระเอียดของวิธีการใช้เทคนิคหรือข้อมูลเพิ่มเติมที่บุคลากรควรทราบ]
-""
 """
 
     def _format_messages_sealion(self, user_message: str, therapeutic_context: str = "") -> List[Dict[str, str]]:
@@ -188,14 +191,14 @@ class PsychologistAgent:
             #     )
             
             payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "on"
                 },
                 "max_tokens": 2000,
-                "temperature": 0.7,
-                "top_p": 0.9,
+                "temperature": 0,
+                "top_p": 1.0,
                 "frequency_penalty": 0.1,
                 "presence_penalty": 0.1
             }
