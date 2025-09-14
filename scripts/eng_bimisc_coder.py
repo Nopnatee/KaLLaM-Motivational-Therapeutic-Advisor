@@ -93,16 +93,20 @@ THERAPIST_CODES: Dict[str, str] = {
 
 CLIENT_CODES: Dict[str, str] = {
     "FN": "Follow/Neutral",
-    "ASK": "Ask",
+
+    # Change talk (toward change)
     "CM+": "Commitment toward change",
     "TS+": "Taking step toward change",
     "R+": "Reason for change",
     "O+": "Other change-intent",
+
+    # Sustain talk (against change)
     "CM-": "Commitment against change",
     "TS-": "Taking step against change",
     "R-": "Reason against change",
     "O-": "Other sustain-intent",
 }
+
 
 # AnnoMI coarse mapping (MISC 2.5 → AnnoMI)
 FINE_TO_COARSE: Dict[str, str] = {
@@ -152,100 +156,116 @@ FINE_TO_COARSE: Dict[str, str] = {
     # Client examples: list of plain strings
 EXAMPLES = {
     "THERAPIST": {
+        # Open Question: invites elaboration, not answerable with yes/no
         "OQ": [
             ("Client: I think I should cut down.\nTherapist:", "What makes cutting down important to you right now?"),
             ("Client: I'm torn about my meds.\nTherapist:", "How are you weighing the pros and cons of taking them?"),
         ],
+
+        # Closed Question: seeks specific fact, yes/no, or detail
         "CQ": [
             ("Client: I missed my meds.\nTherapist:", "Did you miss them yesterday?"),
             ("Client: I might go tomorrow.\nTherapist:", "Will you go tomorrow?"),
         ],
+
+        # Simple Reflection: repeats/rephrases client, adds little new meaning
         "SR": [
             ("Client: I'm overwhelmed.\nTherapist:", "You’re feeling swamped by all this."),
             ("Client: It’s been a lot lately.\nTherapist:", "It’s been heavy and nonstop for you."),
         ],
+
+        # Complex Reflection: adds significant meaning, emotion, or new framing
         "CR": [
             ("Client: Work drains me.\nTherapist:", "The stress at work is leaving you exhausted and irritable."),
             ("Client: I fail every time.\nTherapist:", "Each setback has been chipping away at your confidence."),
         ],
 
-        # Advice WITH permission (ADP): assume permission was granted (or client asked)
+        # Advise with Permission (ADP): gives advice after asking or when client invites it
         "ADP": [
             ("Client: Could you suggest something?\nTherapist:", "You could try a 10-minute walk after dinner to get started."),
-            ("Client: Is there a way to sleep better?\nTherapist:", "You might keep a fixed bedtime and avoid screens for 30 minutes before."),
+            ("Client: Is there a way to sleep better?\nTherapist:", "You might keep a fixed bedtime and avoid screens before bed."),
         ],
 
-        # Advice WITHOUT permission (ADW)
+        # Advise without Permission (ADW): gives advice without first asking or invitation
         "ADW": [
-            ("Client: My sleep is a mess.\nTherapist:", "Start a sleep schedule and cut caffeine after noon."),
-            ("Client: I want to manage stress.\nTherapist:", "Join a mindfulness class this week."),
+            ("Client: My sleep is a mess.\nTherapist:", "You should start a sleep schedule and cut caffeine after noon."),
+            ("Client: I have been stressed lately.\nTherapist:", "You could join a mindfulness class this week."),
         ],
 
+        # Affirm: compliments, expresses confidence, or appreciates effort
         "AF": [
             ("Client: I booked an appointment.\nTherapist:", "That took initiative. Nice work."),
             ("Client: I told my partner.\nTherapist:", "That was brave and constructive."),
         ],
 
+        # Confront: disagrees, criticizes, shames, judges, or argues
         "CO": [
             ("Client: I looked for a job this week.\nTherapist:", "Sure you did. Right."),
             ("Client: I don’t think alcohol is a problem.\nTherapist:", "So you think there’s nothing wrong at all?"),
         ],
 
+        # Direct: commands or imperative language
         "DI": [
             ("Client: I keep skipping doses.\nTherapist:", "Set an alarm and take it tonight."),
             ("Client: I can’t decide.\nTherapist:", "Call your clinic today."),
         ],
 
-        # Emphasize Control (includes permission-seeking utterances)
+        # Emphasize Control: underscores client’s autonomy, includes permission-seeking
         "EC": [
             ("Client: I’m unsure.\nTherapist:", "It’s your call how you want to proceed."),
-            ("Client: I don’t like being told.\nTherapist:", "You’re in charge; we’ll go at your pace."),
+            ("Client: I don’t like being told.\nTherapist:", "You’re in charge, we’ll go at your pace."),
             ("Client: Not sure about advice.\nTherapist:", "Is it okay if I share a suggestion?"),
         ],
 
-        # Facilitate: backchannels only, not questions or directives
+        # Facilitate: short encouragers or backchannels (“mm-hmm”, “okay”)
         "FA": [
             ("Client: ...\nTherapist:", "Mm-hmm."),
             ("Client: I don’t know.\nTherapist:", "Okay."),
         ],
 
+        # Filler: small talk or pleasantries, not substantive
         "FI": [
             ("Therapist:", "Good morning."),
             ("Therapist:", "Nice to see you."),
         ],
 
+        # Giving Information: factual, explanatory, or feedback statements
         "GI": [
             ("Client: What does this med do?\nTherapist:", "It lowers inflammation and pain."),
             ("Client: How often should I take it?\nTherapist:", "Once daily with food."),
         ],
 
+        # Support: sympathetic or compassionate statements (“hug” not “praise”)
         "SU": [
             ("Client: I feel alone.\nTherapist:", "That sounds really hard. I’m with you in this."),
             ("Client: I’m scared to slip.\nTherapist:", "It makes sense you’d feel worried about that."),
         ],
 
+        # Structure: tells client what will happen in session, transitions topics
         "ST": [
             ("Therapist:", "First we’ll review your week, then plan next steps."),
-            ("Therapist:", "Let’s switch gears to your goals, then barriers, then actions."),
+            ("Therapist:", "Let’s switch to goals, then barriers, then actions."),
         ],
 
+        # Warn: threat or prediction of negative consequence
         "WA": [
             ("Therapist:", "If you keep skipping insulin, you could end up hospitalized."),
             ("Therapist:", "Driving after drinking puts you at real risk of losing your license."),
         ],
 
-        # Raise Concern WITH permission (RCP): assume permission just granted or client invited input
+        # Raise Concern with Permission (RCP): names a concern after asking or being invited
         "RCP": [
             ("Client: What do you think of that plan?\nTherapist:", "I’m concerned it might put you near old triggers."),
             ("Client: Is there anything I’m missing?\nTherapist:", "I’m a bit worried moving back could make staying sober harder."),
         ],
 
-        # Raise Concern WITHOUT permission (RCW)
+        # Raise Concern without Permission (RCW): expresses a concern without asking first
         "RCW": [
             ("Client: I’ll hang with the same crowd.\nTherapist:", "I’m concerned that could pull you back into using."),
             ("Client: I’ll just skip the dose if I forget.\nTherapist:", "That worries me given your recent symptoms."),
         ],
 
+        # Reframe: changes the meaning or emotional valence of client’s statement
         "RF": [
             ("Client: My husband keeps nagging me about meds.\nTherapist:", "He sounds really concerned about your health."),
             ("Client: I failed again.\nTherapist:", "Each attempt has taught you something you’re using now."),
@@ -253,20 +273,27 @@ EXAMPLES = {
     },
 
     "CLIENT": {
-        "FN": ["Yeah.", "Okay.", "I usually drink 4–5 days a week."],
-        "ASK": ["What options do I have?", "Can you explain how that works?"],
+        # Follow/Neutral: neutral info, history, or off-target statements
+        "FN": ["Yeah.", "Okay.", "I usually drink 4–5 days a week.", "Mmm"],
 
-        "CM+": ["I’ll cut down to two drinks tonight.", "I’m going to start tomorrow."],
-        "TS+": ["I tossed out my cigarettes yesterday.", "I set up my pillbox today."],
-        "R+": ["It would help my kids if I quit.", "I want my energy back."],
-        "O+": ["I’m ready to change.", "This time I’m serious."],
-
+        # Commitment to change (+) or sustain (–)
+        "CM+": ["I’ll cut down to two drinks tonight.", "I’m going to start tomorrow.", "I'll try."],
         "CM-": ["I won’t commit to that right now.", "I’m not planning to stop."],
+
+        # Taking steps toward change (+) or against change (–)
+        "TS+": ["I tossed out my cigarettes yesterday.", "I set up my pillbox today."],
         "TS-": ["I bought another pack this morning.", "I skipped the appointment again."],
+
+        # Reason for change (+) or reason against (–)
+        "R+": ["It would help my kids if I quit.", "I want my energy back."],
         "R-": ["I need the drinks to sleep.", "It’s the only way I relax."],
+
+        # Other change intent (+) or sustain intent (–)
+        "O+": ["I’m ready to change.", "This time I’m serious."],
         "O-": ["I’m not changing anything.", "This is just who I am."],
     },
 }
+
 
 
 # ----------------------------
