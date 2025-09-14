@@ -69,6 +69,28 @@ log = logging.getLogger("bimisc")
 # MISC definitions (BiMISC + MISC 2.5 extended)
 # ----------------------------
 
+# -------- MISC decoding policy (production) --------
+THRESHOLD = 0.60           # main decision boundary
+BACKOFF_THRESHOLD = 0.40   # if nothing crosses THRESHOLD, allow top-1 if >= this
+MAX_CODES_PER_UTT = 1      # MISC gold is 1 code/utterance for scoring
+
+# Optional per-code thresholds (override the global; tweak later if needed)
+PER_CODE_THRESHOLDS = {
+    "ADW": 0.70, "RCW": 0.70, "CO": 0.65, "WA": 0.60,   # high cost of FP
+    "CR": 0.60, "RF": 0.60, "ADP": 0.60, "RCP": 0.60,   # trickier semantics
+    "FA": 0.50, "FI": 0.50, "ST": 0.50,                 # easy stuff
+}
+
+# Accept BiMISC-era aliases from the model and normalize to MISC 2.5
+ALIAS_MAP = {
+    "SP": "SU",
+    "STR": "ST",
+    "WAR": "WA",
+    "PS": "EC",
+    "OP": "GI",
+    "ASK": "FN",   # strict 2.5 folds client questions into FN
+}
+
 THERAPIST_CODES: Dict[str, str] = {
     "OQ": "Open Question",
     "CQ": "Closed Question",
@@ -463,15 +485,57 @@ def call_llm(prompt: str, model: Optional[str] = None, temperature: float = 0.0)
 # Multi-label decoding & mapping
 # ----------------------------
 
-def decode_codes(llm_json: Dict[str, Any], threshold: float = 0.50, allowed: Optional[Iterable[str]] = None) -> List[str]:
-    allowed_set = set(allowed or [])
-    out: List[str] = []
-    for item in llm_json.get("codes", []):
-        code = str(item.get("code", "")).strip()
-        conf = float(item.get("confidence", 0))
-        if (not allowed_set or code in allowed_set) and conf >= threshold:
-            out.append(code)
-    return sorted(set(out))
+def _norm_code(c: str) -> str:
+    c = (c or "").strip().upper()
+    return ALIAS_MAP.get(c, c)
+
+# Can optionally get custom treshold
+def _select_codes(
+    llm_json: dict,
+    allowed: set[str],
+    *,
+    max_k: int = MAX_CODES_PER_UTT,
+    threshold: float = THRESHOLD,
+    backoff: float = BACKOFF_THRESHOLD,
+    per_code: dict[str, float] = PER_CODE_THRESHOLDS,
+) -> list[str]:
+    """Normalize -> threshold (with per-code overrides) -> pick top-k by confidence -> optional backoff."""
+    raw = llm_json.get("codes", []) or []
+    scored = []
+    for it in raw:
+        code = _norm_code(str(it.get("code", "")))
+        if code and (not allowed or code in allowed):
+            conf = float(it.get("confidence", 0.0))
+            cut = per_code.get(code, threshold)
+            if conf >= cut:
+                scored.append((code, conf))
+
+    # Sort by confidence desc, then by code for stability
+    scored.sort(key=lambda x: (x[1], x[0]), reverse=True)
+
+    # Keep unique codes only
+    seen = set()
+    picked = []
+    for code, conf in scored:
+        if code not in seen:
+            picked.append((code, conf))
+            seen.add(code)
+        if len(picked) >= max_k:
+            break
+
+    # Backoff: if nothing selected but there exists a candidate above backoff, take the best one
+    if not picked and raw:
+        best = max((( _norm_code(str(it.get("code",""))), float(it.get("confidence",0.0)) )
+                   for it in raw if _norm_code(str(it.get("code",""))) in allowed),
+                   key=lambda t: t[1], default=None)
+        if best and best[1] >= backoff:
+            picked = [best]
+
+    return [c for c, _ in picked]
+
+def decode_codes(llm_json: Dict[str, Any], allowed: Iterable[str]) -> List[str]:
+    allowed_set = set(allowed)
+    return _select_codes(llm_json, allowed_set)
 
 def map_to_coarse(fine_codes: Iterable[str]) -> List[str]:
     return sorted(set(FINE_TO_COARSE[c] for c in fine_codes if c in FINE_TO_COARSE))
@@ -524,9 +588,7 @@ def multilabel_scores(y_true: List[List[str]], y_pred: List[List[str]], label_se
 
 def run_bimisc(
     jsonl_path: str,
-    role: str,
     request_coarse: bool = True,
-    threshold: float = 0.50,
     limit: int | None = None,
     save_path: str | None = None,
     history_window: int = 6,
@@ -542,39 +604,41 @@ def run_bimisc(
                 break
             items.append(json.loads(line))
 
-    role_key = "THERAPIST" if role.upper().startswith("THER") else "CLIENT"
-    manual = THERAPIST_CODES if role_key == "THERAPIST" else CLIENT_CODES
-    ex = EXAMPLES[role_key]
-    allowed_codes = list(manual.keys())
-
     preds_fine: List[List[str]] = []
     preds_coarse: List[List[str]] = []
 
     for idx, ex_item in enumerate(items):
+        # Role gating per utterance
+        utt_role_text = str(ex_item.get("utterance_role", "")).strip().lower()
+        role_key = "THERAPIST" if utt_role_text.startswith("ther") else "CLIENT"
+
+        manual = THERAPIST_CODES if role_key == "THERAPIST" else CLIENT_CODES
+        examples = EXAMPLES[role_key]
+        allowed_codes = list(manual.keys())
+
         history = [(h["role"], h["text"]) for h in ex_item.get("history", [])]
-        utter_role = ex_item["utterance_role"]
-        utter_text = ex_item["utterance_text"]
+        utter_text = ex_item.get("utterance_text", "")
 
         prompt = build_prompt(
             role=role_key,
             history=history,
-            utterance_role=utter_role,
+            utterance_role=ex_item.get("utterance_role", ""),
             utterance_text=utter_text,
             misc_manual=manual,
-            examples=ex,
+            examples=examples,
             request_coarse=request_coarse,
             history_window=history_window,
         )
 
         llm_json = call_llm(prompt, model=model or SEA_LION_MODEL, temperature=0.0)
-        fine_codes = decode_codes(llm_json, threshold=threshold, allowed=allowed_codes)
-        preds_fine.append(fine_codes)
+        fine_codes = decode_codes(llm_json, allowed=allowed_codes)
         ex_item["silver_fine"] = fine_codes
+        preds_fine.append(fine_codes)
 
         if request_coarse:
             coarse_codes = map_to_coarse(fine_codes)
-            preds_coarse.append(coarse_codes)
             ex_item["silver_coarse"] = coarse_codes
+            preds_coarse.append(coarse_codes)
 
         if (idx + 1) % 50 == 0:
             log.info("Processed %d items...", idx + 1)
@@ -589,8 +653,8 @@ def run_bimisc(
 
     return {
         "n": len(items),
-        "threshold": threshold,
-        "role": role_key,
+        "threshold": THRESHOLD,
+        "role": "AUTO",
         "model": model or SEA_LION_MODEL,
         "preds_fine": preds_fine,
         "preds_coarse": preds_coarse if request_coarse else None,
@@ -608,17 +672,17 @@ if __name__ == "__main__":
     log.info("Run config: %s", json.dumps({
         "model": SEA_LION_MODEL,
         "temperature": 0.0,
-        "threshold": 0.50,
+        "threshold": THRESHOLD,
+        "backoff": BACKOFF_THRESHOLD,
+        "max_codes_per_utt": MAX_CODES_PER_UTT,
         "history_window": 6,
         "base_url": SEA_LION_BASE_URL,
     }, ensure_ascii=False))
 
     out = run_bimisc(
         jsonl_path=str(DATA_PATH),
-        role="THERAPIST",
         request_coarse=True,
-        threshold=0.50,
-        limit=100,            # set an integer for smoke tests, e.g., 100
+        limit=300,
         save_path=str(OUT_PATH),
         history_window=6,
         model=SEA_LION_MODEL,
