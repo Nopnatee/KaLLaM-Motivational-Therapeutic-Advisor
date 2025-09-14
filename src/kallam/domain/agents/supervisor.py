@@ -284,7 +284,7 @@ Read the given context and response concisely based on commentary of each agents
                     "thinking_mode": "on"
                 },
                 "max_tokens": 2000,  # for thinking and answering
-                "temperature": 0.7,
+                "temperature": 0.4,
                 "top_p": 0.9,
                 "frequency_penalty": 0.1,  # prevent repetition
                 "presence_penalty": 0.1    # Encourage new topics
