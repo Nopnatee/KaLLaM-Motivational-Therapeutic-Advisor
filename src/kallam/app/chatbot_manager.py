@@ -385,9 +385,6 @@ class ChatbotManager:
         if limit is None:
             limit = self.message_limit
 
-        if hasattr(self.messages, "get_history"):
-            return self.messages.get_history(session_id=session_id, limit=limit)
-
         # Fallback: direct query
         with sqlite_conn(str(self.db_path)) as c:
             rows = c.execute(
@@ -405,5 +402,11 @@ class ChatbotManager:
     @_with_trace()
     def export_session_json(self, session_id: str) -> str:
         path = self.exporter.export_session_json(session_id)
+        logger.info(f"exported session to {path}")
+        return path
+    
+    @_with_trace()
+    def export_all_session_json(self) -> str:
+        path = self.exporter.export_all_sessions_json()
         logger.info(f"exported session to {path}")
         return path
