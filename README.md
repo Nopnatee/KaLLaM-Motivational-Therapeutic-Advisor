@@ -143,4 +143,3 @@ That’s it. If you follow this, future you won’t rage-quit.
 
 ---
 
-“The primary objective of this project is to demonstrate the effectiveness of SEALION models in handling psychological context and dialogue—both by generating meaningful therapeutic sessions with users and by evaluating conversations through automated SEALION-based MISC annotation as an AI coder.”
