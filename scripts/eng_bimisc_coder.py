@@ -45,6 +45,12 @@ from typing import List, Dict, Any, Tuple, Iterable, Optional
 
 import requests
 from dotenv import load_dotenv
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Fallback if tqdm is not available
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 # ----------------------------
 # Environment & logging
@@ -152,7 +158,7 @@ FINE_TO_COARSE: Dict[str, str] = {
     "ST": "TI",
     "WA": "TI",
     "RCP": "TI", "RCW": "TI",
-    # No PS/OP in MISC 2.5; permission-seeking is EC, “opinions” without advice are GI. :contentReference[oaicite:1]{index=1}
+    # No PS/OP in MISC 2.5; permission-seeking is EC, "opinions" without advice are GI. :contentReference[oaicite:1]{index=1}
     
     # Client → NT / CT / ST
     "FN": "NT",  # In MISC 2.5, client questions fall under FN → NT. :contentReference[oaicite:2]{index=2}
@@ -194,8 +200,8 @@ EXAMPLES = {
 
         # Simple Reflection: repeats/rephrases client, adds little new meaning
         "SR": [
-            ("Client: I'm overwhelmed.\nTherapist:", "You’re feeling swamped by all this."),
-            ("Client: It’s been a lot lately.\nTherapist:", "It’s been heavy and nonstop for you."),
+            ("Client: I'm overwhelmed.\nTherapist:", "You're feeling swamped by all this."),
+            ("Client: It's been a lot lately.\nTherapist:", "It's been heavy and nonstop for you."),
         ],
 
         # Complex Reflection: adds significant meaning, emotion, or new framing
@@ -225,26 +231,26 @@ EXAMPLES = {
         # Confront: disagrees, criticizes, shames, judges, or argues
         "CO": [
             ("Client: I looked for a job this week.\nTherapist:", "Sure you did. Right."),
-            ("Client: I don’t think alcohol is a problem.\nTherapist:", "So you think there’s nothing wrong at all?"),
+            ("Client: I don't think alcohol is a problem.\nTherapist:", "So you think there's nothing wrong at all?"),
         ],
 
         # Direct: commands or imperative language
         "DI": [
             ("Client: I keep skipping doses.\nTherapist:", "Set an alarm and take it tonight."),
-            ("Client: I can’t decide.\nTherapist:", "Call your clinic today."),
+            ("Client: I can't decide.\nTherapist:", "Call your clinic today."),
         ],
 
-        # Emphasize Control: underscores client’s autonomy, includes permission-seeking
+        # Emphasize Control: underscores client's autonomy, includes permission-seeking
         "EC": [
-            ("Client: I’m unsure.\nTherapist:", "It’s your call how you want to proceed."),
-            ("Client: I don’t like being told.\nTherapist:", "You’re in charge, we’ll go at your pace."),
+            ("Client: I'm unsure.\nTherapist:", "It's your call how you want to proceed."),
+            ("Client: I don't like being told.\nTherapist:", "You're in charge, we'll go at your pace."),
             ("Client: Not sure about advice.\nTherapist:", "Is it okay if I share a suggestion?"),
         ],
 
-        # Facilitate: short encouragers or backchannels (“mm-hmm”, “okay”)
+        # Facilitate: short encouragers or backchannels ("mm-hmm", "okay")
         "FA": [
             ("Client: ...\nTherapist:", "Mm-hmm."),
-            ("Client: I don’t know.\nTherapist:", "Okay."),
+            ("Client: I don't know.\nTherapist:", "Okay."),
         ],
 
         # Filler: small talk or pleasantries, not substantive
@@ -259,16 +265,16 @@ EXAMPLES = {
             ("Client: How often should I take it?\nTherapist:", "Once daily with food."),
         ],
 
-        # Support: sympathetic or compassionate statements (“hug” not “praise”)
+        # Support: sympathetic or compassionate statements ("hug" not "praise")
         "SU": [
-            ("Client: I feel alone.\nTherapist:", "That sounds really hard. I’m with you in this."),
-            ("Client: I’m scared to slip.\nTherapist:", "It makes sense you’d feel worried about that."),
+            ("Client: I feel alone.\nTherapist:", "That sounds really hard. I'm with you in this."),
+            ("Client: I'm scared to slip.\nTherapist:", "It makes sense you'd feel worried about that."),
         ],
 
         # Structure: tells client what will happen in session, transitions topics
         "ST": [
-            ("Therapist:", "First we’ll review your week, then plan next steps."),
-            ("Therapist:", "Let’s switch to goals, then barriers, then actions."),
+            ("Therapist:", "First we'll review your week, then plan next steps."),
+            ("Therapist:", "Let's switch to goals, then barriers, then actions."),
         ],
 
         # Warn: threat or prediction of negative consequence
@@ -279,20 +285,20 @@ EXAMPLES = {
 
         # Raise Concern with Permission (RCP): names a concern after asking or being invited
         "RCP": [
-            ("Client: What do you think of that plan?\nTherapist:", "I’m concerned it might put you near old triggers."),
-            ("Client: Is there anything I’m missing?\nTherapist:", "I’m a bit worried moving back could make staying sober harder."),
+            ("Client: What do you think of that plan?\nTherapist:", "I'm concerned it might put you near old triggers."),
+            ("Client: Is there anything I'm missing?\nTherapist:", "I'm a bit worried moving back could make staying sober harder."),
         ],
 
         # Raise Concern without Permission (RCW): expresses a concern without asking first
         "RCW": [
-            ("Client: I’ll hang with the same crowd.\nTherapist:", "I’m concerned that could pull you back into using."),
-            ("Client: I’ll just skip the dose if I forget.\nTherapist:", "That worries me given your recent symptoms."),
+            ("Client: I'll hang with the same crowd.\nTherapist:", "I'm concerned that could pull you back into using."),
+            ("Client: I'll just skip the dose if I forget.\nTherapist:", "That worries me given your recent symptoms."),
         ],
 
-        # Reframe: changes the meaning or emotional valence of client’s statement
+        # Reframe: changes the meaning or emotional valence of client's statement
         "RF": [
             ("Client: My husband keeps nagging me about meds.\nTherapist:", "He sounds really concerned about your health."),
-            ("Client: I failed again.\nTherapist:", "Each attempt has taught you something you’re using now."),
+            ("Client: I failed again.\nTherapist:", "Each attempt has taught you something you're using now."),
         ],
     },
 
@@ -301,8 +307,8 @@ EXAMPLES = {
         "FN": ["Yeah.", "Okay.", "I usually drink 4–5 days a week.", "Mmm"],
 
         # Commitment to change (+) or sustain (–)
-        "CM+": ["I’ll cut down to two drinks tonight.", "I’m going to start tomorrow.", "I'll try."],
-        "CM-": ["I won’t commit to that right now.", "I’m not planning to stop."],
+        "CM+": ["I'll cut down to two drinks tonight.", "I'm going to start tomorrow.", "I'll try."],
+        "CM-": ["I won't commit to that right now.", "I'm not planning to stop."],
 
         # Taking steps toward change (+) or against change (–)
         "TS+": ["I tossed out my cigarettes yesterday.", "I set up my pillbox today."],
@@ -310,11 +316,11 @@ EXAMPLES = {
 
         # Reason for change (+) or reason against (–)
         "R+": ["It would help my kids if I quit.", "I want my energy back."],
-        "R-": ["I need the drinks to sleep.", "It’s the only way I relax."],
+        "R-": ["I need the drinks to sleep.", "It's the only way I relax."],
 
         # Other change intent (+) or sustain intent (–)
-        "O+": ["I’m ready to change.", "This time I’m serious."],
-        "O-": ["I’m not changing anything.", "This is just who I am."],
+        "O+": ["I'm ready to change.", "This time I'm serious."],
+        "O-": ["I'm not changing anything.", "This is just who I am."],
     },
 }
 
@@ -609,7 +615,8 @@ def run_bimisc(
     preds_fine: List[List[str]] = []
     preds_coarse: List[List[str]] = []
 
-    for idx, ex_item in enumerate(items):
+    # Use tqdm for progress bar
+    for idx, ex_item in enumerate(tqdm(items, desc="Processing items", unit="item")):
         # Role gating per utterance
         utt_role_text = str(ex_item.get("utterance_role", "")).strip().lower()
         role_key = "THERAPIST" if utt_role_text.startswith("ther") else "CLIENT"
@@ -684,7 +691,7 @@ if __name__ == "__main__":
     out = run_bimisc(
         jsonl_path=str(DATA_PATH),
         request_coarse=True,
-        limit=300,
+        limit=500,
         save_path=str(OUT_PATH),
         history_window=6,
         model=SEA_LION_MODEL,
