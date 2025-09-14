@@ -641,9 +641,6 @@ def run_bimisc(
             ex_item["silver_coarse"] = coarse_codes
             preds_coarse.append(coarse_codes)
 
-        if (idx + 1) % 50 == 0:
-            log.info("Processed %d items...", idx + 1)
-
     if save_path:
         out_path = Path(save_path).expanduser().resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
