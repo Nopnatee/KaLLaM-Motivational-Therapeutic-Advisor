@@ -337,7 +337,6 @@ def build_prompt(
     utterance_text: str,
     misc_manual: Dict[str, str],
     examples: Dict[str, List],
-    request_coarse: bool = True,
     history_window: int = 6,
 ) -> str:
     assert role in ("THERAPIST", "CLIENT") # Check dataset
@@ -360,12 +359,6 @@ def build_prompt(
     history_lines = [f"{r}: {t}" for r, t in hist]
 
     allowed = list(misc_manual.keys())
-    coarse_note = ""
-    if request_coarse:
-        coarse_note = (
-            "\nAdditionally map selected fine-grained codes to the coarse set "
-            "{'QS','RF','TI','NT','CT','ST'} using the known mapping."
-        )
 
     json_guard = (
         "Return ONLY valid minified JSON. Do not include prose, preambles, or code fences."
@@ -391,7 +384,7 @@ Task:
 Identify ALL applicable fine-grained MISC codes for this utterance strictly from {allowed}.
 Respond only in JSON with:
 {{"codes":[{{"code":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
-Only include a code if confidence >= 0.50. Use calibrated confidence, not random.{coarse_note}
+Only include a code if confidence >= 0.50. Use calibrated confidence, not random.
 
 {json_guard}
 """
@@ -635,7 +628,6 @@ def run_bimisc(
             utterance_text=utter_text,
             misc_manual=manual,
             examples=examples,
-            request_coarse=request_coarse,
             history_window=history_window,
         )
 

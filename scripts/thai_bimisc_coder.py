@@ -99,41 +99,41 @@ ALIAS_MAP = {
 }
 
 THERAPIST_CODES: Dict[str, str] = {
-    "OQ": "Open Question",
-    "CQ": "Closed Question",
-    "SR": "Simple Reflection",
-    "CR": "Complex Reflection",
-    "ADP": "Advise with Permission",
-    "ADW": "Advise without Permission",
-    "AF": "Affirm",
-    "CO": "Confront",
-    "DI": "Direct",
-    "EC": "Emphasize Control",
-    "FA": "Facilitate",
-    "FI": "Filler",
-    "GI": "Giving Information",
-    "SU": "Support",
-    "ST": "Structure",
-    "WA": "Warn",
-    "RCP": "Raise Concern with Permission",
-    "RCW": "Raise Concern without Permission",
-    "RF": "Reframe",
+    "OQ": "การใช้คำถามปลายเปิด",
+    "CQ": "การใช้คำถามปลายปิด",
+    "SR": "การสะท้อนอย่างเรียบง่าย",
+    "CR": "การสะท้อนอย่างซับซ้อน",
+    "ADP": "การให้คำแนะนำโดยได้รับอนุญาติ",
+    "ADW": "การให้คำแนะนำโดยไม่ได้รับอนุญาติ",
+    "AF": "การยืนยัน",
+    "CO": "การประจันหน้า",
+    "DI": "การตรงไปตรงมา",
+    "EC": "การเน้นการควบคุม",
+    "FA": "การอำนวยความสะดวก",
+    "FI": "การใช้ประโยคตัวเติม",
+    "GI": "การให้ข้อมูล",
+    "SU": "การสนับสนุน",
+    "ST": "การอยู่ในโครงสร้าง",
+    "WA": "การเตือน",
+    "RCP": "การเตือนอย่างได้รับอนุญาติ",
+    "RCW": "การเตือนอย่างไม่ได้รับอนุญาติ",
+    "RF": "การเปลี่ยนมุมมอง",
 }
 
 CLIENT_CODES: Dict[str, str] = {
-    "FN": "Follow/Neutral",
+    "FN": "การตามบทสนทนา",
 
     # Change talk (toward change)
-    "CM+": "Commitment toward change",
-    "TS+": "Taking step toward change",
-    "R+": "Reason for change",
-    "O+": "Other change-intent",
+    "CM+": "การลงมือในทางที่ดี",
+    "TS+": "การพูดสู่ทางที่ดี",
+    "R+": "การให้เหตุผลในการเปลี่ยนแปลงสู่ทางที่ดี",
+    "O+": "การแสดงเจตนาในการเปลี่ยนแปลงที่ดีอื่นๆ",
 
     # Sustain talk (against change)
-    "CM-": "Commitment against change",
-    "TS-": "Taking step against change",
-    "R-": "Reason against change",
-    "O-": "Other sustain-intent",
+    "CM-": "การลงมือในทางที่ไม่ดี",
+    "TS-": "การพูดสู่ทางที่ไม่ดี",
+    "R-": "การให้เหตุผลในการเปลี่ยนแปลงสู่ทางที่ไม่ดี",
+    "O-": "การแสดงเจตนาในการเปลี่ยนแปลงที่ไม่ดีอื่นๆ",
 }
 
 
@@ -337,7 +337,6 @@ def build_prompt(
     utterance_text: str,
     misc_manual: Dict[str, str],
     examples: Dict[str, List],
-    request_coarse: bool = True,
     history_window: int = 6,
 ) -> str:
     assert role in ("THERAPIST", "CLIENT") # Check dataset
@@ -360,38 +359,32 @@ def build_prompt(
     history_lines = [f"{r}: {t}" for r, t in hist]
 
     allowed = list(misc_manual.keys())
-    coarse_note = ""
-    if request_coarse:
-        coarse_note = (
-            "\nAdditionally map selected fine-grained codes to the coarse set "
-            "{'QS','RF','TI','NT','CT','ST'} using the known mapping."
-        )
 
     json_guard = (
         "Return ONLY valid minified JSON. Do not include prose, preambles, or code fences."
     )
 
-    return f"""You are performing Motivational Interviewing behavioral coding (MISC) for the last utterance.
+    return f"""คุณกำลังทำการเข้ารหัสพฤติกรรมของการสัมภาษณ์เชิงสร้างแรงบันดาลใจ (MISC) สำหรับคำพูดสุดท้าย.
 
-Role to classify: {role_header}
+บทบาทในการจำแนกประเภท: {role_header}
 
-MISC manual for {role_header}:
+คู่มือ MISC สำหรับ {role_header}:
 {chr(10).join(manual_lines)}
 
-MISC examples for {role_header}:
+คู่มือ MISC สำหรับ {role_header}:
 {chr(10).join(ex_lines)}
 
-Historical conversation (most recent last):
+ประวัติการสนทนา (สุดท้ายใหม่สุด):
 {chr(10).join(history_lines)}
 
-Utterance for classification:
+ถ้อยคำที่ต้องการการจำแนกประเภท:
 {utterance_role}: {utterance_text}
 
-Task:
-Identify ALL applicable fine-grained MISC codes for this utterance strictly from {allowed}.
-Respond only in JSON with:
-{{"codes":[{{"code":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
-Only include a code if confidence >= 0.50. Use calibrated confidence, not random.{coarse_note}
+งานที่ต้องทำ:
+ระบุรหัส MISC โดยละเอียดทั้งหมดที่เกี่ยวข้องสำหรับคำพูดนี้อย่างเคร่งครัดจาก {allowed}.
+ตอบด้วยโครงสร้าง JSON เท่านั้นโดยโครงสร้างที่กำหนดให้:
+{{"รหัส":[{{"รหัส":"<MISC>","confidence":<0..1>}},...],"notes":"<brief justification>"}}
+ระบุค่าความมั่นใจในคำตอบ (confidence), ห้ามสุ่มขึ้นมา.
 
 {json_guard}
 """
@@ -635,7 +628,6 @@ def run_bimisc(
             utterance_text=utter_text,
             misc_manual=manual,
             examples=examples,
-            request_coarse=request_coarse,
             history_window=history_window,
         )
 
