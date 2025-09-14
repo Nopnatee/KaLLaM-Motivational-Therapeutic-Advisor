@@ -132,7 +132,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 
 **Rules:**
 - If the user reports physical symptoms, illnesses, treatments, or medications → set "doctor": true
-- If the user reports emotional struggles, thoughts, relationships, or psychological concerns → set "psychologist": true  
+- If the user suggest any emotional struggles, thoughts, relationships, or psychological concerns → set "psychologist": true  
 - According to the previous commentaries the "psychologist" should be false only when the conversation clearly don't need psychologist anymore
 - "language" MUST be exactly "english" or "thai" (lowercase)
 - Both "doctor" and "psychologist" can be true if both aspects are present
