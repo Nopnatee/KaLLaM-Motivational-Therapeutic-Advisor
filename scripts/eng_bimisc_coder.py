@@ -212,7 +212,7 @@ def build_prompt(
     request_coarse: bool = True,
     history_window: int = 6,
 ) -> str:
-    assert role in ("THERAPIST", "CLIENT")
+    assert role in ("THERAPIST", "CLIENT") # Check dataset
     role_header = "Therapist" if role == "THERAPIST" else "Client"
 
     manual_lines = [f"- {code}: {desc}" for code, desc in misc_manual.items()]
