@@ -77,8 +77,9 @@ MAX_CODES_PER_UTT = 1      # MISC gold is 1 code/utterance for scoring
 # Optional per-code thresholds (override the global; tweak later if needed)
 PER_CODE_THRESHOLDS = {
     "ADW": 0.70, "RCW": 0.70, "CO": 0.65, "WA": 0.60,   # high cost of FP
-    "CR": 0.60, "RF": 0.60, "ADP": 0.60, "RCP": 0.60,   # trickier semantics
-    "FA": 0.50, "FI": 0.50, "ST": 0.50,                 # easy stuff
+    "CR": 0.55, "RF": 0.65, "ADP": 0.60, "RCP": 0.60,   # trickier semantics
+    "FA": 0.50, "FI": 0.50, "ST": 0.50, "OQ": 0.55,     # easy stuff
+    "CQ": 0.65,
 }
 
 # Accept BiMISC-era aliases from the model and normalize to MISC 2.5
@@ -182,6 +183,7 @@ EXAMPLES = {
         "OQ": [
             ("Client: I think I should cut down.\nTherapist:", "What makes cutting down important to you right now?"),
             ("Client: I'm torn about my meds.\nTherapist:", "How are you weighing the pros and cons of taking them?"),
+            ("Client: I'm so pissed at myself right now.\nTherapist:", "Can you tell me more?")
         ],
 
         # Closed Question: seeks specific fact, yes/no, or detail
