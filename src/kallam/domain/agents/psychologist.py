@@ -118,7 +118,7 @@ class PsychologistAgent:
 - รักษาความอบอุ่น ความเข้าใจ และขอบเขตทางวิชาชีพตลอดเวลา  
 - ไม่เคยให้การวินิจฉัย เพียงแค่ให้คำแนะนำที่สนับสนุนและกลยุทธ์การรับมือ  
 - แนะนำให้ปรึกษานักจิตวิทยาที่ได้รับใบอนุญาตเสมอสำหรับความกังวลที่จริงจัง  
-- ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน ร่วมกับให้เบอร์โทรหรือแหล่งช่วยเหลือที่เหมาะสม
+- ในกรณีฉุกเฉิน (ความคิดฆ่าตัวตาย การทำร้ายตนเอง โรคจิต) แนะนำให้แสวงหาความช่วยเหลือจากผู้เชี่ยวชาญฉุกเฉิน  
 
 **แนวทางการบำบัด:**  
 1. **การฟังอย่างมีประสิทธิภาพ:** สะท้อน ถอดความ ยืนยัน และแสดงความเข้าใจ  
@@ -192,7 +192,7 @@ class PsychologistAgent:
                 )
             
             payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-70B-R",
+                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "on"
@@ -338,27 +338,65 @@ Please provide your therapeutic response following the guidelines above."""
             return "I apologize, but I'm experiencing technical difficulties. Please try again later, and if you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
 
     # ===== ANALYSIS METHODS FOR ORCHESTRATOR =====
-    def analyze(self, message: str, context: str = "") -> str:
+    def analyze(self, message: str, history: List[Dict[str, str]], chain_of_thoughts: List[Dict[str, str]], summarized_histories: List[Dict[str, str]]) -> str:
         """
         Analyze method expected by the orchestrator
         Provides psychological analysis and therapeutic guidance
         
         Args:
             message: The client's message to analyze
-            context: Additional context about the conversation/client
+            history: Chat history as list of message dictionaries
+            chain_of_thoughts: Chain of thoughts from previous processing
+            summarized_histories: Previously summarized conversation histories
             
         Returns:
             Therapeutic analysis and guidance response
         """
         self.logger.info("Starting psychological analysis")
         self.logger.debug(f"Analyzing message: {message}")
-        self.logger.debug(f"Context: {context}")
+        self.logger.debug(f"History length: {len(history) if history else 0}")
+        self.logger.debug(f"Chain of thoughts length: {len(chain_of_thoughts) if chain_of_thoughts else 0}")
+        self.logger.debug(f"Summarized histories length: {len(summarized_histories) if summarized_histories else 0}")
         
         try:
+            # Build therapeutic context from history and chain of thoughts
+            context_parts = []
+            
+            # Add recent conversation context
+            if history:
+                recent_messages = history[-3:] if len(history) > 3 else history  # Last 3 messages
+                context_parts.append("Recent conversation context:")
+                for msg in recent_messages:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    context_parts.append(f"- {role}: {content}")
+            
+            # Add chain of thoughts if available
+            if chain_of_thoughts:
+                context_parts.append("Previous analysis context:")
+                for thought in chain_of_thoughts[-2:]:  # Last 2 thoughts
+                    if isinstance(thought, dict):
+                        content = thought.get('content', str(thought))
+                    else:
+                        content = str(thought)
+                    context_parts.append(f"- {content}")
+            
+            # Add summarized context if available
+            if summarized_histories:
+                context_parts.append("Historical context summary:")
+                for summary in summarized_histories[-1:]:  # Most recent summary
+                    if isinstance(summary, dict):
+                        content = summary.get('content', str(summary))
+                    else:
+                        content = str(summary)
+                    context_parts.append(f"- {content}")
+            
+            therapeutic_context = "\n".join(context_parts) if context_parts else "New conversation session"
+            
             # Use the main therapeutic guidance method
             response = self.provide_therapeutic_guidance(
                 user_message=message,
-                therapeutic_context=context
+                therapeutic_context=therapeutic_context
             )
             
             self.logger.info("Psychological analysis completed successfully")
@@ -480,15 +518,28 @@ if __name__ == "__main__":
     print(f"{'='*60}")
     
     test_message = "hello im kinda sad"
-    test_context = "User expressing mild sadness, needs supportive guidance"
+    test_history = [
+        {"role": "user", "content": "Hi there"},
+        {"role": "assistant", "content": "Hello! How can I help you today?"},
+        {"role": "user", "content": test_message}
+    ]
+    test_chain_of_thoughts = [
+        {"step": "analysis", "content": "User expressing mild sadness, needs supportive guidance"},
+        {"step": "routing", "content": "Psychological support required"}
+    ]
+    test_summarized_histories = [
+        {"session": "previous", "content": "User has been dealing with some personal challenges"}
+    ]
     
     print(f"\n Test Message: {test_message}")
-    print(f" Context: {test_context}")
+    print(f" History: {len(test_history)} messages")
+    print(f" Chain of thoughts: {len(test_chain_of_thoughts)} items")
+    print(f" Summaries: {len(test_summarized_histories)} items")
     
     print(f"\n ANALYZE METHOD RESPONSE:")
     print("-" * 50)
     
-    analyze_response = psychologist.analyze(test_message, test_context)
+    analyze_response = psychologist.analyze(test_message, test_history, test_chain_of_thoughts, test_summarized_histories)
     print(analyze_response)
 
     # Run other tests
