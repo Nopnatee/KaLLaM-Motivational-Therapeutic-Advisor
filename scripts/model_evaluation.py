@@ -211,6 +211,9 @@ if __name__ == "__main__":
     IN_PATH = "dataset/test_silver.jsonl"
     OUT_PATH = "dataset/test_silver_report.json"
 
+    # IN_PATH = "dataset/thai_test_silver.jsonl"
+    # OUT_PATH = "dataset/thai_test_silver_report.json"
+
     stats = compute_misc_stats(IN_PATH, use_coarse=True)
     text = json.dumps(stats, ensure_ascii=False, indent=2)
     print(text)
