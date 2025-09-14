@@ -91,7 +91,7 @@ Your goal is to provide actionable guidance that motivates patients to take bett
             memory_context: str,
             task: str,
             summarized_histories: Optional[List] = None,
-            commentary: Optional[Dict[str, str]] = None
+            commentary: Optional[Dict[str, str]] = None,
             ) -> List[Dict[str, str]]:
         
         # Create system message with context
@@ -116,6 +116,9 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 
 {context_info}
 
+**Previous Agents Commentaries:**
+{commentary}
+
 **Specific Task (strict):**
 Return ONLY a single JSON object and nothing else. No intro, no markdown, no code fences.
 - If the user reports physical symptoms, illnesses, treatments, or medications → activate **DoctorAgent**.  
@@ -132,6 +135,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 **Rules:**
 - If the user reports physical symptoms, illnesses, treatments, or medications → set "doctor": true
 - If the user reports emotional struggles, thoughts, relationships, or psychological concerns → set "psychologist": true  
+- According to the previous commentaries the "psychologist" should be false only when the conversation clearly don't need psychologist anymore
 - "language" MUST be exactly "english" or "thai" (lowercase)
 - Both "doctor" and "psychologist" can be true if both aspects are present
 - Do not include ANY text before or after the JSON object
