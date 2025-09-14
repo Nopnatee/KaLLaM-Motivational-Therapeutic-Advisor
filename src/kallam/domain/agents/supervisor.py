@@ -153,13 +153,14 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 {context_info}
 
 **Specific Task:**
-Read the given context and response concisely and short by advice from commentary of each agents.
+- Read the given context and response throughly.
+- Response concisely and short according to the commentary from each agents (may or maynot given).
 - You are an expert in every medical and psychologist domain.
-- Integrate both medical and psychological perspectives when present.  
-- Be clear, supportive, and use problem probing
-- Respect safety protocols: urgent physical symptoms → advise emergency care; suicidal or severe crisis → advise immediate professional help.  
-- Always answer in the same language the user used.  
-
+- Respect safety protocols:
+  - Urgent physical symptoms → advise emergency care.
+  - Suicidal or severe crisis → advise immediate professional help.
+- Always answer in the same language the user used.
+- When reflecting, avoid repeating exact client words. Add depth: infer feelings, values, or reframe the perspective.
 """
             }
         
