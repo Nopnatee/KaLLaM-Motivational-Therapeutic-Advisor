@@ -66,26 +66,29 @@ logging.basicConfig(
 log = logging.getLogger("bimisc")
 
 # ----------------------------
-# MISC definitions
+# MISC definitions (BiMISC + MISC 2.5 extended)
 # ----------------------------
 
 THERAPIST_CODES: Dict[str, str] = {
-    "OQ": "Open question",
-    "CQ": "Closed question",
-    "SR": "Simple reflection",
-    "CR": "Complex reflection",
-    "ADV": "Advice",
-    "AFF": "Affirm",
-    "DIR": "Direct",
-    "EC": "Emphasize control",
+    "OQ": "Open Question",
+    "CQ": "Closed Question",
+    "SR": "Simple Reflection",
+    "CR": "Complex Reflection",
+    "ADP": "Advise with Permission",
+    "ADW": "Advise without Permission",
+    "AF": "Affirm",
+    "CO": "Confront",
+    "DI": "Direct",
+    "EC": "Emphasize Control",
     "FA": "Facilitate",
-    "FIL": "Filler",
-    "GI": "Giving information",
-    "SP": "Support",
-    "STR": "Structure",
-    "WAR": "Warn",
-    "PS": "Permission seeking",
-    "OP": "Opinion",
+    "FI": "Filler",
+    "GI": "Giving Information",
+    "SU": "Support",
+    "ST": "Structure",
+    "WA": "Warn",
+    "RCP": "Raise Concern with Permission",
+    "RCW": "Raise Concern without Permission",
+    "RF": "Reframe",
 }
 
 CLIENT_CODES: Dict[str, str] = {
@@ -101,18 +104,48 @@ CLIENT_CODES: Dict[str, str] = {
     "O-": "Other sustain-intent",
 }
 
-# AnnoMI coarse mapping
+# AnnoMI coarse mapping (MISC 2.5 → AnnoMI)
 FINE_TO_COARSE: Dict[str, str] = {
-    # Therapist
+    # Therapist → QS (Questions)
     "OQ": "QS", "CQ": "QS",
-    "SR": "RF", "CR": "RF",
-    "ADV": "TI", "AFF": "TI", "DIR": "TI", "EC": "TI", "FA": "TI", "FIL": "TI",
-    "GI": "TI", "SP": "TI", "STR": "TI", "WAR": "TI", "PS": "TI", "OP": "TI",
-    # Client
-    "FN": "NT", "ASK": "NT",
+
+    # Therapist → RF (Reflections family)
+    "SR": "RF", "CR": "RF", "RF": "RF",   # Reframe groups with reflections per its function
+
+    # Therapist → TI (all other interventions/information)
+    "ADP": "TI", "ADW": "TI",
+    "AF": "TI",
+    "CO": "TI",
+    "DI": "TI",
+    "EC": "TI",
+    "FA": "TI",
+    "FI": "TI",
+    "GI": "TI",
+    "SU": "TI",
+    "ST": "TI",
+    "WA": "TI",
+    "RCP": "TI", "RCW": "TI",
+    # No PS/OP in MISC 2.5; permission-seeking is EC, “opinions” without advice are GI. :contentReference[oaicite:1]{index=1}
+    
+    # Client → NT / CT / ST
+    "FN": "NT",  # In MISC 2.5, client questions fall under FN → NT. :contentReference[oaicite:2]{index=2}
+    "ASK": "NT", # If you keep this BiMISC convenience code, collapse to NT.
     "CM+": "CT", "TS+": "CT", "R+": "CT", "O+": "CT",
     "CM-": "ST", "TS-": "ST", "R-": "ST", "O-": "ST",
 }
+
+# ----------------------------
+# Notes:
+# ----------------------------
+# - This schema follows MISC 2.5 (Houck et al., 2010 update) exactly:contentReference[oaicite:2]{index=2}.
+# - BiMISC simplifies some categories:
+#     • ADV = ADP + ADW
+#     • SP = SU
+#     • STR = ST
+#     • Drops CO, RCP, RCW, RF
+# - If your target is AnnoMI (QS, RF, TI, NT, CT, ST), BiMISC mapping is sufficient.
+# - If you want strict gold-standard MISC 2.5 coding, you must use this full set.
+
 
 # Minimal, role-specific examples (two per code)
     # Therapist examples: list of (lhs, rhs) where lhs includes "Client: ...\nTherapist:"
@@ -120,8 +153,8 @@ FINE_TO_COARSE: Dict[str, str] = {
 EXAMPLES = {
     "THERAPIST": {
         "OQ": [
-            ("Client: I think I should cut down.\nTherapist:", "What makes cutting down important now?"),
-            ("Client: I'm torn about my meds.\nTherapist:", "What concerns you most about taking them?"),
+            ("Client: I think I should cut down.\nTherapist:", "What makes cutting down important to you right now?"),
+            ("Client: I'm torn about my meds.\nTherapist:", "How are you weighing the pros and cons of taking them?"),
         ],
         "CQ": [
             ("Client: I missed my meds.\nTherapist:", "Did you miss them yesterday?"),
@@ -133,70 +166,108 @@ EXAMPLES = {
         ],
         "CR": [
             ("Client: Work drains me.\nTherapist:", "The stress at work is leaving you exhausted and irritable."),
-            ("Client: I fail every time.\nTherapist:", "It feels like each attempt chips away at your confidence."),
+            ("Client: I fail every time.\nTherapist:", "Each setback has been chipping away at your confidence."),
         ],
-        "ADV": [
-            ("Client: I want to manage stress.\nTherapist:", "Try a short daily walk to get started."),
-            ("Client: My sleep is a mess.\nTherapist:", "Start with a consistent bedtime and no screens 30 minutes prior."),
+
+        # Advice WITH permission (ADP): assume permission was granted (or client asked)
+        "ADP": [
+            ("Client: Could you suggest something?\nTherapist:", "You could try a 10-minute walk after dinner to get started."),
+            ("Client: Is there a way to sleep better?\nTherapist:", "You might keep a fixed bedtime and avoid screens for 30 minutes before."),
         ],
-        "AFF": [
-            ("Client: I booked an appointment.\nTherapist:", "That took initiative. Good move."),
+
+        # Advice WITHOUT permission (ADW)
+        "ADW": [
+            ("Client: My sleep is a mess.\nTherapist:", "Start a sleep schedule and cut caffeine after noon."),
+            ("Client: I want to manage stress.\nTherapist:", "Join a mindfulness class this week."),
+        ],
+
+        "AF": [
+            ("Client: I booked an appointment.\nTherapist:", "That took initiative. Nice work."),
             ("Client: I told my partner.\nTherapist:", "That was brave and constructive."),
         ],
-        "DIR": [
-            ("Client: I keep skipping doses.\nTherapist:", "Set an alarm and take it tonight."),
-            ("Client: I can’t decide.\nTherapist:", "Start with one small step today: call your clinic."),
+
+        "CO": [
+            ("Client: I looked for a job this week.\nTherapist:", "Sure you did. Right."),
+            ("Client: I don’t think alcohol is a problem.\nTherapist:", "So you think there’s nothing wrong at all?"),
         ],
+
+        "DI": [
+            ("Client: I keep skipping doses.\nTherapist:", "Set an alarm and take it tonight."),
+            ("Client: I can’t decide.\nTherapist:", "Call your clinic today."),
+        ],
+
+        # Emphasize Control (includes permission-seeking utterances)
         "EC": [
             ("Client: I’m unsure.\nTherapist:", "It’s your call how you want to proceed."),
-            ("Client: I don’t like being told.\nTherapist:", "You’re in charge; we’ll follow your pace."),
+            ("Client: I don’t like being told.\nTherapist:", "You’re in charge; we’ll go at your pace."),
+            ("Client: Not sure about advice.\nTherapist:", "Is it okay if I share a suggestion?"),
         ],
+
+        # Facilitate: backchannels only, not questions or directives
         "FA": [
-            ("Client: ...\nTherapist:", "Tell me more about that."),
-            ("Client: I don’t know.\nTherapist:", "What comes to mind first about that situation?"),
+            ("Client: ...\nTherapist:", "Mm-hmm."),
+            ("Client: I don’t know.\nTherapist:", "Okay."),
         ],
-        "FIL": [
-            ("Therapist:", "Good morning!"),
-            ("Therapist:", "Mhm, I see."),
+
+        "FI": [
+            ("Therapist:", "Good morning."),
+            ("Therapist:", "Nice to see you."),
         ],
+
         "GI": [
             ("Client: What does this med do?\nTherapist:", "It lowers inflammation and pain."),
-            ("Client: How often should I take it?\nTherapist:", "Take it once daily with food."),
+            ("Client: How often should I take it?\nTherapist:", "Once daily with food."),
         ],
-        "SP": [
-            ("Client: I feel alone.\nTherapist:", "I’m here to support you as we sort this out."),
-            ("Client: I’m scared to slip.\nTherapist:", "You’re not doing this alone; we’ll plan safety nets."),
+
+        "SU": [
+            ("Client: I feel alone.\nTherapist:", "That sounds really hard. I’m with you in this."),
+            ("Client: I’m scared to slip.\nTherapist:", "It makes sense you’d feel worried about that."),
         ],
-        "STR": [
+
+        "ST": [
             ("Therapist:", "First we’ll review your week, then plan next steps."),
-            ("Therapist:", "Let’s start with goals, then barriers, then actions."),
+            ("Therapist:", "Let’s switch gears to your goals, then barriers, then actions."),
         ],
-        "WAR": [
-            ("Therapist:", "Uncontrolled sugar can damage your vision."),
-            ("Therapist:", "Smoking increases your risk of heart disease."),
+
+        "WA": [
+            ("Therapist:", "If you keep skipping insulin, you could end up hospitalized."),
+            ("Therapist:", "Driving after drinking puts you at real risk of losing your license."),
         ],
-        "PS": [
-            ("Therapist:", "Would it be okay if I share a tip on sleep?"),
-            ("Therapist:", "Can I offer a suggestion on planning your doses?"),
+
+        # Raise Concern WITH permission (RCP): assume permission just granted or client invited input
+        "RCP": [
+            ("Client: What do you think of that plan?\nTherapist:", "I’m concerned it might put you near old triggers."),
+            ("Client: Is there anything I’m missing?\nTherapist:", "I’m a bit worried moving back could make staying sober harder."),
         ],
-        "OP": [
-            ("Therapist:", "In my view, pacing yourself could help."),
-            ("Therapist:", "I think tracking triggers would be useful."),
+
+        # Raise Concern WITHOUT permission (RCW)
+        "RCW": [
+            ("Client: I’ll hang with the same crowd.\nTherapist:", "I’m concerned that could pull you back into using."),
+            ("Client: I’ll just skip the dose if I forget.\nTherapist:", "That worries me given your recent symptoms."),
+        ],
+
+        "RF": [
+            ("Client: My husband keeps nagging me about meds.\nTherapist:", "He sounds really concerned about your health."),
+            ("Client: I failed again.\nTherapist:", "Each attempt has taught you something you’re using now."),
         ],
     },
+
     "CLIENT": {
-        "FN": ["Yeah.", "Hmm, okay."],
+        "FN": ["Yeah.", "Okay.", "I usually drink 4–5 days a week."],
         "ASK": ["What options do I have?", "Can you explain how that works?"],
+
         "CM+": ["I’ll cut down to two drinks tonight.", "I’m going to start tomorrow."],
         "TS+": ["I tossed out my cigarettes yesterday.", "I set up my pillbox today."],
         "R+": ["It would help my kids if I quit.", "I want my energy back."],
         "O+": ["I’m ready to change.", "This time I’m serious."],
-        "CM-": ["I won’t commit to that right now.", "Not making promises."],
+
+        "CM-": ["I won’t commit to that right now.", "I’m not planning to stop."],
         "TS-": ["I bought another pack this morning.", "I skipped the appointment again."],
         "R-": ["I need the drinks to sleep.", "It’s the only way I relax."],
         "O-": ["I’m not changing anything.", "This is just who I am."],
     },
 }
+
 
 # ----------------------------
 # Prompt builder
