@@ -4,16 +4,25 @@ runtime: python311
 
 build:
   commands:
-    # keep this minimal; no apt-get here
     build:
       - pip3 install --upgrade pip setuptools wheel
 
 run:
-  # pin to a supported minor; or omit to use AWS's latest py311
+  # pin to a supported minor; or omit this line to let AWS pick latest 3.11
   runtime-version: 3.11.13
-  # py311 "revised build" quirk: install your package here
+  # Py311 revised-build quirk: install your package here, not in build
   pre-run:
     - pip3 install --no-cache-dir .
-  # start like your Dockerfile's CMD (no $APP_FILE env needed)
+  # start like your Dockerfile's CMD
   command: python3 gui/chatbot_dev_app.py
-  port: 8080
+  # optional envs (valid location is under run.env)
+  env:
+    - name: GRADIO_SERVER_NAME
+      value: "0.0.0.0"
+    - name: PIP_NO_CACHE_DIR
+      value: "1"
+    - name: PYTHONDONTWRITEBYTECODE
+      value: "1"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    # Do NOT set PORT here; App Runner injects it
