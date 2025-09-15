@@ -460,7 +460,7 @@ def main():
     app = create_app()
     app.launch(
         share=False,
-        server_name="0.0.0.0", # for cloud 127.0.0.1 for local
+        server_name=os.getenv("GRADIO_SERVER_NAME","0.0.0.0"), # for cloud 127.0.0.1 for local
         server_port=int(os.getenv("PORT", 8080)), # for cloud 7860 for local
         debug=True,
         show_error=True,
