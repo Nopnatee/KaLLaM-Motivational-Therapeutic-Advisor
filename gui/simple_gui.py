@@ -1,4 +1,3 @@
-# simple_chat_app.py
 import gradio as gr
 from datetime import datetime
 

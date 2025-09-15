@@ -43,7 +43,7 @@ class UnifiedDatasetOrchestrator:
         summarization_model: Literal["gpt", "gemini", "sealion"] = "gpt",
         # model names
         gpt_model: str = "gpt-4o",
-        gemini_model: str = "gemini-1.5-pro",
+        gemini_model: str = "gemini-1.5-flash",
         sealion_model: str = "aisingapore/sea-lion-7b-instruct",
         # runtime
         timeout: int = 30,
