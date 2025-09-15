@@ -1,0 +1,44 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# VCS and IDE
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+.vscode/
+.idea/
+
+# Notebooks and checkpoints
+*.ipynb
+.ipynb_checkpoints/
+
+# Local data, logs, exports
+logs/
+exported_sessions/
+*.db
+*.sqlite
+*.sqlite3
+
+# Node/npm
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Tests (optional to keep image lean)
+tests/
+

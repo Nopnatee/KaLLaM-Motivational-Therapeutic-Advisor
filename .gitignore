@@ -6,8 +6,6 @@ logs
 .gradio/
 data
 exported_sessions
-Dockerfile
-.dockerignore
 *.csv
 *.jsonl
 
