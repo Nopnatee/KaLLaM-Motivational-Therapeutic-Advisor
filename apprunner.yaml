@@ -18,16 +18,13 @@ env:
     value: "gui/chatbot_dev_app.py"
 
 build:
-  # Managed runtime build step (no apt-get here; keep it pure Python)
   commands:
     build:
       - pip3 install --upgrade pip setuptools wheel
 
 run:
-  runtime-version: 3.11
-  # With Py311 managed runtime, installs are safest in pre-run
+  runtime-version: 3.11.13     # <- pin a supported minor
   pre-run:
     - pip3 install --no-cache-dir .
-  # Start the app; use sh so $APP_FILE expands like in your Dockerfile
   command: sh -c "python3 ${APP_FILE}"
   port: 8080
