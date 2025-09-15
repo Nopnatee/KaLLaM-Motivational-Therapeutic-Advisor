@@ -1167,7 +1167,7 @@ def main():
             print("Launching locally only...")
             app.launch(
                 share=False,
-                server_name="127.0.0.1",
+                server_name="127.0.0.1", # for cloud 127.0.0.1 for local
                 server_port=8080, # for cloud 7860 for local
                 debug=True,
                 show_error=True,

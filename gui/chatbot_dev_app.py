@@ -3,6 +3,7 @@ import gradio as gr
 import logging
 from datetime import datetime
 from typing import List, Tuple, Optional
+import os
 
 from kallam.app.chatbot_manager import ChatbotManager
 from kallam.infra.db import sqlite_conn  # use the shared helper
@@ -459,11 +460,11 @@ def main():
     app = create_app()
     app.launch(
         share=False,
-        server_name="0.0.0.0",
-        server_port=7860,
-        debug=False,
+        server_name="0.0.0.0", # for cloud 127.0.0.1 for local
+        server_port=int(os.getenv("PORT", 8080)), # for cloud 7860 for local
+        debug=True,
         show_error=True,
-        inbrowser=True,
+        inbrowser=False
     )
 
 if __name__ == "__main__":
