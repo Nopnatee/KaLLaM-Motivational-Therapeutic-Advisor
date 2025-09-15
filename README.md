@@ -16,7 +16,7 @@ KaLLaM is a bilingual (Thai/English) multi‑agent assistant for health and ment
 
 ## Requirements
 
-- Python 3.10+
+- Recommend Python 3.11+ as it might not work as we intended
 - API access where used:
   - SEA‑Lion: `SEA_LION_API_KEY` (required for translation/summarization/flagging)
   - Google Gemini: `GEMINI_API_KEY` (required for Doctor/Psychologist agents)
