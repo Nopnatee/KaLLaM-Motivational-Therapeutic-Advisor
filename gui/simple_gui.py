@@ -76,7 +76,7 @@ def create_app():
                 lines=2,
             )
             new_btn = gr.Button("➕ New Session", variant="primary")
-            summarize_btn = gr.Button("📋 Summarize", variant="secondary")
+            # summarize_btn = gr.Button("📋 Summarize", variant="secondary")
 
         chat = gr.Chatbot(label="Chat", type="messages", height=420)
         with gr.Row():
@@ -112,14 +112,14 @@ def create_app():
         )
 
         # Optional: force summary
-        summarize_btn.click(force_summary, inputs=[session_id], outputs=[result_md])
+        # summarize_btn.click(force_summary, inputs=[session_id], outputs=[result_md])
 
     return demo
 
 def main():
     app = create_app()
     app.launch(
-        share=False,
+        share=True,
         server_name="0.0.0.0",
         server_port=7860,
         debug=False,
