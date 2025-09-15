@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 model_evaluation.py  (MISC 2.5-aligned)
