@@ -1,145 +1,168 @@
 
----
+# KaLLaM – Motivational‑Therapeutic Advisor
 
-# KaLLaM – Motivational-Therapeutic Advisor
+KaLLaM is a bilingual (Thai/English) multi‑agent assistant for health and mental‑health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists sessions in SQLite, and offers Gradio UIs plus evaluation utilities for MISC‑style conversation coding.
 
-> **Note to future stupid self**: You will forget everything. This file exists so you don’t scream at your computer in six months. Read it first.
 
----
+## Key Features
 
-## 🚀 Quickstart
+- Multi‑agent orchestration: Supervisor routes messages to domain experts.
+- Bilingual support: Thai/English with SEA‑Lion powered translation.
+- Persistence: SQLite session/message/summary stores with JSON export.
+- UIs: Gradio demo and developer apps for quick experimentation.
+- Evaluation: Scripts for SEA‑Lion based MISC silver coding (EN/TH).
+- Pragmatic tooling: Logging, request tracing, token counting cache.
 
-1. **Create venv**
-   Windows (PowerShell):
 
-   ```powershell
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1
-   ```
+## Requirements
 
-   Linux/macOS:
+- Python 3.10+
+- API access where used:
+  - SEA‑Lion: `SEA_LION_API_KEY` (required for translation/summarization/flagging)
+  - Google Gemini: `GEMINI_API_KEY` (required for Doctor/Psychologist agents)
+  - Optional: OpenAI (`OPENAI_API_KEY`) if using OpenAI via `strands-agents`
+  - Optional: AWS Bedrock (`AWS_DEFAULT_REGION`, `AWS_ROLE_ARN`) for `supervisor_bedrock.py`
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
 
-2. **Upgrade pip**
+## Installation
 
-   ```bash
-   python -m pip install -U pip
-   ```
+1) Create and activate a virtualenv
 
-3. **Install project (runtime only)**
+Windows (PowerShell):
 
-   ```bash
-   pip install -e .
-   ```
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-4. **Install project + dev tools (pytest, mypy, ruff)**
+Linux/macOS:
 
-   ```bash
-   pip install -e .[dev]
-   ```
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
 
-5. **Run tests**
+2) Upgrade pip and install
 
-   ```bash
-   pytest -q
-   ```
+```bash
+python -m pip install -U pip
+pip install -e .            # runtime
+pip install -e .[dev]       # + pytest, ruff, mypy
+```
 
----
+3) Run tests
 
-## 📂 Project layout (don’t mess this up)
+```bash
+pytest -q
+```
+
+
+## Environment Variables
+
+Create a `.env` at the project root. Load happens via `python-dotenv`.
+
+```
+# Core
+SEA_LION_API_KEY=...
+SEA_LION_BASE_URL=https://api.sea-lion.ai/v1   # optional (default)
+SEA_LION_MODEL=aisingapore/Gemma-SEA-LION-v4-27B-IT   # optional for scripts
+GEMINI_API_KEY=...
+
+# Optional integrations
+OPENAI_API_KEY=sk-...
+AWS_DEFAULT_REGION=ap-southeast-2
+AWS_ROLE_ARN=...
+TAVILY_API_KEY=...  # if you wire search tooling
+```
+
+
+## Usage
+
+Run a demo UI (recommended):
+
+```bash
+python gui/chatbot_demo.py
+# or the Thai‑first developer app
+python gui/chatbot_dev_app.py
+```
+
+Programmatic session workflow:
+
+```python
+from kallam.app.chatbot_manager import ChatbotManager
+
+mgr = ChatbotManager()
+sid = mgr.start_session(saved_memories="diabetes type‑2 | on metformin")
+
+# … integrate your own routing or UI; see Gradio apps for examples …
+
+# Export a session to JSON
+path = mgr.export_session_json(sid)
+print("Exported:", path)
+```
+
+Developer smoke UI (no agents invoked, storage only):
+
+```bash
+python tests/gradio_chatbot_manager_smoketest.py
+```
+
+
+## Project Layout
 
 ```
 project-root/
-├─ pyproject.toml         # dependencies & config (editable mode uses src/)
-├─ README.md              # you are here
-├─ src/
-│  └─ kallam/
-│     ├─ __init__.py
-│     ├─ app/             # orchestrator wiring, chatbot manager
-│     ├─ domain/          # agents, judges, orchestrator logic
-│     └─ infra/           # db, llm clients, search, token counter
-└─ tests/                 # pytest lives here
+├─ pyproject.toml            # deps and tool config
+├─ src/kallam/
+│  ├─ app/                   # ChatbotManager facade
+│  ├─ domain/agents/         # supervisor, doctor, psychologist, translator, summarizer, orchestrator
+│  └─ infra/                 # sqlite stores, exporter, token counter, config
+├─ gui/                      # gradio apps (demo and dev)
+├─ scripts/                  # data tools: MISC coding, preprocessing, notebooks
+└─ tests/                    # pytest and storage smoke UI
 ```
 
-* `app/` = entrypoint, wires everything.
-* `domain/` = core logic (agents, judges, orchestrator rules).
-* `infra/` = all the boring adapters (DB, APIs, token counting).
-* `tests/` = if you don’t write them, you’ll break everything and blame Python.
 
----
+## Agents at a Glance
 
-## 🔑 Environment variables
+- Supervisor: routes, produces flags and final response scaffolding.
+- Translator: SEA‑Lion backed Thai/English translation.
+- Summarizer: SEA‑Lion backed conversation/health summaries.
+- Doctor: Gemini backed medical guidance with safety guardrails.
+- Psychologist: Thai via SEA‑Lion, English via Gemini; MI‑oriented.
 
-Put these in `.env` at project root:
+Orchestrator configuration lives in `src/kallam/domain/agents/orchestrator.py` (models, language, thresholds).
 
-```
-OPENAI_API_KEY=sk-...
-SEA_LION_API_KEY=...
-AWS_ROLE_ARN=...
-AWS_DEFAULT_REGION=ap-southeast-2
-TAVILY_API_KEY=...
-```
 
-Load automatically via `python-dotenv`.
+## Data Persistence
 
----
+- SQLite schema is created automatically in your chosen DB file (default `chatbot_data.db`).
+- Stores: `SessionStore`, `MessageStore`, `SummaryStore` in `src/kallam/infra/`.
+- Export: `JsonExporter` writes per‑session or all sessions to `exported_sessions/`.
 
-## 🧪 Common commands
 
-* Run chatbot manager manually:
+## Development
 
-  ```bash
-  python -m kallam.app.chatbot_manager
-  ```
+- Lint: `ruff check src tests`
+- Type check: `mypy src`
+- Logs: written under `logs/` by each agent and manager; request tracing is enabled for key paths.
+- Tips:
+  - Use editable install (`pip install -e .[dev]`) to enable imports.
+  - If SQLite locks up locally, stop processes using the DB or remove stale `*.db` files.
+  - Run pytest from repo root so tests see `src/` via editable install.
 
-* Run lint:
 
-  ```bash
-  ruff check src tests
-  ```
+## Evaluation and Scripts
 
-* Run type check:
+- `scripts/eng_silver_misc_coder.py` and `scripts/thai_silver_misc_coder.py` implement SEA‑Lion based BiMISC/MISC silver coding with JSON‑only enforcement and metrics. See file headers for dataset and output formats.
+- `scripts/model_evaluator.py`, preprocessing utilities, and `scripts/visualizer.ipynb` support dataset prep and analysis.
 
-  ```bash
-  mypy src
-  ```
 
-* Export a session JSON (example):
+## Citation
 
-  ```python
-  from kallam.app.chatbot_manager import ChatbotManager
-  mgr = ChatbotManager()
-  sid = mgr.start_session()
-  mgr.handle_message(sid, "hello world")
-  mgr.export_session_json(sid)
-  ```
+References and datasets used by this project are listed in `Citation.md`.
 
----
 
-## 🧹 Rules for survival
+## License
 
-* Always activate `.venv` before coding.
-* Never `pip install` globally, always `pip install -e .[dev]` inside venv.
-* If imports fail → you forgot editable install. Run `pip install -e .` again.
-* If SQLite locks up → delete `*.db` files and start fresh.
-* If you break `pyproject.toml` → copy it from git history, don’t wing it.
-
----
-
-## ☠️ Known pitfalls
-
-* **Windows error “source not recognized”** → you’re not on Linux. Use `.venv\Scripts\Activate.ps1`.
-* **“No module named kallam”** → you didn’t install with `-e`.
-* **Tests can’t import your code** → run `pytest` from project root, not inside `tests/`.
-* **Pip complains about `[dev]`** → you typo’d in `pyproject.toml`. Fix the `[project.optional-dependencies]` block.
-
----
-
-That’s it. If you follow this, future you won’t rage-quit.
-
----
-
+Apache License 2.0. See `LICENSE` for details.
