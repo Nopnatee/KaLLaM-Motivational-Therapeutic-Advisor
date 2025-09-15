@@ -32,18 +32,10 @@ class GeminiDatasetOrchestrator:
 
     def __init__(self, 
                  api_key: Optional[str] = None,
-                 model_name: str = "gemini-1.5-pro",
+                 model_name: str = "gemini-1.5-flash",
                  log_level: int | None = None, 
                  logger_name: str = "kallam.dataset.gemini"):
-        """
-        Gemini-based dataset orchestrator that handles all tasks with a single LLM API.
         
-        Args:
-            api_key: Google AI API key. If None, will look for GOOGLE_API_KEY environment variable
-            model_name: Gemini model to use (default: gemini-1.5-pro)
-            log_level: if provided, sets this logger's level; otherwise inherit from parent.
-            logger_name: child logger under the manager's logger hierarchy.
-        """
         self._setup_logging(log_level, logger_name)
 
         # Configure Gemini

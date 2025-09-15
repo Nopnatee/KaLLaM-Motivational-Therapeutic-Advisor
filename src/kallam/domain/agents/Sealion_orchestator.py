@@ -1,4 +1,3 @@
-# src/your_pkg/domain/agents/dataset_orchestrator_sealion.py
 import json
 import logging
 from typing import Optional, Dict, Any, List
@@ -143,44 +142,6 @@ class SeaLionDatasetOrchestrator:
         if summarized_histories:
             context_text += f"\nPrevious Summaries: {json.dumps(summarized_histories)}"
 
-        system_prompt = """You are a supervisor agent that analyzes user messages and context to generate flags for routing.
-
-Your task is to analyze the user message and return ONLY a valid JSON object with these flags:
-- "language": detect the language ("thai", "english", or "invalid" if unclear)
-- "doctor": boolean, true if medical/health related content
-- "psychologist": boolean, true if mental health/psychology related content
-
-Return ONLY the JSON object, no additional text or explanations."""
-
-        user_prompt = f"""Context:
-{context_text}
-
-Current User Message: "{user_message}"
-
-Analyze and return the JSON flags:"""
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        response = self._call_sealion(messages, temperature=0.3)
-        
-        try:
-            # Clean up response in case it has extra text
-            cleaned_response = response.strip()
-            # Try to extract JSON if it's wrapped in other text
-            if '{' in cleaned_response and '}' in cleaned_response:
-                start = cleaned_response.find('{')
-                end = cleaned_response.rfind('}') + 1
-                cleaned_response = cleaned_response[start:end]
-            
-            flags = json.loads(cleaned_response)
-            self.logger.debug(f"SeaLion supervisor flags: {flags}")
-            return flags
-        except json.JSONDecodeError:
-            self.logger.warning(f"Failed to parse SeaLion response as JSON: {response}")
-            return {"language": "invalid", "doctor": False, "psychologist": False}
 
     @_trace()
     def get_translation(self, message: str, flags: dict, translation_type: str) -> str:
@@ -258,8 +219,6 @@ Analyze and return the JSON flags:"""
         if chain_of_thoughts:
             context_parts.append(f"Previous Reasoning: {json.dumps(chain_of_thoughts)}")
 
-        context_text = "\n\n".join(context_parts)
-
         # Determine response style based on flags
         system_instructions = "You are a helpful AI assistant. Respond naturally and helpfully to the user's message. Use the provided context to give more relevant and personalized responses."
         
@@ -269,76 +228,14 @@ Analyze and return the JSON flags:"""
         if flags.get("psychologist"):
             system_instructions += " The user needs emotional or psychological support. Be empathetic, supportive, and understanding in your response."
 
-        user_prompt = f"""Context Information:
-{context_text}
-
-User's message: "{original_message}"
-
-Please provide a helpful response in the same language as the user's message."""
-
-        messages = [
-            {"role": "system", "content": system_instructions},
-            {"role": "user", "content": user_prompt}
-        ]
-
-        response = self._call_sealion(messages)
-
-        commentary = {
-            "final_output": response,
-            "model_used": self.config["model"],
-            "flags_processed": flags
-        }
-
-        if flags.get("doctor"):
-            commentary["doctor_analysis"] = "Medical context detected and addressed"
-        
-        if flags.get("psychologist"):
-            commentary["psychology_analysis"] = "Psychological support context detected and addressed"
-
-        self.logger.info("SeaLion response generation complete")
-        return commentary
-
     @_trace()
     def summarize_history(self,
                           chat_history: List[Dict[str, str]],
                           eng_summaries: List[Dict[str, str]]) -> Optional[str]:
-        """Generate a summary of chat history using SeaLion."""
         try:
-            if not chat_history:
-                return "No chat history to summarize."
-
-            history_text = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in chat_history])
-            
-            previous_summaries = ""
-            if eng_summaries:
-                previous_summaries = "\n".join([summary.get('summary', '') for summary in eng_summaries[-3:]])
-
-            system_prompt = """You are an expert at creating concise conversation summaries. Focus on:
-- Key topics and themes discussed
-- Important decisions or conclusions reached
-- Main questions asked and answered
-- Overall context and progression of the conversation
-
-Create a clear, informative summary that captures the essence of the conversation."""
-
-            user_prompt = f"""Previous Summaries (for context):
-{previous_summaries}
-
-Current Conversation to Summarize:
-{history_text}
-
-Please create a concise summary:"""
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-
-            summary = self._call_sealion(messages, temperature=0.3)
-            
-            self.logger.info("SeaLion summarization complete.")
-            return summary
-            
+            summary = self.summarizer.summarize(chat_history, eng_summaries)
+            self.logger.info("Summarization complete.")
         except Exception as e:
             self.logger.error(f"Error during summarization: {e}", exc_info=True)
-            return "Error during summarization."
+            summary = "Error during summarization."
+        return str(summary)
