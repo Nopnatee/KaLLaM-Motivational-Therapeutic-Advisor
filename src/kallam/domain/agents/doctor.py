@@ -45,7 +45,7 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
 
 **Output Format in JSON:**
 {"Recommendations": [one or two most priority recommendation or note for medical personnel]
-"Diagnosis": {[Disease | Symptom]: [Confidence 0-100%]}
+"Diagnosis": {[Disease | Symptom]: [Confidence 0-10]}
 "Doctor Plan": [short plan for your future self and medical personnel]}
 """
 
