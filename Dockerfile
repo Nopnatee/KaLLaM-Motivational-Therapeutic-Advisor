@@ -7,11 +7,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     GRADIO_SERVER_NAME=0.0.0.0 \
-    GRADIO_SERVER_PORT=7860 \
-    PORT=7860
+    GRADIO_SERVER_PORT=8080 \
+    PORT=8080
 
 # Allow overriding the app entry file at build/run time
-ARG APP_FILE=gui/simple_gui.py
+ARG APP_FILE=gui/chatbot_dev_app.py
 ENV APP_FILE=${APP_FILE}
 
 WORKDIR /app
@@ -32,7 +32,7 @@ COPY scripts ./scripts
 RUN python -m pip install --upgrade pip \
  && pip install .
 
-EXPOSE 7860
+EXPOSE 8080
 
 # Note: Gradio reads GRADIO_SERVER_NAME/PORT; many platforms also use $PORT
 # Use a shell to allow $APP_FILE expansion
