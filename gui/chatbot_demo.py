@@ -1168,7 +1168,7 @@ def main():
             app.launch(
                 share=False,
                 server_name="127.0.0.1",
-                server_port=7860,
+                server_port=8080, # for cloud 7860 for local
                 debug=True,
                 show_error=True,
                 inbrowser=True
