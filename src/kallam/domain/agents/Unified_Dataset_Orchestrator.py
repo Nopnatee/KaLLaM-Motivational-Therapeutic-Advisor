@@ -37,9 +37,9 @@ class UnifiedDatasetOrchestrator:
     def __init__(
         self,
         # API keys / endpoints (can be passed or picked from env)
-        openai_api_key: Optional[str] = None,
-        gemini_api_key: Optional[str] = None,
-        sealion_api_key: Optional[str] = None,
+        openai_api_key = os.getenv("OPENAI_API_KEY"),
+        gemini_api_key = os.getenv("GEMINI_API_KEY"),
+        sealion_api_key = os.getenv("SEALION_API_KEY"),
         sealion_api_url: str = "https://api.aisingapore.org/v1/chat/completions",
         # which provider to use per task
         flags_model: Literal["gpt", "gemini", "sealion"] = "gpt",
