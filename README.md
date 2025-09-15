@@ -86,7 +86,7 @@ python gui/chatbot_demo.py
 python gui/chatbot_dev_app.py
 ```
 
-Programmatic session workflow:
+Simple programmatic session workflow:
 
 ```python
 from kallam.app.chatbot_manager import ChatbotManager
@@ -101,13 +101,6 @@ path = mgr.export_session_json(sid)
 print("Exported:", path)
 ```
 
-Developer smoke UI (no agents invoked, storage only):
-
-```bash
-python tests/gradio_chatbot_manager_smoketest.py
-```
-
-
 ## Project Layout
 
 ```
@@ -117,15 +110,20 @@ project-root/
 │  ├─ app/                   # ChatbotManager facade
 │  ├─ domain/agents/         # supervisor, doctor, psychologist, translator, summarizer, orchestrator
 │  └─ infra/                 # sqlite stores, exporter, token counter, config
-├─ gui/                      # gradio apps (demo and dev)
+├─ gui/                      # gradio apps (demo, dev, and simple example)
 ├─ scripts/                  # data tools: MISC coding, preprocessing, notebooks
-└─ tests/                    # pytest and storage smoke UI
+├─ tests/                    # pytest and storage smoke UI
+├─ exported_sessions/        # will be generated through export sessions as JSON
+└─ Data/                     # datasets holder (in json jsonl and csv)
+   ├─ orchestrated/
+   ├─ human/
+   └─ single-agent/
 ```
 
 
 ## Agents at a Glance
 
-- Supervisor: routes, produces flags and final response scaffolding.
+- Supervisor: routes, produces flags and final response scaffolding (SEA-Lion).
 - Translator: SEA‑Lion backed Thai/English translation.
 - Summarizer: SEA‑Lion backed conversation/health summaries.
 - Doctor: Gemini backed medical guidance with safety guardrails.

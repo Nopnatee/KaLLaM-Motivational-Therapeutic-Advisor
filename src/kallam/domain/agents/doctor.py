@@ -45,7 +45,7 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
 
 **Output Format in JSON:**
 {"Recommendations": [one or two most priority recommendation or note for medical personnel]
-"Diagnosis": {[Disease | Symptom]: [Confidence 0-10]}
+"Diagnosis 0-10 with Confidence": {[Disease | Symptom]: [Confidence 0-10]}
 "Doctor Plan": [short plan for your future self and medical personnel]}
 """
 
@@ -76,7 +76,7 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
                 raise ValueError("GEMINI_API_KEY not found in environment variables")
             
             self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-            self.gemini_model_name = "gemini-1.5-flash"
+            self.gemini_model_name = "gemini-2.5-flash-lite"
             self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
         except Exception as e:
             self.logger.error(f"Failed to initialize API clients: {str(e)}")
