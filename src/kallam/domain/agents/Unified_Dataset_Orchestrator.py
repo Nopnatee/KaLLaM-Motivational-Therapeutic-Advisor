@@ -7,6 +7,12 @@ from typing import Optional, Dict, Any, List, Literal
 from dotenv import load_dotenv
 load_dotenv()
 
+from .supervisor import SupervisorAgent
+from .summarizer import SummarizerAgent
+from .translator import TranslatorAgent
+from .doctor import DoctorAgent
+from .psychologist import PsychologistAgent
+
 from openai import OpenAI
 from google import genai
 
@@ -34,8 +40,20 @@ class UnifiedDatasetOrchestrator:
 
     SUPPORTED_PROVIDERS = {"gpt", "gemini", "sealion"}
 
-    def __init__(
-        self,
+    def __init__(self, log_level: int | None = None, logger_name: str = "kallam.chatbot.orchestrator"):
+        """
+        log_level: if provided, sets this logger's level; otherwise inherit from parent.
+        logger_name: child logger under the manager's logger hierarchy.
+        """
+        self._setup_logging(log_level, logger_name)
+
+        # Initialize available agents
+        self.supervisor = SupervisorAgent()
+        self.summarizer = SummarizerAgent()
+        self.translator = TranslatorAgent()
+        self.doctor = DoctorAgent()
+        self.psychologist = PsychologistAgent()
+
         # which provider to use per task
         flags_model: Literal["gpt", "gemini", "sealion"] = "gpt",
         translation_model: Literal["gpt", "gemini", "sealion"] = "gpt",
@@ -49,7 +67,7 @@ class UnifiedDatasetOrchestrator:
         timeout: int = 30,
         log_level: Optional[int] = None,
         logger_name: str = "kallam.dataset.unified",
-    ):
+        
         self._setup_logging(log_level, logger_name)
 
         self.task_models = {
@@ -296,4 +314,3 @@ class UnifiedDatasetOrchestrator:
             self.logger.error(f"Error during summarization: {e}", exc_info=True)
             summary = "Error during summarization."
         return str(summary)
-
