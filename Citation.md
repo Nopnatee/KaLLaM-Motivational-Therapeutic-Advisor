@@ -14,7 +14,6 @@
   year={2024}
 }
 
-
 # Sealion
 @misc{sea_lion_2024,
   title={SEA-LION (Southeast Asian Languages In One Network): A Family of Large Language Models for Southeast Asia},
