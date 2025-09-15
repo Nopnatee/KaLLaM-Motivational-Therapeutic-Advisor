@@ -1,19 +1,33 @@
 version: 1.0
-runtime: docker
+runtime: python311
+
+env:
+  - name: PYTHONDONTWRITEBYTECODE
+    value: "1"
+  - name: PYTHONUNBUFFERED
+    value: "1"
+  - name: PIP_NO_CACHE_DIR
+    value: "1"
+  - name: GRADIO_SERVER_NAME
+    value: "0.0.0.0"
+  - name: GRADIO_SERVER_PORT
+    value: "8080"
+  - name: PORT
+    value: "8080"
+  - name: APP_FILE
+    value: "gui/chatbot_dev_app.py"
 
 build:
-  dockerfile: Dockerfile
-  # If your Dockerfile isn’t in repo root, also specify:
-  # context: ./               # or the subfolder
+  # Managed runtime build step (no apt-get here; keep it pure Python)
+  commands:
+    build:
+      - pip3 install --upgrade pip setuptools wheel
 
 run:
-  # Your Dockerfile already defines CMD ["sh","-c","python $APP_FILE"].
-  # This section is optional, but you can override or set env here:
+  runtime-version: 3.11
+  # With Py311 managed runtime, installs are safest in pre-run
+  pre-run:
+    - pip3 install --no-cache-dir .
+  # Start the app; use sh so $APP_FILE expands like in your Dockerfile
+  command: sh -c "python3 ${APP_FILE}"
   port: 8080
-  env:
-    - name: APP_FILE
-      value: gui/chatbot_dev_app.py
-    - name: GRADIO_SERVER_NAME
-      value: "0.0.0.0"
-    - name: PORT
-      value: "8080"
