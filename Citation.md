@@ -1,4 +1,4 @@
-# Example technique for inspiration for evaluation
+# For certified technique for MISC code therapeutic evaluation as psycology statistic
 @article{jiang2023psychological,
   title={Psychological Metrics for Dialog System Evaluation},
   author={Jiang, Chunyuan and Zhang, Rui and Lee, Andy and He, Yifan and Zhou, Kai},
@@ -6,7 +6,7 @@
   year={2023}
 }
 
-# Example of solution by using prompt engineering (not effective)
+# For real scenario and clinical saftly of the model evaluation
 @article{xu2024building,
   title={Building Trust in Mental Health Chatbots: Safety Metrics and LLM-Based Evaluation},
   author={Xu, Shujie and Wang, Zhiyuan and Liu, Yiming and Liu, Yuchen and Zhang, Yue and Ji, Heng},
@@ -42,7 +42,7 @@ Rashkin, H., Smith, E. M., Li, M., & Boureau, Y.-L. (2019). Towards Empathetic O
   year={2019}
 }
 
-# Current real MISC2.5 Codes Definitions
+# MISC2.5 Codes Definitions
 @manual{houck2010misc25,
   title     = {Motivational Interviewing Skill Code (MISC) 2.5},
   author    = {Houck, Jon M. and Moyers, Theresa B. and Miller, William R. and Glynn, Lisa H. and Hallgren, Kevin A.},
