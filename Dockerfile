@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1
-
 FROM python:3.11-slim AS app
 
-# Environment
+# Minimal env
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -10,30 +9,30 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GRADIO_SERVER_PORT=8080 \
     PORT=8080
 
-# Allow overriding the app entry file at build/run time
+# Allow overriding entry script
 ARG APP_FILE=gui/chatbot_dev_app.py
 ENV APP_FILE=${APP_FILE}
 
 WORKDIR /app
 
-# System deps (minimal). Add more if your libs require.
+# OS deps (git is often needed for pip VCS URLs)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
 COPY pyproject.toml README.md LICENSE ./
+
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Bring in source last to avoid invalidating earlier cache layers
 COPY src ./src
-# Copy app scripts and GUIs (so the entry script is present)
 COPY gui ./gui
 COPY scripts ./scripts
 
-# Install Python deps and the package
-RUN python -m pip install --upgrade pip \
- && pip install .
+# Install your package
+RUN pip install --no-cache-dir .
 
 EXPOSE 8080
 
-# Note: Gradio reads GRADIO_SERVER_NAME/PORT; many platforms also use $PORT
-# Use a shell to allow $APP_FILE expansion
+# Launch the chosen app file; App Runner sets $PORT for us
 CMD ["sh", "-c", "python $APP_FILE"]
