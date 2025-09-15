@@ -1,0 +1,19 @@
+version: 1.0
+runtime: docker
+
+build:
+  dockerfile: Dockerfile
+  # If your Dockerfile isn’t in repo root, also specify:
+  # context: ./               # or the subfolder
+
+run:
+  # Your Dockerfile already defines CMD ["sh","-c","python $APP_FILE"].
+  # This section is optional, but you can override or set env here:
+  port: 8080
+  env:
+    - name: APP_FILE
+      value: gui/chatbot_dev_app.py
+    - name: GRADIO_SERVER_NAME
+      value: "0.0.0.0"
+    - name: PORT
+      value: "8080"
