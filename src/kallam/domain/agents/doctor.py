@@ -23,43 +23,30 @@ class DoctorAgent:
 
         self.system_prompt = """
 **Your Role:**  
-You are a Medical Assistant AI Doctor. You provide helpful medical information and guidance while being extremely careful about medical advice.
+You are an expert doctor assisting medical personnel. You provide helpful medical information and guidance while being extremely careful about medical advice.
 
-**Core Rules:**  
-- You are NOT a replacement for professional medical care
-- Always use a calm and reassuring tone
-- Maintain warmth, empathy, and professional boundaries at all times.  
-- Always recommend consulting a healthcare professional for serious concerns
-- In emergencies, always advise calling emergency services immediately
-- Do not provide specific diagnoses - only general information and guidance
+**Core Rules:**    
+- Recommend consulting a healthcare professional for serious cases
+- Advice specific diagnosis based on the context with variable confidence on each if there is any
+- Keep your advice very concise and use medical keywords as it will be use only for advice for a expert medical personnel
+- You only response based on the provided JSON format
 
 **Specific Task:**
 - Assess symptom severity and provide appropriate recommendations
-- Provide general health information and wellness advice
 - Offer first aid guidance for emergency situations
-- Recognize when immediate medical attention is needed
-- Support users with health concerns while emphasizing professional care
 
 **Response Guidelines:**
-- Be empathetic and supportive
-- Ask clarifying questions when needed
-- Provide clear, actionable guidance
-- Always include appropriate medical disclaimers
+- Recommend clarifying questions when needed
+- Use clear, actionable for guidance
+- Include appropriate medical disclaimers
 - Use structured assessment approach
 - Respond in the user's preferred language when specified
+- Do not provide any reasons to your "Diagnosis" confidence
 
-**Emergency Protocol:**
-If you detect emergency symptoms, immediately:
-1. Advise calling emergency services complete with the local emergency number
-2. Provide relevant first aid guidance
-3. Emphasize urgency while keeping the user calm
-
-**Output Format:**
-Provide structured responses including:
-- Symptom assessment (if applicable)
-- Recommendations (self-care, consult GP, urgent care, emergency)
-- Next steps
-- Medical disclaimer
+**Output Format in JSON:**
+{"Recommendations": [one or two most priority recommendation or note for medical personnel]
+"Diagnosis": {[Disease | Symptom]: [Confidence 0-100%]}
+"Doctor Plan": [short plan for your future self and medical personnel]}
 """
 
     def _setup_logging(self, log_level: int) -> None:
@@ -95,19 +82,17 @@ Provide structured responses including:
             self.logger.error(f"Failed to initialize API clients: {str(e)}")
             raise
 
-    def _format_prompt_gemini(self, user_message: str, medical_context: str = "") -> str:
+    def _format_prompt_gemini(self, message_context: str, medical_context: str = "") -> str:
         now = datetime.now()
-        context_info = f"""
+        current_context = f"""
 **Current Context:**
 - Date/Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
 - Medical Context: {medical_context}
 """
         
         prompt = f"""{self.system_prompt}
-
-{context_info}
-
-**Patient Query:** {user_message}
+{current_context}
+**Patient Query:** {message_context}
 
 Please provide your medical guidance following the guidelines above."""
         
@@ -148,41 +133,28 @@ Please provide your medical guidance following the guidelines above."""
         if summarized_histories:
             context_parts.append(f"Patient History Summary: {summarized_histories}")
         if chain_of_thoughts:
-            context_parts.append(f"Previous Medical Considerations: {chain_of_thoughts}")
+            context_parts.append(f"Your Previous Recommendations: {chain_of_thoughts}")
 
         recent_context = []
         for msg in chat_history[-3:]:
             if msg.get("role") == "user":
                 recent_context.append(f"Patient: {msg.get('content', '')}")
             elif msg.get("role") == "assistant":
-                recent_context.append(f"Previous Response: {msg.get('content', '')}")
+                recent_context.append(f"Medical Personnel: {msg.get('content', '')}")
         if recent_context:
             context_parts.append("Recent Conversation:\n" + "\n".join(recent_context))
 
         full_context = "\n\n".join(context_parts) if context_parts else ""
 
-        prompt_content = f"""
-Based on the current medical query and available context, provide comprehensive medical guidance:
+        message_context = f"""
 
-**Current Query:** {user_message}
-
-**Available Context:**
+Current Patient Message: {user_message}
+Available Context:
 {full_context if full_context else "No previous context available"}
+"""
 
-Please provide:
-
-1. **Medical Assessment**
-2. **Recommendations**
-3. **Patient Education**
-4. **Safety Considerations**
-
-**Response Structure:**
-
-```answer
-[Concise, patient-friendly medical guidance with clear recommendations, appropriate disclaimers, and actionable next steps. Keep professional yet empathetic tone.]
-```"""
-
-        prompt = self._format_prompt_gemini(prompt_content, full_context)
+        prompt = self._format_prompt_gemini(message_context=message_context)
+        print(prompt)
         return self._generate_response_gemini(prompt)
 
 
