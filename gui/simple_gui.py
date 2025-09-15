@@ -64,7 +64,7 @@ def force_summary(session_id: str):
 # -----------------------
 def create_app():
     with gr.Blocks(title="Minimal Chat Sessions") as demo:
-        gr.Markdown("# Minimal Chat Sessions • clean and boring, just like production likes it. 🧼🧪")
+        gr.Markdown("# Minimal Chat Sessions • clean and boring but try me.")
 
         session_id = gr.State(value="")
         with gr.Row():
