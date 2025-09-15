@@ -54,20 +54,22 @@ class UnifiedDatasetOrchestrator:
         self.doctor = DoctorAgent()
         self.psychologist = PsychologistAgent()
 
-        # which provider to use per task
-        flags_model: Literal["gpt", "gemini", "sealion"] = "gpt",
-        translation_model: Literal["gpt", "gemini", "sealion"] = "gpt",
-        response_model: Literal["gpt", "gemini", "sealion"] = "gpt",
-        summarization_model: Literal["gpt", "gemini", "sealion"] = "gpt",
+        # which provider to use per task — FIXED: removed trailing commas
+        flags_model: Literal["gpt", "gemini", "sealion"] = "gpt"
+        translation_model: Literal["gpt", "gemini", "sealion"] = "gpt"
+        response_model: Literal["gpt", "gemini", "sealion"] = "gpt"
+        summarization_model: Literal["gpt", "gemini", "sealion"] = "gpt"
+
         # model names
-        gpt_model: str = "gpt-4o",
-        gemini_model: str = "gemini-1.5-flash",
-        sealion_model: str = "aisingapore/sea-lion-7b-instruct",
+        gpt_model: str = "gpt-4o"
+        gemini_model: str = "gemini-1.5-flash"
+        sealion_model: str = "aisingapore/sea-lion-7b-instruct"
+
         # runtime
-        timeout: int = 30,
-        log_level: Optional[int] = None,
-        logger_name: str = "kallam.dataset.unified",
-        
+        timeout: int = 30
+        log_level: Optional[int] = None
+        logger_name: str = "kallam.dataset.unified"
+
         self._setup_logging(log_level, logger_name)
 
         self.task_models = {
@@ -83,7 +85,13 @@ class UnifiedDatasetOrchestrator:
             "sealion": {"name": sealion_model, "temperature": 0.2, "max_tokens": 2000},
         }
 
-        self.config = {"timeout": timeout}
+        # FIXED: added agents_language and supported_languages
+        self.config = {
+            "timeout": timeout,
+            "agents_language": "english",  # default internal agent language
+            "supported_languages": ["thai", "english"],  # add any languages you support
+        }
+
         self.clients: Dict[str, Any] = {}
 
         # pick up keys from environment
