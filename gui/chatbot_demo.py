@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import List, Tuple, Optional
 import os
 
-# Your existing manager (same as simple_chat_app.py)
 from kallam.app.chatbot_manager import ChatbotManager
 
 mgr = ChatbotManager(log_level="INFO")
@@ -35,7 +34,7 @@ CABBAGE_SVG = """
 """
 
 # -----------------------
-# Core handlers (using mgr like simple app)
+# Core handlers
 # -----------------------
 def _session_status(session_id: str) -> str:
     """Get current session status using mgr.get_session()"""
