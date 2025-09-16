@@ -347,7 +347,7 @@ class ChatbotManager:
         except Exception as e:
             logger.warning(f"Failed to get flags from supervisor: {e}, using safe defaults")
             # Safe defaults keep the pipeline alive
-            return {"language": "invalid", "doctor": False, "psychologist": False}
+            return {"language": "english", "doctor": False, "psychologist": False}
 
     @_with_trace()
     def summarize_session(self, session_id: str) -> str:

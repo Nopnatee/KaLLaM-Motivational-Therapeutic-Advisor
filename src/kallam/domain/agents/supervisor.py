@@ -287,7 +287,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
             }
             
             payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "model": "aisingapore/Gemma-SEA-LION-v4-27B",
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "on"
