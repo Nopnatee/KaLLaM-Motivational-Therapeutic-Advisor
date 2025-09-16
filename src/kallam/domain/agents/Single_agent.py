@@ -13,6 +13,11 @@ from typing import Dict, Any, Optional, List, Union
 from dotenv import load_dotenv
 load_dotenv()
 
+# API clients
+import openai
+import google.generativeai as genai
+import requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +56,9 @@ class UniversalExpertAgent:
         
         if not self.api_key:
             logger.warning(f"No API key found for {self.api_provider.value}. Please set in .env file or pass directly.")
+        else:
+            # Initialize the API client based on provider
+            self._initialize_api_client()
         
         # Load expertise configurations
         self.expertise_domains = self._load_expertise_configs()
@@ -78,6 +86,27 @@ class UniversalExpertAgent:
                 logger.warning(f"Environment variable {env_key} not found for {provider.value}")
         
         return None
+
+    def _initialize_api_client(self) -> None:
+        """Initialize the appropriate API client based on provider"""
+        try:
+            if self.api_provider == APIProvider.GPT:
+                openai.api_key = self.api_key
+                # Test the connection
+                logger.info("OpenAI API client initialized")
+                
+            elif self.api_provider == APIProvider.GEMINI:
+                genai.configure(api_key=self.api_key)
+                # Test the connection by listing models
+                logger.info("Gemini API client initialized")
+                
+            elif self.api_provider == APIProvider.SEALION:
+                # SeaLion uses REST API calls
+                logger.info("SeaLion API client configured")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize {self.api_provider.value} API client: {e}")
+            raise
 
     def _load_expertise_configs(self) -> Dict[str, ExpertiseConfig]:
         """Load pre-configured expertise domains"""
@@ -456,7 +485,7 @@ Message Processing: Successfully processed {len(user_message)} character input a
         return list(self.expertise_domains.keys())
 
     def switch_api_provider(self, provider: Union[str, APIProvider], api_key: Optional[str] = None) -> bool:
-        """Switch API provider"""
+        """Switch API provider and reinitialize the client"""
         try:
             new_provider = APIProvider(provider) if isinstance(provider, str) else provider
             new_api_key = api_key or self._get_api_key_from_env(new_provider)
@@ -465,13 +494,64 @@ Message Processing: Successfully processed {len(user_message)} character input a
                 logger.warning(f"No API key available for {new_provider.value}")
                 return False
             
-            self.api_provider = new_provider
-            self.api_key = new_api_key
-            logger.info(f"Switched to {new_provider.value} API provider")
-            return True
+            # Store old values in case we need to rollback
+            old_provider = self.api_provider
+            old_key = self.api_key
+            
+            try:
+                # Set new values
+                self.api_provider = new_provider
+                self.api_key = new_api_key
+                
+                # Initialize new API client
+                self._initialize_api_client()
+                
+                logger.info(f"Successfully switched from {old_provider.value} to {new_provider.value}")
+                return True
+                
+            except Exception as e:
+                # Rollback on failure
+                self.api_provider = old_provider
+                self.api_key = old_key
+                logger.error(f"Failed to switch API provider, rolled back: {e}")
+                return False
+                
         except Exception as e:
             logger.error(f"Failed to switch API provider: {e}")
             return False
+
+    def test_api_connection(self) -> bool:
+        """Test if the current API is working"""
+        try:
+            test_context = "Please respond with 'Connection successful' to confirm the API is working."
+            test_config = self.expertise_domains["general"]
+            
+            response = self._generate_response(test_context, test_config, {"temperature": 0.1})
+            
+            # Check if we got a valid response (not an error message)
+            is_working = response and not response.startswith("Error:") and not response.startswith("I apologize")
+            
+            if is_working:
+                logger.info(f"{self.api_provider.value} API connection test: SUCCESS")
+            else:
+                logger.warning(f"{self.api_provider.value} API connection test: FAILED - {response[:100]}...")
+                
+            return is_working
+            
+        except Exception as e:
+            logger.error(f"API connection test failed: {e}")
+            return False
+
+    def get_api_status(self) -> Dict[str, Any]:
+        """Get detailed status of the current API configuration"""
+        return {
+            "provider": self.api_provider.value,
+            "has_api_key": bool(self.api_key),
+            "api_key_length": len(self.api_key) if self.api_key else 0,
+            "connection_test": self.test_api_connection() if self.api_key else False,
+            "available_domains": list(self.expertise_domains.keys()),
+            "current_domain": self.current_domain
+        }
 
 
 # Convenience factory functions - now auto-load API keys from .env
@@ -505,14 +585,70 @@ if __name__ == "__main__":
     # The agent can now be used directly with ChatbotManager
     # without importing ChatbotManager in this file
     
-    agent = create_gpt_agent(log_level="INFO")
-    print("Available domains:", agent.get_available_domains())
+    # Create and test different API providers
+    print("=== Testing API Providers ===")
+    
+    # Test GPT agent
+    try:
+        gpt_agent = create_gpt_agent(log_level="INFO")
+        print(f"GPT Agent Status: {gpt_agent.get_api_status()}")
+        
+        if gpt_agent.api_key:
+            connection_test = gpt_agent.test_api_connection()
+            print(f"GPT Connection Test: {'✓' if connection_test else '✗'}")
+    except Exception as e:
+        print(f"GPT Agent Error: {e}")
+    
+    # Test Gemini agent
+    try:
+        gemini_agent = create_gemini_agent(log_level="INFO")
+        print(f"Gemini Agent Status: {gemini_agent.get_api_status()}")
+        
+        if gemini_agent.api_key:
+            connection_test = gemini_agent.test_api_connection()
+            print(f"Gemini Connection Test: {'✓' if connection_test else '✗'}")
+    except Exception as e:
+        print(f"Gemini Agent Error: {e}")
+    
+    # Test SeaLion agent
+    try:
+        sealion_agent = create_sealion_agent(log_level="INFO")
+        print(f"SeaLion Agent Status: {sealion_agent.get_api_status()}")
+        
+        if sealion_agent.api_key:
+            connection_test = sealion_agent.test_api_connection()
+            print(f"SeaLion Connection Test: {'✓' if connection_test else '✗'}")
+    except Exception as e:
+        print(f"SeaLion Agent Error: {e}")
+    
+    print("\n=== API Switching Demo ===")
+    
+    # Demonstrate API switching
+    agent = create_gpt_agent()
+    print(f"Started with: {agent.api_provider.value}")
+    
+    # Try to switch to Gemini
+    if agent.switch_api_provider("gemini"):
+        print(f"Switched to: {agent.api_provider.value}")
+        
+        # Try to switch back to GPT
+        if agent.switch_api_provider("gpt"):
+            print(f"Switched back to: {agent.api_provider.value}")
+    
+    print("\n=== Domain Detection Demo ===")
     
     # Test domain determination
-    medical_msg = "I have been experiencing chest pain and shortness of breath"
-    flags = agent.get_flags_from_supervisor([], medical_msg, "", [])
-    print("Medical message flags:", flags)
+    test_messages = [
+        ("I have been experiencing chest pain and shortness of breath", "Expected: doctor"),
+        ("I've been feeling very anxious and stressed lately", "Expected: psychologist"),
+        ("What's the weather like today?", "Expected: general"),
+        ("Can you explain diabetes symptoms and treatment?", "Expected: doctor"),
+        ("How can I manage depression and mood swings?", "Expected: psychologist")
+    ]
     
-    psychology_msg = "I've been feeling very anxious and stressed lately"
-    flags = agent.get_flags_from_supervisor([], psychology_msg, "", [])
-    print("Psychology message flags:", flags)
+    for msg, expected in test_messages:
+        flags = agent.get_flags_from_supervisor([], msg, "", [])
+        detected_domain = flags.get("expertise_domain", "unknown")
+        print(f"Message: '{msg[:50]}...'")
+        print(f"  Detected: {detected_domain} | {expected}")
+        print(f"  Flags: doctor={flags.get('doctor')}, psychologist={flags.get('psychologist')}")
