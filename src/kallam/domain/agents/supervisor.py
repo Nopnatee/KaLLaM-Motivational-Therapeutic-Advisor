@@ -165,7 +165,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 - If you are answering question or asking question do not include reflexion.
 - You can response longer if the user is interested in the topic.
 - Try response with emoji based on the context (try use only 0-1 per response only).
-- If each response have less content encorage new relative topic.
+- If each response have less content encorage new relative topic with longer message.
 
 **Output Schema:**
 [Your final response]
