@@ -1,4 +1,4 @@
-# src/your_pkg/app/universal_agent.py
+# src/your_pkg/app/single_agent.py
 from __future__ import annotations
 
 import json
@@ -8,13 +8,10 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, Optional, List, Union
-from pathlib import Path
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
-
-from .chatbot_manager import ChatbotManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,27 +35,15 @@ class ExpertiseConfig:
 
 class UniversalExpertAgent:
     """
-    A single agent that can be an expert in any field using ChatbotManager as wrapper.
-    Supports multiple API providers (Gemini, GPT, SeaLion) and maintains expertise
-    across all domains through dynamic prompt engineering.
+    A single agent that can be an expert in any field.
+    This replaces the UnifiedDatasetOrchestrator in the architecture.
+    Provides all the methods that ChatbotManager expects from an orchestrator.
     """
     
     def __init__(self,
                  api_provider: Union[str, APIProvider] = APIProvider.GPT,
                  api_key: Optional[str] = None,
-                 db_path: str = "universal_agent.db",
                  log_level: str = "INFO"):
-        
-        # Initialize ChatbotManager wrapper
-        self.chatbot = ChatbotManager(
-            db_path=db_path,
-            summarize_every_n_messages=15,
-            message_limit=20,
-            sunmmary_limit=10,
-            chain_of_thoughts_limit=8,
-            log_level=log_level,
-            log_name="universal_agent"
-        )
         
         # API configuration - auto-load from environment if not provided
         self.api_provider = APIProvider(api_provider) if isinstance(api_provider, str) else api_provider
@@ -70,8 +55,8 @@ class UniversalExpertAgent:
         # Load expertise configurations
         self.expertise_domains = self._load_expertise_configs()
         
-        # Session tracking for context switching
-        self.active_sessions: Dict[str, Dict[str, Any]] = {}
+        # Current domain context (can be switched per session via flags)
+        self.current_domain = "doctor"  # default
         
         logger.info(f"UniversalExpertAgent initialized with {self.api_provider.value} provider")
 
@@ -136,199 +121,325 @@ class UniversalExpertAgent:
                     "Respect confidentiality principles and ethical guidelines",
                     "Acknowledge the complexity of human psychology and individual differences"
                 ]
+            ),
+            
+            "general": ExpertiseConfig(
+                domain="general",
+                system_prompt="""You are a knowledgeable general assistant with broad expertise across 
+                multiple domains. You provide helpful, accurate, and contextually appropriate responses 
+                to a wide variety of questions and topics. You adapt your communication style to match 
+                the user's needs and maintain a professional yet approachable tone.""",
+                temperature=0.7,
+                special_instructions=[
+                    "Provide clear and accurate information across various topics",
+                    "Adapt communication style to the user's level and context",
+                    "Acknowledge limitations and direct to specialists when appropriate",
+                    "Be helpful while maintaining accuracy and objectivity"
+                ]
             )
         }
         
         return configs
 
-    def start_conversation(self, 
-                          expertise_domain: str = "doctor",
-                          initial_context: Optional[str] = None,
-                          custom_instructions: Optional[List[str]] = None) -> str:
-        """Start a new conversation session with specific expertise focus"""
+    # =========================================================================
+    # Methods that ChatbotManager expects (replacing UnifiedDatasetOrchestrator)
+    # =========================================================================
+
+    def get_translation(self, message: str, flags: Dict[str, Any], translation_type: str) -> str:
+        """
+        Handle translation requests. For now, we'll return the message as-is 
+        since we're focusing on English expertise. This can be enhanced later.
+        """
+        # In a real implementation, you might use the flags to determine language
+        # and perform actual translation. For now, we pass through.
+        return message
+
+    def get_flags_from_supervisor(self, 
+                                chat_history: List[Dict[str, Any]], 
+                                user_message: str,
+                                memory_context: str,
+                                summarized_histories: List[str]) -> Dict[str, Any]:
+        """
+        Analyze the conversation context and determine appropriate flags.
+        This replaces the supervisor's role in determining expertise domain and other parameters.
+        """
+        # Analyze message content to determine expertise domain
+        domain = self._determine_expertise_domain(user_message, chat_history, memory_context)
         
-        # Get expertise configuration
-        if expertise_domain not in self.expertise_domains:
-            logger.warning(f"Unknown domain '{expertise_domain}', using doctor expertise")
-            expertise_domain = "doctor"
-        
-        config = self.expertise_domains[expertise_domain]
-        
-        # Build system context
-        system_context = self._build_system_context(config, initial_context, custom_instructions)
-        
-        # Start session through ChatbotManager
-        session_id = self.chatbot.start_session(saved_memories=system_context)
-        
-        # Track session
-        self.active_sessions[session_id] = {
-            "domain": expertise_domain,
-            "config": config,
-            "start_time": time.time(),
-            "message_count": 0
+        # Build flags that ChatbotManager expects
+        flags = {
+            "language": "english",  # Default to English for now
+            "doctor": domain == "doctor",
+            "psychologist": domain == "psychologist",
+            "expertise_domain": domain,
+            "api_provider": self.api_provider.value,
+            "temperature": self.expertise_domains[domain].temperature,
+            "max_tokens": self.expertise_domains[domain].max_tokens
         }
         
-        logger.info(f"Started {expertise_domain} session: {session_id}")
-        return session_id
-
-    def _build_system_context(self, 
-                            config: ExpertiseConfig,
-                            initial_context: Optional[str] = None,
-                            custom_instructions: Optional[List[str]] = None) -> str:
-        """Build comprehensive system context for the agent"""
+        # Store current domain for response generation
+        self.current_domain = domain
         
-        context_parts = [
-            f"API Provider: {self.api_provider.value.upper()}",
-            f"Expertise Domain: {config.domain.title()}",
-            f"Temperature: {config.temperature}",
-            "",
-            "System Prompt:",
-            config.system_prompt,
-            ""
+        return flags
+
+    def get_commented_response(self, 
+                             original_history: List[Dict[str, Any]],
+                             original_message: str,
+                             eng_history: List[Dict[str, Any]], 
+                             eng_message: str,
+                             flags: Dict[str, Any],
+                             chain_of_thoughts: List[str],
+                             memory_context: str,
+                             summarized_histories: List[str]) -> Dict[str, Any]:
+        """
+        Generate the main response with commentary/reasoning.
+        This is the core method that replaces the orchestrator's response generation.
+        """
+        
+        # Get expertise domain from flags
+        domain = flags.get("expertise_domain", self.current_domain)
+        config = self.expertise_domains.get(domain, self.expertise_domains["general"])
+        
+        # Build context for the AI model
+        context = self._build_response_context(
+            eng_history, eng_message, memory_context, 
+            summarized_histories, chain_of_thoughts, config
+        )
+        
+        # Generate response using the configured API
+        response = self._generate_response(context, config, flags)
+        
+        # Generate reasoning/commentary
+        reasoning = self._generate_reasoning(eng_message, response, domain, flags)
+        
+        return {
+            "final_output": response,
+            "chain_of_thoughts": reasoning,
+            "expertise_domain": domain,
+            "api_provider": self.api_provider.value,
+            "temperature_used": config.temperature,
+            "context_length": len(context)
+        }
+
+    def summarize_history(self, 
+                         chat_history: List[Dict[str, Any]], 
+                         eng_summaries: List[str]) -> str:
+        """
+        Generate a summary of the chat history.
+        """
+        if not chat_history:
+            return "No conversation history to summarize."
+        
+        # Build summary context
+        context = "Please provide a concise summary of this conversation:\n\n"
+        
+        # Add previous summaries if available
+        if eng_summaries:
+            context += "Previous summaries:\n"
+            for i, summary in enumerate(eng_summaries[-3:], 1):  # Last 3 summaries
+                context += f"{i}. {summary}\n"
+            context += "\n"
+        
+        # Add recent chat history
+        context += "Recent conversation:\n"
+        for msg in chat_history[-10:]:  # Last 10 messages
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")[:200]  # Truncate long messages
+            context += f"{role.title()}: {content}\n"
+        
+        context += "\nProvide a summary that captures the key topics, decisions, and context."
+        
+        # Use general domain for summarization
+        config = self.expertise_domains["general"]
+        summary = self._generate_response(context, config, {"temperature": 0.3})
+        
+        return summary
+
+    # =========================================================================
+    # Internal helper methods
+    # =========================================================================
+
+    def _determine_expertise_domain(self, 
+                                  user_message: str, 
+                                  chat_history: List[Dict[str, Any]], 
+                                  memory_context: str) -> str:
+        """
+        Analyze the message and context to determine the appropriate expertise domain.
+        """
+        message_lower = user_message.lower()
+        
+        # Medical keywords
+        medical_keywords = [
+            'symptoms', 'diagnosis', 'treatment', 'medicine', 'doctor', 'health',
+            'disease', 'pain', 'medication', 'hospital', 'clinic', 'medical',
+            'illness', 'injury', 'prescription', 'therapy', 'surgery', 'blood',
+            'heart', 'lung', 'brain', 'cancer', 'diabetes', 'pressure',
+            'infection', 'virus', 'bacteria', 'fever', 'headache'
         ]
         
+        # Psychology keywords
+        psychology_keywords = [
+            'stress', 'anxiety', 'depression', 'mental', 'psychology', 'therapy',
+            'counseling', 'emotion', 'behavior', 'cognitive', 'psychologist',
+            'mood', 'trauma', 'ptsd', 'bipolar', 'schizophrenia', 'addiction',
+            'relationship', 'family', 'grief', 'phobia', 'panic', 'ocd',
+            'personality', 'self-esteem', 'confidence', 'sleep', 'insomnia'
+        ]
+        
+        # Check for domain indicators in the message
+        medical_score = sum(1 for keyword in medical_keywords if keyword in message_lower)
+        psychology_score = sum(1 for keyword in psychology_keywords if keyword in message_lower)
+        
+        # Check recent conversation context
+        if chat_history:
+            recent_messages = [msg.get("content", "") for msg in chat_history[-3:]]
+            recent_text = " ".join(recent_messages).lower()
+            
+            medical_score += sum(0.5 for keyword in medical_keywords if keyword in recent_text)
+            psychology_score += sum(0.5 for keyword in psychology_keywords if keyword in recent_text)
+        
+        # Check memory context
+        if memory_context:
+            memory_lower = memory_context.lower()
+            if "doctor" in memory_lower or "medical" in memory_lower:
+                medical_score += 1
+            if "psychologist" in memory_lower or "psychology" in memory_lower:
+                psychology_score += 1
+        
+        # Determine domain based on scores
+        if medical_score > psychology_score and medical_score > 0:
+            return "doctor"
+        elif psychology_score > 0:
+            return "psychologist"
+        else:
+            return "general"
+
+    def _build_response_context(self, 
+                              eng_history: List[Dict[str, Any]], 
+                              eng_message: str,
+                              memory_context: str,
+                              summarized_histories: List[str], 
+                              chain_of_thoughts: List[str],
+                              config: ExpertiseConfig) -> str:
+        """
+        Build the complete context for response generation.
+        """
+        context_parts = []
+        
+        # Add system prompt and expertise context
+        context_parts.append(f"System Role: {config.system_prompt}")
+        context_parts.append("")
+        
+        # Add special instructions
         if config.special_instructions:
-            context_parts.extend([
-                "Special Instructions:",
-                *[f"- {instruction}" for instruction in config.special_instructions],
-                ""
-            ])
+            context_parts.append("Special Instructions:")
+            for instruction in config.special_instructions:
+                context_parts.append(f"- {instruction}")
+            context_parts.append("")
         
-        if custom_instructions:
-            context_parts.extend([
-                "Custom Instructions:",
-                *[f"- {instruction}" for instruction in custom_instructions],
-                ""
-            ])
+        # Add memory context
+        if memory_context.strip():
+            context_parts.append("Session Context:")
+            context_parts.append(memory_context)
+            context_parts.append("")
         
-        if initial_context:
-            context_parts.extend([
-                "Initial Context:",
-                initial_context,
-                ""
-            ])
+        # Add previous summaries
+        if summarized_histories:
+            context_parts.append("Previous Conversation Summary:")
+            for summary in summarized_histories[-2:]:  # Last 2 summaries
+                context_parts.append(summary)
+            context_parts.append("")
         
-        context_parts.extend([
-            f"Session started at: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-            "Ready to provide expert assistance in this domain."
-        ])
+        # Add recent conversation history
+        if eng_history:
+            context_parts.append("Recent Conversation:")
+            for msg in eng_history[-10:]:  # Last 10 messages
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                context_parts.append(f"{role.title()}: {content}")
+            context_parts.append("")
+        
+        # Add chain of thoughts if available
+        if chain_of_thoughts:
+            context_parts.append("Previous Reasoning:")
+            for thought in chain_of_thoughts[-3:]:  # Last 3 thoughts
+                context_parts.append(f"- {thought}")
+            context_parts.append("")
+        
+        # Add current message
+        context_parts.append("Current Message:")
+        context_parts.append(f"User: {eng_message}")
+        context_parts.append("")
+        context_parts.append("Please provide your expert response:")
         
         return "\n".join(context_parts)
 
-    def ask(self, session_id: str, question: str) -> str:
-        """Ask a question to the universal expert agent"""
-        
-        if session_id not in self.active_sessions:
-            raise ValueError(f"Session {session_id} not found. Start a conversation first.")
-        
-        # Update session tracking
-        session_info = self.active_sessions[session_id]
-        session_info["message_count"] += 1
-        session_info["last_activity"] = time.time()
-        
-        # Get response through ChatbotManager
-        try:
-            response = self.chatbot.handle_message(session_id, question)
-            
-            # Log interaction
-            logger.debug(f"Question processed in {session_info['domain']} domain: {len(question)} chars -> {len(response)} chars")
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Error processing question in session {session_id}: {e}")
-            raise
-
-    def switch_expertise(self, session_id: str, new_domain: str) -> bool:
-        """Switch expertise domain mid-conversation"""
-        
-        if session_id not in self.active_sessions:
-            raise ValueError(f"Session {session_id} not found")
-        
-        if new_domain not in self.expertise_domains:
-            logger.warning(f"Unknown domain '{new_domain}', switch failed")
-            return False
-        
-        # Update session tracking
-        old_domain = self.active_sessions[session_id]["domain"]
-        self.active_sessions[session_id]["domain"] = new_domain
-        self.active_sessions[session_id]["config"] = self.expertise_domains[new_domain]
-        
-        # Add context switch message
-        switch_message = f"""
-        EXPERTISE DOMAIN SWITCH:
-        Previous: {old_domain.title()}
-        Current: {new_domain.title()}
-        
-        New System Prompt: {self.expertise_domains[new_domain].system_prompt}
-        
-        Please adapt your responses to reflect expertise in {new_domain.title()}.
+    def _generate_response(self, 
+                         context: str, 
+                         config: ExpertiseConfig, 
+                         flags: Dict[str, Any]) -> str:
+        """
+        Generate response using the configured AI API.
+        This is a placeholder - implement actual API calls based on self.api_provider.
         """
         
-        try:
-            self.chatbot.handle_message(session_id, switch_message)
-            logger.info(f"Switched expertise from {old_domain} to {new_domain} for session {session_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to switch expertise: {e}")
-            # Rollback
-            self.active_sessions[session_id]["domain"] = old_domain
-            self.active_sessions[session_id]["config"] = self.expertise_domains[old_domain]
-            return False
+        # TODO: Implement actual API calls to Gemini, GPT, or SeaLion
+        # For now, return a simulated response
+        
+        domain = config.domain
+        
+        # Simulate different responses based on domain
+        if domain == "doctor":
+            return f"""Based on your medical query, I need to provide you with evidence-based medical information. 
 
-    def get_session_info(self, session_id: str) -> Dict[str, Any]:
-        """Get detailed session information"""
-        
-        if session_id not in self.active_sessions:
-            return {}
-        
-        # Get base session info from ChatbotManager
-        base_info = self.chatbot.get_session_stats(session_id)
-        
-        # Add agent-specific info
-        agent_info = self.active_sessions[session_id].copy()
-        agent_info["duration_seconds"] = time.time() - agent_info["start_time"]
-        
-        return {
-            **base_info,
-            "agent_info": agent_info
-        }
+However, I must emphasize that this is for informational purposes only and cannot replace professional medical consultation. 
 
-    def list_active_sessions(self) -> List[Dict[str, Any]]:
-        """List all active sessions with their domains"""
-        
-        sessions = []
-        for session_id, info in self.active_sessions.items():
-            sessions.append({
-                "session_id": session_id,
-                "domain": info["domain"],
-                "message_count": info["message_count"],
-                "duration": time.time() - info["start_time"],
-                "last_activity": info.get("last_activity", info["start_time"])
-            })
-        
-        return sorted(sessions, key=lambda x: x["last_activity"], reverse=True)
+Please consult with a healthcare professional for proper diagnosis and treatment recommendations specific to your situation.
 
-    def close_session(self, session_id: str) -> bool:
-        """Close a session"""
+[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]"""
         
-        # Close in ChatbotManager
-        closed = self.chatbot.close_session(session_id)
-        
-        # Remove from tracking
-        if session_id in self.active_sessions:
-            del self.active_sessions[session_id]
-            logger.info(f"Closed session: {session_id}")
-        
-        return closed
+        elif domain == "psychologist":
+            return f"""From a psychological perspective, I understand your concerns and want to provide you with helpful insights.
 
-    def export_session(self, session_id: str) -> str:
-        """Export session to JSON"""
-        return self.chatbot.export_session_json(session_id)
+It's important to approach this with empathy and evidence-based psychological understanding.
 
-    def export_all_sessions(self) -> str:
-        """Export all sessions to JSON"""
-        return self.chatbot.export_all_sessions_json()
+Please remember that while I can provide general psychological information and support, professional psychological consultation is recommended for personalized mental health care.
+
+[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]"""
+        
+        else:  # general
+            return f"""I'll do my best to provide you with helpful and accurate information on this topic.
+
+[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]
+
+Let me know if you need clarification on any aspect of my response."""
+
+    def _generate_reasoning(self, 
+                          user_message: str, 
+                          response: str, 
+                          domain: str, 
+                          flags: Dict[str, Any]) -> str:
+        """
+        Generate reasoning/chain of thoughts for the response.
+        """
+        reasoning = f"""Domain Analysis: Determined '{domain}' expertise based on message content and context.
+
+API Configuration: Using {self.api_provider.value.upper()} with temperature {flags.get('temperature', 0.7)}.
+
+Response Strategy: Applied {domain} expertise with appropriate professional boundaries and ethical considerations.
+
+Key Considerations: 
+- Maintained professional standards for {domain} domain
+- Emphasized need for professional consultation where appropriate  
+- Provided evidence-based information within scope of AI capabilities
+
+Message Processing: Successfully processed {len(user_message)} character input and generated {len(response)} character response."""
+
+        return reasoning
+
+    # =========================================================================
+    # Additional utility methods
+    # =========================================================================
 
     def add_custom_expertise(self, domain: str, config: ExpertiseConfig) -> bool:
         """Add a custom expertise domain"""
@@ -344,19 +455,23 @@ class UniversalExpertAgent:
         """Get list of available expertise domains"""
         return list(self.expertise_domains.keys())
 
-    def cleanup_old_sessions(self, days_old: int = 7) -> int:
-        """Clean up old sessions"""
-        count = self.chatbot.cleanup_old_sessions(days_old)
-        
-        # Clean up tracking for non-existent sessions
-        current_sessions = {s["session_id"] for s in self.chatbot.list_sessions(active_only=False)}
-        to_remove = [sid for sid in self.active_sessions.keys() if sid not in current_sessions]
-        
-        for sid in to_remove:
-            del self.active_sessions[sid]
-        
-        logger.info(f"Cleaned up {count} old sessions, removed {len(to_remove)} from tracking")
-        return count
+    def switch_api_provider(self, provider: Union[str, APIProvider], api_key: Optional[str] = None) -> bool:
+        """Switch API provider"""
+        try:
+            new_provider = APIProvider(provider) if isinstance(provider, str) else provider
+            new_api_key = api_key or self._get_api_key_from_env(new_provider)
+            
+            if not new_api_key:
+                logger.warning(f"No API key available for {new_provider.value}")
+                return False
+            
+            self.api_provider = new_provider
+            self.api_key = new_api_key
+            logger.info(f"Switched to {new_provider.value} API provider")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to switch API provider: {e}")
+            return False
 
 
 # Convenience factory functions - now auto-load API keys from .env
@@ -385,50 +500,19 @@ def create_sealion_agent(api_key: Optional[str] = None, **kwargs) -> UniversalEx
     )
 
 
-# Example usage
+# Example usage with ChatbotManager integration
 if __name__ == "__main__":
-    # Example of how to use the Universal Expert Agent
+    # The agent can now be used directly with ChatbotManager
+    # without importing ChatbotManager in this file
     
-    # Create agent with auto-loaded API keys from .env
-    agent = create_gpt_agent(log_level="INFO")  # Will use OPENAI_API_KEY from .env
+    agent = create_gpt_agent(log_level="INFO")
+    print("Available domains:", agent.get_available_domains())
     
-    # Or create with specific provider
-    # agent = create_gemini_agent()  # Uses GEMINI_API_KEY from .env
-    # agent = create_sealion_agent()  # Uses SEA_LION_API_KEY from .env
+    # Test domain determination
+    medical_msg = "I have been experiencing chest pain and shortness of breath"
+    flags = agent.get_flags_from_supervisor([], medical_msg, "", [])
+    print("Medical message flags:", flags)
     
-    # Start a doctor expertise session
-    doctor_session = agent.start_conversation(
-        expertise_domain="doctor",
-        initial_context="Patient consultation context",
-        custom_instructions=["Focus on evidence-based medical recommendations"]
-    )
-    
-    # Ask medical questions
-    response1 = agent.ask(doctor_session, "What are the symptoms and treatment options for hypertension?")
-    print("Doctor Response:", response1)
-    
-    # Switch to psychology expertise mid-conversation
-    agent.switch_expertise(doctor_session, "psychologist")
-    response2 = agent.ask(doctor_session, "How does chronic stress affect mental health and what coping strategies would you recommend?")
-    print("Psychologist Response:", response2)
-    
-    # Start a separate psychology session
-    psychology_session = agent.start_conversation(
-        expertise_domain="psychologist",
-        initial_context="Mental health counseling session"
-    )
-    
-    response3 = agent.ask(psychology_session, "Can you explain cognitive behavioral therapy and its applications?")
-    print("Psychology Response:", response3)
-    
-    # List all active sessions
-    sessions = agent.list_active_sessions()
-    print("Active Sessions:", sessions)
-    
-    # Export a session
-    export_path = agent.export_session(doctor_session)
-    print("Exported to:", export_path)
-    
-    # Close sessions
-    agent.close_session(doctor_session)
-    agent.close_session(psychology_session)
+    psychology_msg = "I've been feeling very anxious and stressed lately"
+    flags = agent.get_flags_from_supervisor([], psychology_msg, "", [])
+    print("Psychology message flags:", flags)

@@ -14,8 +14,8 @@ from typing import Optional, Dict, List, Any
 from functools import wraps
 from contextvars import ContextVar
 
-# Keep your orchestrator import AS-IS to avoid ripples.
-from kallam.domain.agents.Unified_Dataset_Orchestrator import UnifiedDatasetOrchestrator as Orchestrator
+# Import the single agent instead of the orchestrator
+from .single_agent import UniversalExpertAgent
 
 from kallam.infra.session_store import SessionStore
 from kallam.infra.message_store import MessageStore
@@ -100,20 +100,26 @@ class SessionStats:
 class ChatbotManager:
     """
     Backward-compatible facade. Same constructor and methods as your original class.
-    Under the hood we delegate to infra stores and the orchestrator.
+    Under the hood we delegate to infra stores and the single agent (instead of orchestrator).
     """
 
     def __init__(self,
+                 # Agent configuration
+                 agent: Optional[UniversalExpertAgent] = None,
+                 api_provider: str = "gpt",
+                 api_key: Optional[str] = None,
+                 # Database and processing configuration  
                  db_path: str = "chatbot_single_llm_data.db",
                  summarize_every_n_messages: int = 10,
                  message_limit: int = 10,
-                 sunmmary_limit: int = 20,
+                 summary_limit: int = 20,
                  chain_of_thoughts_limit: int = 5,
                  # logging knobs
                  log_level: Optional[str] = None,
                  log_json: bool = False,
                  log_name: str = "kallam.chatbot",
                  trace_level: int = logging.INFO):
+        
         if summarize_every_n_messages <= 0:
             raise ValueError("summarize_every_n_messages must be positive")
         if message_limit <= 0:
@@ -124,10 +130,26 @@ class ChatbotManager:
         logger = _setup_logging(level=log_level, json_mode=log_json, logger_name=log_name)
         self._trace_level = trace_level
 
-        self.orchestrator = Orchestrator()
+        # Initialize the single agent (either provided or create new one)
+        if agent is not None:
+            self.agent = agent
+            logger.info("Using provided UniversalExpertAgent instance")
+        else:
+            # Create new agent based on api_provider
+            from .single_agent import create_gpt_agent, create_gemini_agent, create_sealion_agent
+            
+            if api_provider.lower() == "gemini":
+                self.agent = create_gemini_agent(api_key=api_key, log_level=log_level or "INFO")
+            elif api_provider.lower() == "sealion":
+                self.agent = create_sealion_agent(api_key=api_key, log_level=log_level or "INFO")
+            else:  # default to GPT
+                self.agent = create_gpt_agent(api_key=api_key, log_level=log_level or "INFO")
+            
+            logger.info(f"Created new {api_provider} agent")
+
         self.sum_every_n = summarize_every_n_messages
         self.message_limit = message_limit
-        self.summary_limit = sunmmary_limit
+        self.summary_limit = summary_limit
         self.chain_of_thoughts_limit = chain_of_thoughts_limit
         self.db_path = Path(db_path)
         self.lock = threading.RLock()
@@ -275,19 +297,19 @@ class ChatbotManager:
                     len(eng_history or []), len(eng_summaries or []), len(chain or []), len(memory_context),
                 )
 
-            # flags and translation
+            # flags and translation - now using the single agent
             flags = self._get_flags_dict(session_id, user_message)
             if logger.isEnabledFor(logging.DEBUG):
                 # keep flags concise if large
                 short_flags = {k: (v if isinstance(v, (int, float, bool, str)) else "…") for k, v in (flags or {}).items()}
                 logger.debug(f"flags: {short_flags}")
 
-            eng_msg = self.orchestrator.get_translation(
+            eng_msg = self.agent.get_translation(
                 message=user_message, flags=flags, translation_type="forward"
             )
 
-            # respond
-            response_commentary = self.orchestrator.get_commented_response(
+            # respond using the single agent
+            response_commentary = self.agent.get_commented_response(
                 original_history=original_history,
                 original_message=user_message,
                 eng_history=eng_history,
@@ -299,7 +321,7 @@ class ChatbotManager:
             )
 
             bot_message = response_commentary["final_output"]
-            bot_eng = self.orchestrator.get_translation(
+            bot_eng = self.agent.get_translation(
                 message=bot_message, flags=flags, translation_type="forward"
             )
             latency_ms = int((time.time() - t0) * 1000)
@@ -331,13 +353,13 @@ class ChatbotManager:
     def _get_flags_dict(self, session_id: str, user_message: str) -> Dict[str, Any]:
         self._validate_inputs(session_id=session_id)
         try:
-            # Build context Supervisor expects
+            # Build context that the single agent expects
             chat_history = self.messages.get_translated_history(session_id, limit=self.message_limit) or []
             summaries = self.summaries.list(session_id, limit=self.message_limit) or []
             meta = self.sessions.get_meta(session_id) or {}
             memory_context = (meta.get("saved_memories") or "") if isinstance(meta, dict) else ""
 
-            flags = self.orchestrator.get_flags_from_supervisor(
+            flags = self.agent.get_flags_from_supervisor(
                 chat_history=chat_history,
                 user_message=user_message,
                 memory_context=memory_context,
@@ -345,9 +367,9 @@ class ChatbotManager:
             )
             return flags
         except Exception as e:
-            logger.warning(f"Failed to get flags from supervisor: {e}, using safe defaults")
+            logger.warning(f"Failed to get flags from agent: {e}, using safe defaults")
             # Safe defaults keep the pipeline alive
-            return {"language": "invalid", "doctor": False, "psychologist": False}
+            return {"language": "english", "doctor": False, "psychologist": False, "expertise_domain": "general"}
 
     @_with_trace()
     def summarize_session(self, session_id: str) -> str:
@@ -355,7 +377,9 @@ class ChatbotManager:
         if not eng_history:
             raise ValueError("No chat history found for session")
         eng_summaries = self.summaries.list(session_id)
-        eng_summary = self.orchestrator.summarize_history(
+        
+        # Use the single agent for summarization
+        eng_summary = self.agent.summarize_history(
             chat_history=eng_history, eng_summaries=eng_summaries
         )
         self.summaries.add(session_id, eng_summary)
@@ -410,3 +434,155 @@ class ChatbotManager:
         path = self.exporter.export_all_sessions_json()
         logger.info(f"exported session to {path}")
         return path
+
+    # ---------- Agent-specific methods ----------
+    @_with_trace()
+    def switch_expertise_domain(self, session_id: str, domain: str) -> bool:
+        """
+        Switch the expertise domain for a session by updating the saved_memories context.
+        This allows the agent to adapt its expertise for subsequent messages.
+        """
+        if not self.get_session(session_id):
+            raise ValueError(f"Session {session_id} not found")
+
+        available_domains = self.agent.get_available_domains()
+        if domain not in available_domains:
+            logger.warning(f"Domain '{domain}' not available. Available: {available_domains}")
+            return False
+
+        # Update the session's saved memories with new domain context
+        domain_config = self.agent.expertise_domains.get(domain)
+        if not domain_config:
+            return False
+
+        new_context = f"""
+EXPERTISE DOMAIN SWITCH: {domain.upper()}
+
+System Prompt: {domain_config.system_prompt}
+
+Special Instructions:
+{chr(10).join(f"- {inst}" for inst in domain_config.special_instructions)}
+
+Switched at: {datetime.now().isoformat()}
+Temperature: {domain_config.temperature}
+Max Tokens: {domain_config.max_tokens}
+
+Please adapt all subsequent responses to reflect expertise in {domain}.
+        """.strip()
+
+        # Update session memories
+        try:
+            # This would require extending SessionStore to support updates
+            # For now, we'll log the switch
+            logger.info(f"Switched expertise to '{domain}' for session {session_id}")
+            
+            # Add a system message to indicate the switch
+            self.messages.append_assistant(
+                session_id=session_id,
+                content=f"[System: Expertise switched to {domain}]",
+                translated=f"[System: Expertise switched to {domain}]",
+                reasoning={"domain_switch": domain, "timestamp": datetime.now().isoformat()},
+                tokens_out=0
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Failed to switch expertise domain: {e}")
+            return False
+
+    def get_agent_info(self) -> Dict[str, Any]:
+        """Get information about the current agent configuration"""
+        return {
+            "api_provider": self.agent.api_provider.value,
+            "available_domains": self.agent.get_available_domains(),
+            "current_domain": getattr(self.agent, 'current_domain', 'general'),
+            "has_api_key": bool(self.agent.api_key)
+        }
+
+    def get_available_expertise_domains(self) -> List[str]:
+        """Get list of available expertise domains"""
+        return self.agent.get_available_domains()
+
+    def add_custom_expertise_domain(self, domain: str, system_prompt: str, 
+                                  temperature: float = 0.7, max_tokens: int = 4000,
+                                  special_instructions: Optional[List[str]] = None) -> bool:
+        """Add a custom expertise domain to the agent"""
+        from .single_agent import ExpertiseConfig
+        
+        config = ExpertiseConfig(
+            domain=domain,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            special_instructions=special_instructions or []
+        )
+        
+        success = self.agent.add_custom_expertise(domain, config)
+        if success:
+            logger.info(f"Added custom expertise domain '{domain}' to ChatbotManager")
+        return success
+
+
+# Convenience factory functions that create ChatbotManager with specific agents
+def create_chatbot_with_gemini(api_key: Optional[str] = None, **kwargs) -> ChatbotManager:
+    """Create ChatbotManager with Gemini agent"""
+    return ChatbotManager(api_provider="gemini", api_key=api_key, **kwargs)
+
+def create_chatbot_with_gpt(api_key: Optional[str] = None, **kwargs) -> ChatbotManager:
+    """Create ChatbotManager with GPT agent"""
+    return ChatbotManager(api_provider="gpt", api_key=api_key, **kwargs)
+
+def create_chatbot_with_sealion(api_key: Optional[str] = None, **kwargs) -> ChatbotManager:
+    """Create ChatbotManager with SeaLion agent"""
+    return ChatbotManager(api_provider="sealion", api_key=api_key, **kwargs)
+
+
+# Example usage
+if __name__ == "__main__":
+    # Example of the new architecture
+    
+    # Create ChatbotManager with auto-configured agent
+    chatbot = create_chatbot_with_gpt(log_level="INFO")  # Uses OPENAI_API_KEY from .env
+    
+    # Or create with custom agent
+    from .single_agent import create_gemini_agent
+    custom_agent = create_gemini_agent()  # Uses GEMINI_API_KEY from .env
+    chatbot_custom = ChatbotManager(agent=custom_agent)
+    
+    # Start a session
+    session_id = chatbot.start_session(saved_memories="Medical consultation context")
+    
+    # Get agent info
+    agent_info = chatbot.get_agent_info()
+    print("Agent Info:", agent_info)
+    
+    # Handle a medical question
+    response = chatbot.handle_message(session_id, "What are the symptoms of diabetes?")
+    print("Medical Response:", response)
+    
+    # Switch expertise domain
+    success = chatbot.switch_expertise_domain(session_id, "psychologist")
+    print("Domain switch success:", success)
+    
+    # Ask a psychology question
+    response = chatbot.handle_message(session_id, "How can I manage stress and anxiety?")
+    print("Psychology Response:", response)
+    
+    # Add custom domain
+    custom_success = chatbot.add_custom_expertise_domain(
+        domain="lawyer",
+        system_prompt="You are an expert lawyer with comprehensive knowledge of law and legal practice.",
+        special_instructions=["Always recommend consulting with qualified legal professionals"]
+    )
+    print("Custom domain added:", custom_success)
+    
+    # List available domains
+    domains = chatbot.get_available_expertise_domains()
+    print("Available domains:", domains)
+    
+    # Export session
+    export_path = chatbot.export_session_json(session_id)
+    print("Session exported to:", export_path)
+    
+    # Close session
+    chatbot.close_session(session_id)
