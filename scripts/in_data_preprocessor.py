@@ -9,7 +9,7 @@ from datetime import datetime
 
 # Defaults 
 DEFAULT_IN = Path("exported_sessions/all_sessions.json")
-DEFAULT_OUT = Path("data/orchestrated/pre_annotate.json")
+DEFAULT_OUT = Path("data/orchestrated/pre_annotate.jsonl")
 
 ROLE_MAP = {
     "user": "Client",
