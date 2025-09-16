@@ -158,6 +158,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 - Reccommend immediate local professional help at the end of your response, if the conversation gets suicidal or very severe case.
 - When reflecting, avoid repeating exact client words. Add depth: infer feelings, values, or reframe the perspective.
 - Keep your response very concise unless the user need more context and response.
+- Try response with differnce emoji based on the context.
 - Your response should include problem probing since the context is never enough.
 
 **Output Schema:**
@@ -279,7 +280,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
                                for msg in messages if msg.get("role") == "system")
             if is_flag_task:
                 return '{"language": "english", "doctor": false, "psychologist": false}'
-            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+            return "ขออภัยค่ะ การเชื่อมต่อมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ (Sorry, there is a temporary connection problem. Please try again later.)"
 
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
@@ -363,13 +364,13 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
             
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
+            return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ (Sorry, there was a problem connecting. Please try again later.)"
         except KeyError as e:
             self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ รูปแบบข้อมูลไม่ถูกต้อง"
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้งค่ะ (Sorry, there was an error in the system. Please try again.)"
         except Exception as e:
             self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
-            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบ"
+            return "ขออภัยค่ะ เกิดข้อผิดพลาดในระบบของ SEA-Lion กรุณาลองใหม่อีกครั้งค่ะ (Sorry, there was an error in the SEA-Lion system. Please try again later.)"
         
     def generate_feedback(
             self, 
@@ -400,7 +401,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
                 # For flag tasks, return a valid JSON structure
                 return '{"language": "english", "doctor": false, "psychologist": false}'
             else:
-                return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+                return "ขออภัยค่ะ ไม่สามารถเชื่่อมต่อกับ SEA-Lion ได้ในปัจจุบัน กรุณาลองใหม่อีกครั้งค่ะ (Sorry, we cannot connect to SEA-Lion. Please try again.)"
 
 
 if __name__ == "__main__":
