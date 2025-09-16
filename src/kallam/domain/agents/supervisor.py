@@ -22,12 +22,12 @@ class SupervisorAgent:
 
         self.system_prompt = """
 **Your Role:** 
-You are "KaLLaM" or "กะหล่ำ" with a nickname "Kabby" You are a warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. 
+You are "KaLLaM" or "กะหล่ำ" with a nickname "Kabby" You are a Thai, warm, friendly, female, doctor, psychiatrist, chatbot specializing in analyzing and improving patient's physical and mental health. 
 Your goal is to provide actionable guidance that motivates patients to take better care of themselves.
 
 **Core Rules:**
 - You are the supervisor agent that handle multiple agents
-- You **ALWAYS** need to respond with the language the user used (English or Thai)
+- You **ALWAYS** respond with the same language as the user.
 """
 
     def _setup_logging(self, log_level: int) -> None:
@@ -151,7 +151,6 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 {context_info}
 
 **Specific Task:**
-- You can only use the same language the user used in your response with no exception.
 - You are a professional medical advisor.
 - Read the given context and response throughly.
 - Response concisely and short according to most recommendation from the commentary of each agents (may or maynot given).
@@ -159,6 +158,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 - When reflecting, avoid repeating exact client words. Add depth: infer feelings, values, or reframe the perspective.
 - Keep your response very concise unless the user need more context and response.
 - Your response should include problem probing since the context is never enough.
+- Do not include your thinking and planning to the response.
 """
             }
         
@@ -290,13 +290,13 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
                 "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
                 "messages": messages,
                 "chat_template_kwargs": {
-                    "thinking_mode": "on"
+                    "thinking_mode": "off"
                 },
                 "max_tokens": 2000,  # for thinking and answering
                 "temperature": 0.4,
                 "top_p": 0.9,
-                "frequency_penalty": 0.1,  # prevent repetition
-                "presence_penalty": 0.1    # Encourage new topics
+                "frequency_penalty": 0.2,  # prevent repetition
+                "presence_penalty": 0.2    # Encourage new topics
             }
             
             response = requests.post(
@@ -312,23 +312,23 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
             # Check if response has expected structure
             if "choices" not in response_data or len(response_data["choices"]) == 0:
                 self.logger.error(f"Unexpected response structure: {response_data}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return f"Unexpected response structure: {response_data}. Please try again later."
             
             choice = response_data["choices"][0]
             if "message" not in choice or "content" not in choice["message"]:
                 self.logger.error(f"Unexpected message structure: {choice}")
-                return "ขออภัยค่ะ ไม่สามารถประมวลผลคำตอบได้ในขณะนี้"
+                return f"Unexpected message structure: {choice}. Please try again later."
                 
             raw_content = choice["message"]["content"]
             
             # Check if response is None or empty
             if raw_content is None:
                 self.logger.error("SEA-Lion API returned None content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+                return "SEA-Lion API returned None content"
             
             if isinstance(raw_content, str) and raw_content.strip() == "":
                 self.logger.error("SEA-Lion API returned empty content")
-                return "ขออภัยค่ะ ไม่สามารถสร้างคำตอบได้ในขณะนี้"
+                return "SEA-Lion API returned empty content"
             
             is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "") 
                         for msg in messages if msg.get("role") == "system")
