@@ -184,34 +184,6 @@ class UniversalExpertAgent:
         # and perform actual translation. For now, we pass through.
         return message
 
-    def get_flags_from_supervisor(self, 
-                                chat_history: List[Dict[str, Any]], 
-                                user_message: str,
-                                memory_context: str,
-                                summarized_histories: List[str]) -> Dict[str, Any]:
-        """
-        Analyze the conversation context and determine appropriate flags.
-        This replaces the supervisor's role in determining expertise domain and other parameters.
-        """
-        # Analyze message content to determine expertise domain
-        domain = self._determine_expertise_domain(user_message, chat_history, memory_context)
-        
-        # Build flags that ChatbotManager expects
-        flags = {
-            "language": "english",  # Default to English for now
-            "doctor": domain == "doctor",
-            "psychologist": domain == "psychologist",
-            "expertise_domain": domain,
-            "api_provider": self.api_provider.value,
-            "temperature": self.expertise_domains[domain].temperature,
-            "max_tokens": self.expertise_domains[domain].max_tokens
-        }
-        
-        # Store current domain for response generation
-        self.current_domain = domain
-        
-        return flags
-
     def get_commented_response(self, 
                              original_history: List[Dict[str, Any]],
                              original_message: str,
@@ -405,67 +377,83 @@ class UniversalExpertAgent:
         return "\n".join(context_parts)
 
     def _generate_response(self, 
-                         context: str, 
-                         config: ExpertiseConfig, 
-                         flags: Dict[str, Any]) -> str:
+                        context: str, 
+                        config: ExpertiseConfig, 
+                        flags: Dict[str, Any]) -> str:
         """
         Generate response using the configured AI API.
-        This is a placeholder - implement actual API calls based on self.api_provider.
+        Falls back to GPT if no other provider is set up.
         """
+
+        try:
+            if self.api_provider == APIProvider.GPT:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o-mini",   # or "gpt-4o" if you want full GPT-4
+                    messages=[
+                        {"role": "system", "content": config.system_prompt},
+                        {"role": "user", "content": context}
+                    ],
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens
+                )
+                return response["choices"][0]["message"]["content"].strip()
+
+            elif self.api_provider == APIProvider.GEMINI:
+                model = genai.GenerativeModel("gemini-pro")
+                result = model.generate_content(context)
+                return result.text
+
+            elif self.api_provider == APIProvider.SEALION:
+                url = "https://api.sealion.ai/v1/generate"
+                headers = {"Authorization": f"Bearer {self.api_key}"}
+                payload = {
+                    "prompt": context,
+                    "temperature": config.temperature,
+                    "max_tokens": config.max_tokens
+                }
+                r = requests.post(url, headers=headers, json=payload, timeout=30)
+                r.raise_for_status()
+                return r.json().get("text", "").strip()
+
+            else:
+                # Default fallback to GPT if unknown
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": config.system_prompt},
+                        {"role": "user", "content": context}
+                    ],
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens
+                )
+                return response["choices"][0]["message"]["content"].strip()
+
+        except Exception as e:
+            return f"Error generating response with {self.api_provider.value}: {str(e)}"
         
-        # TODO: Implement actual API calls to Gemini, GPT, or SeaLion
-        # For now, return a simulated response
-        
-        domain = config.domain
-        
-        # Simulate different responses based on domain
-        if domain == "doctor":
-            return f"""Based on your medical query, I need to provide you with evidence-based medical information. 
-
-However, I must emphasize that this is for informational purposes only and cannot replace professional medical consultation. 
-
-Please consult with a healthcare professional for proper diagnosis and treatment recommendations specific to your situation.
-
-[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]"""
-        
-        elif domain == "psychologist":
-            return f"""From a psychological perspective, I understand your concerns and want to provide you with helpful insights.
-
-It's important to approach this with empathy and evidence-based psychological understanding.
-
-Please remember that while I can provide general psychological information and support, professional psychological consultation is recommended for personalized mental health care.
-
-[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]"""
-        
-        else:  # general
-            return f"""I'll do my best to provide you with helpful and accurate information on this topic.
-
-[This is a simulated response - implement actual {self.api_provider.value.upper()} API integration]
-
-Let me know if you need clarification on any aspect of my response."""
-
     def _generate_reasoning(self, 
-                          user_message: str, 
-                          response: str, 
-                          domain: str, 
-                          flags: Dict[str, Any]) -> str:
+                            user_message: str, 
+                            response: str, 
+                            domain: str, 
+                            flags: Dict[str, Any]) -> str:
         """
         Generate reasoning/chain of thoughts for the response.
         """
         reasoning = f"""Domain Analysis: Determined '{domain}' expertise based on message content and context.
 
-API Configuration: Using {self.api_provider.value.upper()} with temperature {flags.get('temperature', 0.7)}.
+    API Configuration: Using {self.api_provider.value.upper()} with temperature {flags.get('temperature', 0.7)}.
 
-Response Strategy: Applied {domain} expertise with appropriate professional boundaries and ethical considerations.
+    Response Strategy: Applied {domain} expertise with appropriate professional boundaries and ethical considerations.
 
-Key Considerations: 
-- Maintained professional standards for {domain} domain
-- Emphasized need for professional consultation where appropriate  
-- Provided evidence-based information within scope of AI capabilities
+    Key Considerations:
+    - Maintained professional standards for {domain} domain
+    - Emphasized need for professional consultation where appropriate
+    - Provided evidence-based information within scope of AI capabilities
 
-Message Processing: Successfully processed {len(user_message)} character input and generated {len(response)} character response."""
-
+    Message Processing: Successfully processed {len(user_message)} character input and generated {len(response)} character response."""
+        
         return reasoning
+
 
     # =========================================================================
     # Additional utility methods
