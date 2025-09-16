@@ -44,9 +44,10 @@ def _session_status(session_id: str) -> str:
     
     try:
         # Use same method as simple app
+        now = datetime.now()
         s = mgr.get_session(session_id) or {}
-        ts = s.get("timestamp", "N/A")
-        model = s.get("model_used", "N/A")
+        ts = s.get("timestamp", now.strftime("%d %b %Y | %I:%M %p"))
+        model = s.get("model_used", "Orchestrated SEA-Lion")
         total = s.get("total_messages", 0)
         saved_memories = s.get("saved_memories") or "General consultation"
         
@@ -184,10 +185,10 @@ def unlock_inputs():
     return gr.update(interactive=True), gr.update(interactive=True)
 
 # -----------------------
-# UI with improved architecture and greenish cream styling
+# UI with improved architecture and greenish cream styling - LIGHT MODE DEFAULT
 # -----------------------
 def create_app() -> gr.Blocks:
-    # Enhanced CSS with greenish cream color scheme and fixed positioning
+    # Enhanced CSS with greenish cream color scheme, fixed positioning, and light mode defaults
     custom_css = """
     :root {
         --kallam-primary: #659435;
@@ -204,14 +205,33 @@ def create_app() -> gr.Blocks:
         --transition: all 0.3s ease;
     }
 
-    .dark {
-        --kallam-light: #1a2332;
-        --kallam-dark: #ffffff;
-        --kallam-cream: #2a3a2f;
-        --kallam-green-cream: #243329;
-        --kallam-border-cream: #3a4d3f;
-        --shadow-soft: 0 4px 6px -1px rgba(255, 255, 255, 0.1), 0 2px 4px -1px rgba(255, 255, 255, 0.06);
-        --shadow-medium: 0 10px 15px -3px rgba(255, 255, 255, 0.1), 0 4px 6px -2px rgba(255, 255, 255, 0.05);
+    /* Force light mode styles - Override any dark mode defaults */
+    body, .gradio-container, .app {
+        background-color: #ffffff !important;
+        color: #2d3748 !important;
+    }
+
+    /* Ensure light backgrounds for all major containers */
+    .block, .form, .gap {
+        background-color: #ffffff !important;
+        color: #2d3748 !important;
+    }
+
+    /* Light mode for input elements */
+    input, textarea, select {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        color: #2d3748 !important;
+    }
+
+    input:focus, textarea:focus, select:focus {
+        border-color: var(--kallam-primary) !important;
+        box-shadow: 0 0 0 3px rgba(101, 148, 53, 0.1) !important;
+    }
+
+    /* Ensure dark mode styles don't override in light mode */
+    html:not(.dark) .dark {
+        display: none !important;
     }
 
     .gradio-container {
@@ -219,6 +239,7 @@ def create_app() -> gr.Blocks:
         width: 100% !important;
         margin: 0 auto !important;
         min-height: 100vh;
+        background-color: #ffffff !important;
     }
 
     .main-layout {
@@ -231,7 +252,7 @@ def create_app() -> gr.Blocks:
         width: 320px !important;
         min-width: 320px !important;
         max-width: 320px !important;
-        background: white !important;
+        background: #ffffff !important;
         backdrop-filter: blur(10px) !important;
         border-radius: var(--border-radius) !important;
         border: 3px solid var(--kallam-primary) !important;
@@ -298,9 +319,9 @@ def create_app() -> gr.Blocks:
     }
 
     .btn.btn-secondary {
-        background: var(--background-fill-secondary) !important;
-        color: var(--body-text-color) !important;
-        border: 1px solid var(--border-color-primary) !important;
+        background: #f8f9fa !important;
+        color: #2d3748 !important;
+        border: 1px solid #d1d5db !important;
     }
 
     .chat-container {
@@ -334,10 +355,54 @@ def create_app() -> gr.Blocks:
     }
     """
 
+    # Create a light theme with explicit light mode settings
+    light_theme = gr.themes.Soft(
+        primary_hue="green", 
+        secondary_hue="blue", 
+        neutral_hue="slate"
+    ).set(
+        # Force light mode colors
+        body_background_fill="white",
+        body_text_color="#2d3748",
+        background_fill_primary="white",
+        background_fill_secondary="#f8f9fa",
+        border_color_primary="#d1d5db",
+        border_color_accent="#659435",
+        button_primary_background_fill="#659435",
+        button_primary_text_color="white",
+        button_secondary_background_fill="#f8f9fa",
+        button_secondary_text_color="#2d3748"
+    )
+
     with gr.Blocks(
         title="🥬 KaLLaM - Thai Motivational Therapeutic Advisor",
-        theme=gr.themes.Soft(primary_hue="green", secondary_hue="blue", neutral_hue="slate"), # type: ignore
+        theme=light_theme,
         css=custom_css,
+        js="""
+        function() {
+            // Force light mode on load by removing any dark classes and setting light preferences
+            document.documentElement.classList.remove('dark');
+            document.body.classList.remove('dark');
+            
+            // Set data attributes for light mode
+            document.documentElement.setAttribute('data-theme', 'light');
+            
+            // Override any system preferences for dark mode
+            const style = document.createElement('style');
+            style.textContent = `
+                @media (prefers-color-scheme: dark) {
+                    :root {
+                        color-scheme: light !important;
+                    }
+                    body, .gradio-container {
+                        background-color: white !important;
+                        color: #2d3748 !important;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        """
     ) as app:
         
         # State management - same as simple app
@@ -374,7 +439,7 @@ def create_app() -> gr.Blocks:
                 
                 # Hidden health profile section
                 with gr.Column(visible=False) as health_profile_section:
-                    gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid var(--border-color-primary);"></div>')
+                    gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid #d1d5db;"></div>')
                     
                     health_context = gr.Textbox(
                         label="🏥 Patient's Health Information",
@@ -388,7 +453,7 @@ def create_app() -> gr.Blocks:
                         update_profile_btn = gr.Button("💾 Update Health Profile", variant="primary", elem_classes=["btn", "btn-primary"])
                         back_btn = gr.Button("⏪ Back", variant="secondary", elem_classes=["btn", "btn-secondary"])
                 
-                gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid var(--border-color-primary);"></div>')
+                gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid #d1d5db;"></div>')
                 
                 # Session status
                 session_status = gr.Markdown(value="🔄 **Initializing...**")
@@ -424,7 +489,7 @@ def create_app() -> gr.Blocks:
                         send_btn = gr.Button("➤", variant="primary", size="lg", elem_classes=["btn", "btn-primary"])
 
         # Result display
-        result_display = gr.Markdown(visible=True)
+        result_display = gr.Markdown(visible=False)
 
         # Footer
         gr.HTML("""
@@ -600,7 +665,7 @@ def main():
         server_port=server_port,  # cloud: $PORT, local: 7860/8080
         debug=False,
         show_error=True,
-        inbrowser=False,
+        inbrowser=True
     )
 
 if __name__ == "__main__":
