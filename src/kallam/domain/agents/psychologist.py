@@ -207,7 +207,7 @@ class PsychologistAgent:
                 f"{self.sea_lion_base_url}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=90
             )
             
             response.raise_for_status()
