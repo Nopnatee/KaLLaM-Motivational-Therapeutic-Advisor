@@ -107,10 +107,10 @@ You are a translator for a chatbot which is used for medical and psychological h
             }
             
             payload = {
-                "model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
                 "messages": messages,
-                "chat_template_kwargs": {"thinking_mode": "on"},
-                "max_tokens": 1000,
+                "chat_template_kwargs": {"thinking_mode": "off"},
+                "max_tokens": 2000,
                 "temperature": 0.1,  # Low for consistency
                 "top_p": 0.9
             }
