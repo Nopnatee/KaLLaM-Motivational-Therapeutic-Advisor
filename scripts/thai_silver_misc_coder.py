@@ -52,8 +52,8 @@ except ImportError:
     def tqdm(iterable, *args, **kwargs):
         return iterable
 
-DEFAULT_IN_PATH = Path("data/orchestrated/pre_annotate.jsonl")
-DEFAULT_OUT_PATH = Path("data/orchestrated/post_annotate.jsonl")
+DEFAULT_IN_PATH = Path("data/gemini/pre_annotate.json") ###change these
+DEFAULT_OUT_PATH = Path("data/gemini/post_annotate.jsonl")  ###change these
 # ----------------------------
 # Environment & logging
 # ----------------------------

@@ -33,7 +33,7 @@ class ExpertiseConfig:
 
 class UniversalExpertAgent:
     def __init__(self,
-                 api_provider: Union[str, APIProvider] = APIProvider.GEMINI,
+                 api_provider: Union[str, APIProvider] = APIProvider.GPT, ##change here
                  api_key: Optional[str] = None,
                  log_level: str = "INFO"):
     
@@ -564,7 +564,7 @@ def create_gemini_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExp
 def create_gpt_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExpertAgent:
     """Create agent with GPT API - auto-loads from OPENAI_API_KEY if not provided"""
     return UniversalExpertAgent(
-        api_provider=APIProvider.GEMINI,
+        api_provider=APIProvider.GPT,
         api_key=api_key,  # Will auto-load from .env if None
         **kwargs
     )
@@ -576,77 +576,3 @@ def create_sealion_agent(api_key: Optional[str] = None, **kwargs) -> UniversalEx
         api_key=api_key,  # Will auto-load from .env if None
         **kwargs
     )
-
-
-# Example usage with ChatbotManager integration
-if __name__ == "__main__":
-    # The agent can now be used directly with ChatbotManager
-    # without importing ChatbotManager in this file
-    
-    # Create and test different API providers
-    print("=== Testing API Providers ===")
-    
-    # Test GPT agent
-    try:
-        gpt_agent = create_gpt_agent(log_level="INFO")
-        print(f"GPT Agent Status: {gpt_agent.get_api_status()}")
-        
-        if gpt_agent.api_key:
-            connection_test = gpt_agent.test_api_connection()
-            print(f"GPT Connection Test: {'✓' if connection_test else '✗'}")
-    except Exception as e:
-        print(f"GPT Agent Error: {e}")
-    
-    # Test Gemini agent
-    try:
-        gemini_agent = create_gemini_agent(log_level="INFO")
-        print(f"Gemini Agent Status: {gemini_agent.get_api_status()}")
-        
-        if gemini_agent.api_key:
-            connection_test = gemini_agent.test_api_connection()
-            print(f"Gemini Connection Test: {'✓' if connection_test else '✗'}")
-    except Exception as e:
-        print(f"Gemini Agent Error: {e}")
-    
-    # Test SeaLion agent
-    try:
-        sealion_agent = create_sealion_agent(log_level="INFO")
-        print(f"SeaLion Agent Status: {sealion_agent.get_api_status()}")
-        
-        if sealion_agent.api_key:
-            connection_test = sealion_agent.test_api_connection()
-            print(f"SeaLion Connection Test: {'✓' if connection_test else '✗'}")
-    except Exception as e:
-        print(f"SeaLion Agent Error: {e}")
-    
-    print("\n=== API Switching Demo ===")
-    
-    # Demonstrate API switching
-    agent = create_gpt_agent()
-    print(f"Started with: {agent.api_provider.value}")
-    
-    # Try to switch to Gemini
-    if agent.switch_api_provider("gemini"):
-        print(f"Switched to: {agent.api_provider.value}")
-        
-        # Try to switch back to GPT
-        if agent.switch_api_provider("gpt"):
-            print(f"Switched back to: {agent.api_provider.value}")
-    
-    print("\n=== Domain Detection Demo ===")
-    
-    # Test domain determination
-    test_messages = [
-        ("I have been experiencing chest pain and shortness of breath", "Expected: doctor"),
-        ("I've been feeling very anxious and stressed lately", "Expected: psychologist"),
-        ("What's the weather like today?", "Expected: general"),
-        ("Can you explain diabetes symptoms and treatment?", "Expected: doctor"),
-        ("How can I manage depression and mood swings?", "Expected: psychologist")
-    ]
-    
-    for msg, expected in test_messages:
-        flags = agent.get_flags_from_supervisor([], msg, "", [])
-        detected_domain = flags.get("expertise_domain", "unknown")
-        print(f"Message: '{msg[:50]}...'")
-        print(f"  Detected: {detected_domain} | {expected}")
-        print(f"  Flags: doctor={flags.get('doctor')}, psychologist={flags.get('psychologist')}")

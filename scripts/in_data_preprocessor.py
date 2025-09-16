@@ -8,8 +8,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Defaults 
-DEFAULT_IN = Path("exported_sessions/all_sessions.json")
-DEFAULT_OUT = Path("data/orchestrated/pre_annotate.json")
+DEFAULT_IN = Path("exported_sessions/raw_gemini.json")
+DEFAULT_OUT = Path("data/gemini/pre_annotate.json")
 
 ROLE_MAP = {
     "user": "Client",
