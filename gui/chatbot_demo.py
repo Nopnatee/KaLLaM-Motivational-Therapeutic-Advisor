@@ -652,7 +652,7 @@ def create_app() -> gr.Blocks:
 
     with gr.Blocks(
         title="🥬 KaLLaM - Thai Motivational Therapeutic Advisor",
-        theme=gr.themes.Soft(primary_hue="green", secondary_hue="blue", neutral_hue="slate"),
+        theme=gr.themes.Soft(primary_hue="green", secondary_hue="blue", neutral_hue="slate"), # type: ignore
         css=custom_css,
     ) as app:
         # Beautiful header section
