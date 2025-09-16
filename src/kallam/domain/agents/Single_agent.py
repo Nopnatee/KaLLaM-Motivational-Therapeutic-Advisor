@@ -387,15 +387,9 @@ class UniversalExpertAgent:
 
         try:
             if self.api_provider == APIProvider.GPT:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",   # or "gpt-4o" if you want full GPT-4
-                    messages=[
-                        {"role": "system", "content": config.system_prompt},
-                        {"role": "user", "content": context}
-                    ],
-                    temperature=config.temperature,
-                    max_tokens=config.max_tokens
-                )
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key)
+                logger.info("OpenAI client initialized")
                 return response["choices"][0]["message"]["content"].strip()
 
             elif self.api_provider == APIProvider.GEMINI:
