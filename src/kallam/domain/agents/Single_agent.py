@@ -1,4 +1,3 @@
-# src/your_pkg/app/single_agent.py
 from __future__ import annotations
 
 import json
@@ -17,96 +16,116 @@ load_dotenv()
 import openai
 import google.generativeai as genai
 import requests
-
 logger = logging.getLogger(__name__)
 
-
 class APIProvider(Enum):
-    """Supported API providers"""
     GEMINI = "gemini"
-    GPT = "gpt" 
+    GPT = "gpt"
     SEALION = "sealion"
-
 
 @dataclass
 class ExpertiseConfig:
-    """Configuration for different expertise domains"""
     domain: str
     system_prompt: str
     temperature: float = 0.7
     max_tokens: int = 4000
     special_instructions: List[str] = field(default_factory=list)
 
-
 class UniversalExpertAgent:
-    """
-    A single agent that can be an expert in any field.
-    This replaces the UnifiedDatasetOrchestrator in the architecture.
-    Provides all the methods that ChatbotManager expects from an orchestrator.
-    """
-    
-    def __init__(self, #############change api here#################
-                 api_provider: Union[str, APIProvider] = APIProvider.GPT,
+    def __init__(self,
+                 api_provider: Union[str, APIProvider] = APIProvider.GEMINI,
                  api_key: Optional[str] = None,
                  log_level: str = "INFO"):
-        
-        # API configuration - auto-load from environment if not provided
-        self.api_provider = APIProvider(api_provider) if isinstance(api_provider, str) else api_provider
-        self.api_key = api_key or self._get_api_key_from_env(self.api_provider)
-        
-        if not self.api_key:
-            logger.warning(f"No API key found for {self.api_provider.value}. Please set in .env file or pass directly.")
-        else:
-            # Initialize the API client based on provider
-            self._initialize_api_client()
-        
-        # Load expertise configurations
-        self.expertise_domains = self._load_expertise_configs()
-        
-        # Current domain context (can be switched per session via flags)
-        self.current_domain = "doctor"  # default
-        
-        logger.info(f"UniversalExpertAgent initialized with {self.api_provider.value} provider")
+    
+        logger.setLevel(log_level)
 
+        # API provider
+        self.api_provider = APIProvider(api_provider) if isinstance(api_provider, str) else api_provider
+
+        # --- Load all keys like orchestrator ---
+        self._openai_key = os.getenv("OPENAI_API_KEY")
+        self._gemini_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        self._sealion_key = os.getenv("SEALION_API_KEY")
+        self._sealion_url = os.getenv("SEALION_API_URL", "https://api.sealion.ai/v1/generate")
+
+        # choose api key based on provider
+        self.api_key = api_key or self._get_api_key_from_env(self.api_provider)
+
+        # Initialize API client
+        self._initialize_api_client()
+
+        # Load expertise configs
+        self.expertise_domains = self._load_expertise_configs()
+        self.current_domain = "doctor"
+
+        logger.info(f"UniversalExpertAgent initialized with provider {self.api_provider.value}")
+            
     def _get_api_key_from_env(self, provider: APIProvider) -> Optional[str]:
-        """Get API key from environment variables based on provider"""
-        env_keys = {
-            APIProvider.GEMINI: "GEMINI_API_KEY",
-            APIProvider.GPT: "OPENAI_API_KEY", 
-            APIProvider.SEALION: "SEA_LION_API_KEY"
-        }
-        
-        env_key = env_keys.get(provider)
-        if env_key:
-            api_key = os.getenv(env_key)
-            if api_key:
-                logger.info(f"Loaded {provider.value} API key from environment variable {env_key}")
-                return api_key
-            else:
-                logger.warning(f"Environment variable {env_key} not found for {provider.value}")
-        
+        if provider == APIProvider.GPT:
+            return self._openai_key
+        elif provider == APIProvider.GEMINI:
+            return self._gemini_key
+        elif provider == APIProvider.SEALION:
+            return self._sealion_key
         return None
+        
 
     def _initialize_api_client(self) -> None:
-        """Initialize the appropriate API client based on provider"""
+        """Initialize the appropriate API client like orchestrator does."""
         try:
             if self.api_provider == APIProvider.GPT:
+                if not self._openai_key:
+                    raise ValueError("OPENAI_API_KEY required for GPT provider")
                 from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
-                logger.info("OpenAI client initialized")
-                
+                self.client = OpenAI(api_key=self._openai_key)
+                logger.info("OpenAI GPT client initialized")
+
+
             elif self.api_provider == APIProvider.GEMINI:
-                genai.configure(api_key=self.api_key)
-                # Test the connection by listing models
+                if not self._gemini_key:
+                    raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY required for Gemini provider")
+                genai.configure(api_key=self._gemini_key)
+                # create default model like orchestrator
+                self.client = genai.GenerativeModel(
+                    model_name="gemini-2.5-flash-lite",
+                    generation_config={
+                        "temperature": 0.2,
+                        "max_output_tokens": 2000,
+                    },
+                )
                 logger.info("Gemini API client initialized")
-                
+
+
             elif self.api_provider == APIProvider.SEALION:
-                # SeaLion uses REST API calls
+                if not self._sealion_key:
+                    raise ValueError("SEALION_API_KEY required for SeaLion provider")
+                self.client = {
+                    "api_key": self._sealion_key,
+                    "api_url": self._sealion_url,
+                    "headers": {
+                        "Authorization": f"Bearer {self._sealion_key}",
+                        "Content-Type": "application/json",
+                    },
+                }
                 logger.info("SeaLion API client configured")
-                
+
+
         except Exception as e:
             logger.error(f"Failed to initialize {self.api_provider.value} API client: {e}")
             raise
+
+    def switch_api_provider(self, provider: Union[str, APIProvider], api_key: Optional[str] = None) -> bool:
+        """Switch API provider and reinitialize client easily."""
+        try:
+            new_provider = APIProvider(provider) if isinstance(provider, str) else provider
+            self.api_provider = new_provider
+            self.api_key = api_key or self._get_api_key_from_env(new_provider)
+            self._initialize_api_client()
+            logger.info(f"Switched to provider {self.api_provider.value}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to switch API provider: {e}")
+            return False
 
     def _load_expertise_configs(self) -> Dict[str, ExpertiseConfig]:
         """Load pre-configured expertise domains"""
@@ -399,7 +418,7 @@ class UniversalExpertAgent:
                 return response.choices[0].message.content.strip()
 
             elif self.api_provider == APIProvider.GEMINI:
-                model = genai.GenerativeModel("gemini-pro")
+                model = genai.GenerativeModel("gemini-2.5-flash-lite")
                 result = model.generate_content(context)
                 return result.text
 
@@ -545,7 +564,7 @@ def create_gemini_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExp
 def create_gpt_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExpertAgent:
     """Create agent with GPT API - auto-loads from OPENAI_API_KEY if not provided"""
     return UniversalExpertAgent(
-        api_provider=APIProvider.GPT,
+        api_provider=APIProvider.GEMINI,
         api_key=api_key,  # Will auto-load from .env if None
         **kwargs
     )
