@@ -15,7 +15,9 @@ from functools import wraps
 from contextvars import ContextVar
 
 # Import the single agent instead of the orchestrator
-from .single_agent import UniversalExpertAgent
+from kallam.domain.agents.Single_agent import UniversalExpertAgent as UniversalExpertAgent
+
+
 
 from kallam.infra.session_store import SessionStore
 from kallam.infra.message_store import MessageStore
@@ -136,7 +138,7 @@ class ChatbotManager:
             logger.info("Using provided UniversalExpertAgent instance")
         else:
             # Create new agent based on api_provider
-            from .single_agent import create_gpt_agent, create_gemini_agent, create_sealion_agent
+            from kallam.domain.agents.Single_agent import create_gpt_agent, create_gemini_agent, create_sealion_agent
             
             if api_provider.lower() == "gemini":
                 self.agent = create_gemini_agent(api_key=api_key, log_level=log_level or "INFO")
@@ -507,7 +509,7 @@ Please adapt all subsequent responses to reflect expertise in {domain}.
                                   temperature: float = 0.7, max_tokens: int = 4000,
                                   special_instructions: Optional[List[str]] = None) -> bool:
         """Add a custom expertise domain to the agent"""
-        from .single_agent import ExpertiseConfig
+        from kallam.domain.agents.Single_agent import ExpertiseConfig
         
         config = ExpertiseConfig(
             domain=domain,
@@ -545,7 +547,7 @@ if __name__ == "__main__":
     chatbot = create_chatbot_with_gpt(log_level="INFO")  # Uses OPENAI_API_KEY from .env
     
     # Or create with custom agent
-    from .single_agent import create_gemini_agent
+    from kallam.domain.agents.Single_agent import create_gemini_agent
     custom_agent = create_gemini_agent()  # Uses GEMINI_API_KEY from .env
     chatbot_custom = ChatbotManager(agent=custom_agent)
     
