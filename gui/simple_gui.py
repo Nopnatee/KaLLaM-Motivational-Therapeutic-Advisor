@@ -58,6 +58,14 @@ def force_summary(session_id: str):
         return f"📋 Summary updated:\n\n{s}"
     except Exception as e:
         return f"❌ Failed to summarize: {e}"
+    
+def lock_inputs():
+    # disable send + textbox
+    return gr.update(interactive=False), gr.update(interactive=False)
+
+def unlock_inputs():
+    # re-enable send + textbox
+    return gr.update(interactive=True), gr.update(interactive=True)
 
 # -----------------------
 # Gradio app
@@ -97,17 +105,38 @@ def create_app():
             return sid, history, "", status, note
         new_btn.click(_new, inputs=[saved_memories], outputs=[session_id, chat, msg, status_md, result_md])
 
-        # Send handling (button)
+        # Click flow: lock -> send -> unlock
         send.click(
-            send_message,
+            fn=lock_inputs,
+            inputs=None,
+            outputs=[send, msg],
+            queue=False,   # lock applies instantly
+        ).then(
+            fn=send_message,
             inputs=[msg, chat, session_id],
             outputs=[chat, msg, session_id, status_md],
+        ).then(
+            fn=unlock_inputs,
+            inputs=None,
+            outputs=[send, msg],
+            queue=False,
         )
-        # Send handling (enter)
+
+        # Enter/submit flow: same treatment
         msg.submit(
-            send_message,
+            fn=lock_inputs,
+            inputs=None,
+            outputs=[send, msg],
+            queue=False,
+        ).then(
+            fn=send_message,
             inputs=[msg, chat, session_id],
             outputs=[chat, msg, session_id, status_md],
+        ).then(
+            fn=unlock_inputs,
+            inputs=None,
+            outputs=[send, msg],
+            queue=False,
         )
 
     return demo
