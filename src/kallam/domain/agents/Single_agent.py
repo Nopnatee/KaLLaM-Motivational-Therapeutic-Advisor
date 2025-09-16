@@ -91,9 +91,9 @@ class UniversalExpertAgent:
         """Initialize the appropriate API client based on provider"""
         try:
             if self.api_provider == APIProvider.GPT:
-                openai.api_key = self.api_key
-                # Test the connection
-                logger.info("OpenAI API client initialized")
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key)
+                logger.info("OpenAI client initialized")
                 
             elif self.api_provider == APIProvider.GEMINI:
                 genai.configure(api_key=self.api_key)
@@ -384,13 +384,19 @@ class UniversalExpertAgent:
         Generate response using the configured AI API.
         Falls back to GPT if no other provider is set up.
         """
-
         try:
             if self.api_provider == APIProvider.GPT:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
-                logger.info("OpenAI client initialized")
-                return response["choices"][0]["message"]["content"].strip()
+                # Make sure client is initialized in _initialize_api_client
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",   # or "gpt-4o"
+                    messages=[
+                        {"role": "system", "content": config.system_prompt},
+                        {"role": "user", "content": context}
+                    ],
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens
+                )
+                return response.choices[0].message.content.strip()
 
             elif self.api_provider == APIProvider.GEMINI:
                 model = genai.GenerativeModel("gemini-pro")
@@ -410,21 +416,11 @@ class UniversalExpertAgent:
                 return r.json().get("text", "").strip()
 
             else:
-                # Default fallback to GPT if unknown
-                response = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": config.system_prompt},
-                        {"role": "user", "content": context}
-                    ],
-                    temperature=config.temperature,
-                    max_tokens=config.max_tokens
-                )
-                return response["choices"][0]["message"]["content"].strip()
+                return "Error: No valid API provider configured."
 
         except Exception as e:
             return f"Error generating response with {self.api_provider.value}: {str(e)}"
-        
+            
     def _generate_reasoning(self, 
                             user_message: str, 
                             response: str, 
