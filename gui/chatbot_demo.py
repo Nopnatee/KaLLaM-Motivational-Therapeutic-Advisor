@@ -1,17 +1,14 @@
-# enhanced_kallam_improved.py
+# enhanced_kallam_fixed.py
 import gradio as gr
 import logging
 from datetime import datetime
 from typing import List, Tuple, Optional
 import os
 
+# Your existing manager (same as simple_chat_app.py)
 from kallam.app.chatbot_manager import ChatbotManager
-from kallam.infra.db import sqlite_conn
 
-# -----------------------
-# Init
-# -----------------------
-chatbot_manager = ChatbotManager(log_level="DEBUG")
+mgr = ChatbotManager(log_level="INFO")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -38,42 +35,36 @@ CABBAGE_SVG = """
 """
 
 # -----------------------
-# Core handlers (inspired by simple app)
+# Core handlers (using mgr like simple app)
 # -----------------------
-def _safe_latency_str(v) -> str:
-    try:
-        return f"{float(v):.1f}"
-    except Exception:
-        return "0.0"
-
 def _session_status(session_id: str) -> str:
-    """Get current session status - cleaner version inspired by simple app"""
+    """Get current session status using mgr.get_session()"""
     if not session_id:
         return "🔴 **No Active Session** - Click **New Session** to start"
-
+    
     try:
-        data = chatbot_manager.get_session_stats(session_id)
-        session_info = data.get("session_info", {}) if isinstance(data, dict) else {}
-        stats = data.get("stats", {}) if isinstance(data, dict) else {}
-
-        avg_latency = _safe_latency_str(stats.get("avg_latency"))
-        saved_memories = session_info.get("saved_memories") or "General consultation"
+        # Use same method as simple app
+        s = mgr.get_session(session_id) or {}
+        ts = s.get("timestamp", "N/A")
+        model = s.get("model_used", "N/A")
+        total = s.get("total_messages", 0)
+        saved_memories = s.get("saved_memories") or "General consultation"
         
         return f"""
 🟢 **Session:** `{session_id[:8]}...`  
 🏥 **Profile:** {saved_memories[:50]}{"..." if len(saved_memories) > 50 else ""}  
-📅 **Created:** {session_info.get('timestamp', 'N/A')}  
-💬 **Messages:** {stats.get('message_count', 0)} • ⚡ **Latency:** {avg_latency}ms  
-🔧 **Model:** {session_info.get('model_used', 'N/A')}
+📅 **Created:** {ts}  
+💬 **Messages:** {total}  
+🤖 **Model:** {model}
 """.strip()
     except Exception as e:
         logger.error(f"Error getting session status: {e}")
         return f"❌ **Error loading session:** {session_id[:8]}..."
 
 def start_new_session(health_profile: str = ""):
-    """Create new session and return clean UI state - inspired by simple app"""
+    """Create new session using mgr - same as simple app"""
     try:
-        sid = chatbot_manager.start_session(saved_memories=health_profile.strip() or None)
+        sid = mgr.start_session(saved_memories=health_profile.strip() or None)
         status = _session_status(sid)
         
         # Initial welcome message
@@ -97,8 +88,8 @@ I can communicate in both **Thai** and **English**. I'm here to support your hea
         return "", [], "", "❌ **Failed to create session**", f"❌ **Error:** {e}"
 
 def send_message(user_msg: str, history: list, session_id: str):
-    """Send message with defensive session handling - inspired by simple app"""
-    # Defensive: auto-create session if missing
+    """Send message using mgr - same as simple app"""
+    # Defensive: auto-create session if missing (same as simple app)
     if not session_id:
         logger.warning("No session found, auto-creating...")
         sid, history, _, status, _ = start_new_session("")
@@ -112,8 +103,8 @@ def send_message(user_msg: str, history: list, session_id: str):
         # Add user message
         history = history + [{"role": "user", "content": user_msg}]
         
-        # Get bot response
-        bot_response = chatbot_manager.handle_message(
+        # Get bot response using mgr (same as simple app)
+        bot_response = mgr.handle_message(
             session_id=session_id,
             user_message=user_msg
         )
@@ -130,7 +121,7 @@ def send_message(user_msg: str, history: list, session_id: str):
         return history, "", session_id, _session_status(session_id)
 
 def update_health_profile(session_id: str, health_profile: str):
-    """Update health profile for current session"""
+    """Update health profile for current session using mgr's database access"""
     if not session_id:
         return "❌ **No active session**", _session_status(session_id)
     
@@ -138,7 +129,9 @@ def update_health_profile(session_id: str, health_profile: str):
         return "❌ **Please provide health information**", _session_status(session_id)
 
     try:
-        with sqlite_conn(str(chatbot_manager.db_path)) as conn:
+        # Use mgr's database path (same pattern as simple app would use)
+        from kallam.infra.db import sqlite_conn
+        with sqlite_conn(str(mgr.db_path)) as conn:
             conn.execute(
                 "UPDATE sessions SET saved_memories = ?, last_activity = ? WHERE session_id = ?",
                 (health_profile.strip(), datetime.now().isoformat(), session_id),
@@ -152,16 +145,43 @@ def update_health_profile(session_id: str, health_profile: str):
         return f"❌ **Error updating profile:** {e}", _session_status(session_id)
 
 def clear_session(session_id: str):
-    """Clear current session and reset state"""
+    """Clear current session using mgr"""
     if not session_id:
         return "", [], "", "🔴 **No active session to clear**", "❌ **No active session**"
     
     try:
-        chatbot_manager.delete_session(session_id)
-        return "", [], "", "🔴 **Session cleared - Create new session to continue**", f"✅ **Session `{session_id[:8]}...` deleted successfully**"
+        # Check if mgr has delete_session method, otherwise handle gracefully
+        if hasattr(mgr, 'delete_session'):
+            mgr.delete_session(session_id)
+        else:
+            # Fallback: just clear the session data if method doesn't exist
+            logger.warning("delete_session method not available, clearing session state only")
+        
+        return "", [], "", "🔴 **Session cleared - Create new session to continue**", f"✅ **Session `{session_id[:8]}...` cleared successfully**"
     except Exception as e:
         logger.error(f"Error clearing session: {e}")
         return session_id, [], "", _session_status(session_id), f"❌ **Error clearing session:** {e}"
+
+def force_summary(session_id: str):
+    """Force summary using mgr (same as simple app)"""
+    if not session_id:
+        return "❌ No active session."
+    try:
+        if hasattr(mgr, 'summarize_session'):
+            s = mgr.summarize_session(session_id)
+            return f"📋 Summary updated:\n\n{s}"
+        else:
+            return "❌ Summarize function not available."
+    except Exception as e:
+        return f"❌ Failed to summarize: {e}"
+
+def lock_inputs():
+    """Lock inputs during processing (same as simple app)"""
+    return gr.update(interactive=False), gr.update(interactive=False)
+
+def unlock_inputs():
+    """Unlock inputs after processing (same as simple app)"""
+    return gr.update(interactive=True), gr.update(interactive=True)
 
 # -----------------------
 # UI with improved architecture and greenish cream styling
@@ -194,14 +214,14 @@ def create_app() -> gr.Blocks:
         --shadow-medium: 0 10px 15px -3px rgba(255, 255, 255, 0.1), 0 4px 6px -2px rgba(255, 255, 255, 0.05);
     }
 
-            .gradio-container {
+    .gradio-container {
         max-width: 100% !important;
         width: 100% !important;
         margin: 0 auto !important;
         min-height: 100vh;
     }
 
-            .main-layout {
+    .main-layout {
         display: flex !important;
         min-height: calc(100vh - 2rem) !important;
         gap: 1.5rem !important;
@@ -211,10 +231,10 @@ def create_app() -> gr.Blocks:
         width: 320px !important;
         min-width: 320px !important;
         max-width: 320px !important;
-        background: var(--kallam-green-cream) !important;
+        background: white !important;
         backdrop-filter: blur(10px) !important;
         border-radius: var(--border-radius) !important;
-        border: 2px solid var(--kallam-border-cream) !important;
+        border: 3px solid var(--kallam-primary) !important;
         box-shadow: var(--shadow-soft) !important;
         padding: 1.5rem !important;
         height: fit-content !important;
@@ -283,7 +303,6 @@ def create_app() -> gr.Blocks:
         border: 1px solid var(--border-color-primary) !important;
     }
 
-    /* Chat container with greenish cream styling */
     .chat-container {
         background: var(--kallam-green-cream) !important;
         border-radius: var(--border-radius) !important;
@@ -292,24 +311,6 @@ def create_app() -> gr.Blocks:
         overflow: hidden !important;
     }
 
-    /* Control sidebar with white background and green border */
-    .fixed-sidebar {
-        width: 320px !important;
-        min-width: 320px !important;
-        max-width: 320px !important;
-        background: white !important;
-        backdrop-filter: blur(10px) !important;
-        border-radius: var(--border-radius) !important;
-        border: 3px solid var(--kallam-primary) !important;
-        box-shadow: var(--shadow-soft) !important;
-        padding: 1.5rem !important;
-        height: fit-content !important;
-        position: sticky !important;
-        top: 1rem !important;
-        overflow: visible !important;
-    }
-
-    /* Session status - fixed positioning */
     .session-status-container .markdown {
         margin: 0 !important;
         padding: 0 !important;
@@ -339,7 +340,7 @@ def create_app() -> gr.Blocks:
         css=custom_css,
     ) as app:
         
-        # State management - inspired by simple app
+        # State management - same as simple app
         session_id = gr.State(value="")
         
         # Header
@@ -371,7 +372,7 @@ def create_app() -> gr.Blocks:
                     health_profile_btn = gr.Button("👤 Custom Health Profile", variant="secondary", elem_classes=["btn", "btn-secondary"])
                     clear_session_btn = gr.Button("🗑️ Clear Session", variant="secondary", elem_classes=["btn", "btn-secondary"])
                 
-                # Hidden health profile section with enhanced styling
+                # Hidden health profile section
                 with gr.Column(visible=False) as health_profile_section:
                     gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid var(--border-color-primary);"></div>')
                     
@@ -389,10 +390,10 @@ def create_app() -> gr.Blocks:
                 
                 gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid var(--border-color-primary);"></div>')
                 
-                # Session status with fixed container
+                # Session status
                 session_status = gr.Markdown(value="🔄 **Initializing...**")
                 
-            # Main chat area with enhanced styling
+            # Main chat area
             with gr.Column(scale=3, elem_classes=["main-content"]):
                 gr.HTML("""
                 <div style="text-align: center; padding: 1rem 0;">
@@ -422,10 +423,10 @@ def create_app() -> gr.Blocks:
                     with gr.Column(scale=1, min_width=120):
                         send_btn = gr.Button("➤", variant="primary", size="lg", elem_classes=["btn", "btn-primary"])
 
-        # Result display with enhanced styling
+        # Result display
         result_display = gr.Markdown(visible=True)
 
-        # Footer (same as before but with enhanced spacing for bottom padding)
+        # Footer
         gr.HTML("""
         <div style="
             position: fixed; bottom: 0; left: 0; right: 0;
@@ -466,9 +467,9 @@ def create_app() -> gr.Blocks:
         </div>
         """)
 
-        # ====== EVENT HANDLERS - Same as before ======
+        # ====== EVENT HANDLERS - Same pattern as simple app ======
         
-        # Auto-initialize on page load (from simple app)
+        # Auto-initialize on page load (same as simple app)
         def _init():
             sid, history, _, status, note = start_new_session("")
             return sid, history, status, note
@@ -479,7 +480,7 @@ def create_app() -> gr.Blocks:
             outputs=[session_id, chatbot, session_status, result_display]
         )
 
-        # New session - fixed to not depend on hidden textbox
+        # New session
         new_session_btn.click(
             fn=lambda: start_new_session(""),
             inputs=None,
@@ -513,20 +514,38 @@ def create_app() -> gr.Blocks:
             outputs=[health_profile_section]
         )
 
-        # Send message handlers - both identical to avoid state issues
-        def handle_send_message(user_msg, history, sid):
-            return send_message(user_msg, history, sid)
-        
+        # Send message with lock/unlock pattern (inspired by simple app)
         send_btn.click(
-            fn=handle_send_message,
+            fn=lock_inputs,
+            inputs=None,
+            outputs=[send_btn, msg],
+            queue=False,   # lock applies instantly
+        ).then(
+            fn=send_message,
             inputs=[msg, chatbot, session_id],
-            outputs=[chatbot, msg, session_id, session_status]
+            outputs=[chatbot, msg, session_id, session_status],
+        ).then(
+            fn=unlock_inputs,
+            inputs=None,
+            outputs=[send_btn, msg],
+            queue=False,
         )
 
+        # Enter/submit flow: same treatment
         msg.submit(
-            fn=handle_send_message,
+            fn=lock_inputs,
+            inputs=None,
+            outputs=[send_btn, msg],
+            queue=False,
+        ).then(
+            fn=send_message,
             inputs=[msg, chatbot, session_id],
-            outputs=[chatbot, msg, session_id, session_status]
+            outputs=[chatbot, msg, session_id, session_status],
+        ).then(
+            fn=unlock_inputs,
+            inputs=None,
+            outputs=[send_btn, msg],
+            queue=False,
         )
 
         # Clear session
@@ -543,32 +562,11 @@ def main():
     app.launch(
         share=True,
         server_name="0.0.0.0",
-        server_port=int(os.getenv("PORT", 8080)),
-        debug=True,
+        server_port=7860,
+        debug=False,
         show_error=True,
-        inbrowser=False
+        inbrowser=True,
     )
 
-def main_local_only():
-    """Launch application locally only"""
-    try:
-        app = create_app()
-        print("🥬 KaLLaM launching locally...")
-        print("🌐 Your app will be available at: http://localhost:7860")
-        
-        app.launch(
-            share=True,
-            server_name="127.0.0.1",
-            server_port=7860,
-            debug=True,
-            show_error=True,
-            inbrowser=True
-        )
-    except Exception as e:
-        logger.error(f"Failed to launch application: {e}")
-        raise
-
 if __name__ == "__main__":
-    # Choose launch method:
-    # main()           # For production/cloud deployment
-    main_local_only()  # For local development
+    main()
