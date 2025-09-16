@@ -1,16 +1,19 @@
+# enhanced_kallam_app.py
 import gradio as gr
-import json
 import logging
 from datetime import datetime
-from typing import List, Tuple, Optional, Dict, Any
-from kallam.app.chatbot_manager import ChatbotManager
+from typing import List, Tuple, Optional
+import os
 
-# key improvement: - delete notification
-# key improvement: - color
-# key improvement: - language
-# key improvement: - UI
-# key improvement: - ease of usage
-# key improvement: - loading bar (indicator)
+from kallam.app.chatbot_manager import ChatbotManager
+from kallam.infra.db import sqlite_conn  # use the shared helper
+
+# -----------------------
+# Init
+# -----------------------
+chatbot_manager = ChatbotManager(log_level="DEBUG")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # INLINE SVG for icons
 CABBAGE_SVG = """
@@ -34,483 +37,695 @@ CABBAGE_SVG = """
 </svg>
 """
 
-
-
-# Initialize the chatbot manager
-chatbot_manager = ChatbotManager()
-current_session_id = None
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Global state management
 class AppState:
     def __init__(self):
-        self.current_session_id = None
-        self.message_count = 0
-    
+        self.current_session_id: str = ""
+        self.message_count: int = 0
+        self.followup_note: str = "Request follow-up analysis..."
+
     def reset(self):
-        self.current_session_id = None
+        self.current_session_id = ""
         self.message_count = 0
 
 app_state = AppState()
-# fine
-def get_current_session_status() -> str:
-    """Get current session status information."""
-    if not app_state.current_session_id:
-        return "🔴 **No Active Session** - Please create a new session"
-    
+
+# -----------------------
+# Helpers
+# -----------------------
+def _safe_latency_str(v) -> str:
     try:
-        session_stats = chatbot_manager.get_session_stats(app_state.current_session_id)
-        session_info = session_stats
-        stats = session_stats.get("stats", {})
-        
-        # Safe formatting for potentially None values
-        avg_latency = stats.get('avg_latency')
-        latency_str = f"{float(avg_latency):.1f}" if avg_latency is not None else "0.0"
-        
-        saved_memories = session_info.get('saved_memories')
-        saved_memories_str = saved_memories if saved_memories else 'Not specified'
-        
+        return f"{float(v):.1f}"
+    except Exception:
+        return "0.0"
+
+def _extract_stats_pack() -> tuple[dict, dict]:
+    # returns (session_info, stats_dict)
+    data = chatbot_manager.get_session_stats(app_state.current_session_id)  # new shape
+    session_info = data.get("session_info", {}) if isinstance(data, dict) else {}
+    stats = data.get("stats", {}) if isinstance(data, dict) else {}
+    return session_info, stats
+
+def get_current_session_status() -> str:
+    if not app_state.current_session_id:
+        return "🔴 **ไม่มี Session ที่ใช้งาน** - กรุณาสร้าง Session ใหม่"
+
+    try:
+        session_info, stats = _extract_stats_pack()
+
+        avg_latency = _safe_latency_str(stats.get("avg_latency"))
+        saved_memories = session_info.get("saved_memories") or "ไม่ได้ระบุ"
         return f"""
-### 🏥 **Health saved_memories:** {saved_memories_str}  
-🟢 **Current Session:** `{app_state.current_session_id}`  
-📅 **Created on:** {session_info.get('timestamp', 'N/A')}  
-💬 **Messages:** {stats.get('message_count', 0) or 0} messages  
-📋 **Summaries:** {session_info.get('total_summaries', 0) or 0} times  
-⚡ **Average Latency:** {latency_str} ms  
+### 🏥 **สถานะสุขภาพ:** {saved_memories}  
+🟢 **Session ปัจจุบัน:** `{app_state.current_session_id}`
+📅 **สร้างเมื่อ:** {session_info.get('timestamp', 'N/A')}
+💬 **จำนวนข้อความ:** {stats.get('message_count', 0) or 0} ข้อความ
+📋 **จำนวนสรุป:** {session_info.get('total_summaries', 0) or 0} ครั้ง
+⚡ **Latency เฉลี่ย:** {avg_latency} ms
 🔧 **Model:** {session_info.get('model_used', 'N/A')}
         """.strip()
     except Exception as e:
         logger.error(f"Error getting session status: {e}")
-        return f"❌ **Error:** Could not load session data for {app_state.current_session_id}"
+        return f"❌ **Error:** ไม่สามารถโหลดข้อมูล Session {app_state.current_session_id}"
 
-# fine
 def get_session_list() -> List[str]:
-    """Get list of all active sessions with metadata."""
     try:
         sessions = chatbot_manager.list_sessions(active_only=True, limit=50)
-        session_options = []
-        
-        for session in sessions:
-            saved_memories = (session.get('saved_memories') or 'Unspecified')[:20]
-            msg_count = session.get('total_messages', 0)
-            summary_count = session.get('total_summaries', 0)
-            
-            display_name = f"{session['session_id']} | {msg_count}💬 {summary_count}📋 | {saved_memories}"
-            session_options.append(display_name)
-        
-        return session_options if session_options else ["No Sessions"]
+        opts = []
+        for s in sessions:
+            saved = (s.get("saved_memories") or "ไม่ระบุ")[:20]
+            msgs = s.get("total_messages", 0)
+            sums = s.get("total_summaries", 0)
+            opts.append(f"{s['session_id']} | {msgs}💬 {sums}📋 | {saved}")
+        return opts or ["ไม่มี Session"]
     except Exception as e:
         logger.error(f"Error getting session list: {e}")
         return ["Error loading sessions"]
 
 def extract_session_id(dropdown_value: str) -> Optional[str]:
-    """Extract session ID from dropdown display value."""
-    if not dropdown_value or dropdown_value in ["No Sessions", "Error loading sessions"]:
+    if not dropdown_value or dropdown_value in ["ไม่มี Session", "Error loading sessions"]:
         return None
     return dropdown_value.split(" | ")[0]
 
-def refresh_session_list() -> gr.update:
-    """Refresh the session dropdown list."""
-    session_list = get_session_list()
-    return gr.update(choices=session_list, value=session_list[0] if session_list else None)
+def refresh_session_list():
+    sessions = get_session_list()
+    return gr.update(choices=sessions, value=sessions[0] if sessions else None)
 
 def create_new_session(saved_memories: str = "") -> Tuple[List, str, str, str, str]:
-    """Create a new session."""
     try:
-        session_id = chatbot_manager.start_session(saved_memories=saved_memories or None)
-        app_state.current_session_id = session_id
+        sid = chatbot_manager.start_session(saved_memories=saved_memories or None)
+        app_state.current_session_id = sid
         app_state.message_count = 0
-        
         status = get_current_session_status()
-        result_msg = f"✅ **New session created successfully!**\n\n🆔 Session ID: `{session_id}`"
-        
-        return [], "", result_msg, status, saved_memories
+        result = f"✅ **สร้าง Session ใหม่สำเร็จ!**\n\n🆔 Session ID: `{sid}`"
+        return [], "", result, status, saved_memories
     except Exception as e:
         logger.error(f"Error creating new session: {e}")
-        error_msg = f"❌ **Could not create new session:** {str(e)}"
-        return [], "", error_msg, get_current_session_status(), ""
+        return [], "", f"❌ **ไม่สามารถสร้าง Session ใหม่:** {e}", get_current_session_status(), ""
 
 def switch_session(dropdown_value: str) -> Tuple[List, str, str, str, str]:
-    """Switch to selected session."""
-    session_id = extract_session_id(dropdown_value)
-    
-    if not session_id:
-        return [], "", "❌ **Invalid Session ID**", get_current_session_status(), ""
-    
+    sid = extract_session_id(dropdown_value)
+    if not sid:
+        return [], "", "❌ **Session ID ไม่ถูกต้อง**", get_current_session_status(), ""
+
     try:
-        session = chatbot_manager.get_session(session_id)
+        session = chatbot_manager.get_session(sid)
         if not session:
-            return [], "", f"❌ **Session not found:** {session_id}", get_current_session_status(), ""
-        
-        app_state.current_session_id = session_id
-        app_state.message_count = session.get('total_messages', 0)
-        
-        # Load chat history
-        chat_history = chatbot_manager._get_original_chat_history(session_id)
-        gradio_history = []
-        
-        for msg in chat_history:
-            if msg["role"] == "user":
-                gradio_history.append({"role": "user", "content": msg["content"]})
-            elif msg["role"] == "assistant":
-                gradio_history.append({"role": "assistant", "content": msg["content"]})
-        
+            return [], "", f"❌ **ไม่พบ Session:** {sid}", get_current_session_status(), ""
+        app_state.current_session_id = sid
+        app_state.message_count = session.get("total_messages", 0)
+
+        # use the new helper on manager (provided)
+        chat_history = chatbot_manager.get_original_chat_history(sid)
+        gr_history = []
+        for m in chat_history:
+            role = m.get("role")
+            content = m.get("content", "")
+            if role == "user":
+                gr_history.append({"role": "user", "content": content})
+            elif role == "assistant":
+                gr_history.append({"role": "assistant", "content": content})
+
         status = get_current_session_status()
-        result_msg = f"✅ **Switched session successfully!**\n\n🆔 Session ID: `{session_id}`"
-        saved_memories = session.get('saved_memories', '')
-        
-        return gradio_history, "", result_msg, status, saved_memories
+        result = f"✅ **เปลี่ยน Session สำเร็จ!**\n\n🆔 Session ID: `{sid}`"
+        saved_memories = session.get("saved_memories", "")
+        return gr_history, "", result, status, saved_memories
     except Exception as e:
         logger.error(f"Error switching session: {e}")
-        error_msg = f"❌ **Could not switch session:** {str(e)}"
-        return [], "", error_msg, get_current_session_status(), ""
+        return [], "", f"❌ **ไม่สามารถเปลี่ยน Session:** {e}", get_current_session_status(), ""
 
 def get_session_info() -> str:
-    """Get detailed information about current session."""
     if not app_state.current_session_id:
-        return "❌ **No active session**"
-    
+        return "❌ **ไม่มี Session ที่ใช้งาน**"
     try:
-        session_stats = chatbot_manager.get_session_stats(app_state.current_session_id)
-        session_info = session_stats
-        stats = session_stats.get("stats", {})
-        
-        # Safe formatting for potentially None values
-        avg_latency = stats.get('avg_latency')
-        latency_str = f"{float(avg_latency):.2f}" if avg_latency is not None else "0.00"
-        
-        total_tokens_in = stats.get('total_tokens_in') or 0
-        total_tokens_out = stats.get('total_tokens_out') or 0
-        
-        saved_memories = session_info.get('saved_memories')
-        saved_memories_str = saved_memories if saved_memories else 'Not specified'
-        
-        summarized_history = session_info.get('summarized_history')
-        summary_str = summarized_history if summarized_history else 'No summary yet'
-        
-        info = f"""
-## 📊 Session Details: `{app_state.current_session_id}`
+        session_info, stats = _extract_stats_pack()
 
-### 🔧 Basic Information
-- **Session ID:** `{session_info['session_id']}`
-- **Created on:** {session_info.get('timestamp', 'N/A')}
-- **Last activity:** {session_info.get('last_activity', 'N/A')}
+        latency_str = f"{float(stats.get('avg_latency') or 0):.2f}"
+        total_tokens_in = stats.get("total_tokens_in") or 0
+        total_tokens_out = stats.get("total_tokens_out") or 0
+        saved_memories = session_info.get("saved_memories") or "ไม่ได้ระบุ"
+        summarized_history = session_info.get("summarized_history") or "ยังไม่มีการสรุป"
+
+        return f"""
+## 📊 ข้อมูลรายละเอียด Session: `{app_state.current_session_id}`
+
+### 🔧 ข้อมูลพื้นฐาน
+- **Session ID:** `{session_info.get('session_id', 'N/A')}`
+- **สร้างเมื่อ:** {session_info.get('timestamp', 'N/A')}
+- **ใช้งานล่าสุด:** {session_info.get('last_activity', 'N/A')}
 - **Model:** {session_info.get('model_used', 'N/A')}
-- **Status:** {'🟢 Active' if session_info.get('is_active') else '🔴 Inactive'}
+- **สถานะ:** {'🟢 Active' if session_info.get('is_active') else '🔴 Inactive'}
 
-### 🏥 Health Information
-- **Health saved_memories:** {saved_memories_str}
+### 🏥 ข้อมูลสถานะสุขภาพ
+- **สถานะสุขภาพ:** {saved_memories}
 
-### 📈 Usage Statistics
-- **Total messages:** {stats.get('message_count', 0) or 0} messages
-- **Summaries:** {session_info.get('total_summaries', 0) or 0} times
-- **Total Input Tokens:** {total_tokens_in:,} tokens
-- **Total Output Tokens:** {total_tokens_out:,} tokens
-- **Average Latency:** {latency_str} ms
-- **First message:** {stats.get('first_message', 'N/A') or 'N/A'}
-- **Last message:** {stats.get('last_message', 'N/A') or 'N/A'}
+### 📈 สถิติการใช้งาน
+- **จำนวนข้อความทั้งหมด:** {stats.get('message_count', 0) or 0} ข้อความ
+- **จำนวนสรุป:** {session_info.get('total_summaries', 0) or 0} ครั้ง
+- **Token Input รวม:** {total_tokens_in:,} tokens
+- **Token Output รวม:** {total_tokens_out:,} tokens
+- **Latency เฉลี่ย:** {latency_str} ms
+- **ข้อความแรก:** {stats.get('first_message', 'N/A') or 'N/A'}
+- **ข้อความล่าสุด:** {stats.get('last_message', 'N/A') or 'N/A'}
 
-### 📋 Summary History
-{summary_str}
+### 📋 ประวัติการสรุป
+{summarized_history}
         """.strip()
-        
-        return info
     except Exception as e:
         logger.error(f"Error getting session info: {e}")
-        return f"❌ **Error:** {str(e)}"
+        return f"❌ **Error:** {e}"
 
 def get_all_sessions_info() -> str:
-    """Get information about all sessions."""
     try:
         sessions = chatbot_manager.list_sessions(active_only=False, limit=20)
-        
         if not sessions:
-            return "📭 **No sessions in the system**"
-        
-        info_parts = ["# 📁 All Session Data\n"]
-        
-        for i, session in enumerate(sessions, 1):
-            status_icon = "🟢" if session.get('is_active') else "🔴"
-            saved_memories = session.get('saved_memories', 'Unspecified')[:30]
-            
-            session_info = f"""
-## {i}. {status_icon} `{session['session_id']}`
-- **Created:** {session.get('timestamp', 'N/A')}
-- **Last activity:** {session.get('last_activity', 'N/A')}
-- **Messages:** {session.get('total_messages', 0)} | **Summaries:** {session.get('total_summaries', 0)}
-- **saved_memories:** {saved_memories}
-- **Model:** {session.get('model_used', 'N/A')}
-            """.strip()
-            
-            info_parts.append(session_info)
-        
-        return "\n\n".join(info_parts)
+            return "📭 **ไม่มี Session ในระบบ**"
+
+        parts = ["# 📁 ข้อมูล Session ทั้งหมด\n"]
+        for i, s in enumerate(sessions, 1):
+            status_icon = "🟢" if s.get("is_active") else "🔴"
+            saved = (s.get("saved_memories") or "ไม่ระบุ")[:30]
+            parts.append(f"""
+## {i}. {status_icon} `{s['session_id']}`
+- **สร้าง:** {s.get('timestamp', 'N/A')}
+- **ใช้งานล่าสุด:** {s.get('last_activity', 'N/A')}
+- **ข้อความ:** {s.get('total_messages', 0)} | **สรุป:** {s.get('total_summaries', 0)}
+- **สภาวะ:** {saved}
+- **Model:** {s.get('model_used', 'N/A')}
+            """.strip())
+        return "\n\n".join(parts)
     except Exception as e:
         logger.error(f"Error getting all sessions info: {e}")
-        return f"❌ **Error:** {str(e)}"
+        return f"❌ **Error:** {e}"
 
 def update_medical_saved_memories(saved_memories: str) -> Tuple[str, str]:
-    """Update medical saved_memories for current session."""
     if not app_state.current_session_id:
-        return get_current_session_status(), "❌ **No active session**"
-    
+        return get_current_session_status(), "❌ **ไม่มี Session ที่ใช้งาน**"
     if not saved_memories.strip():
-        return get_current_session_status(), "❌ **Please specify the health saved_memories**"
-    
+        return get_current_session_status(), "❌ **กรุณาระบุสถานะสุขภาพ**"
+
     try:
-        # Update saved_memories in database
-        with chatbot_manager._get_connection() as conn:
-            conn.execute("""
-                UPDATE sessions 
-                SET saved_memories = ?, last_activity = ? 
-                WHERE session_id = ?
-            """, (saved_memories.strip(), datetime.now().isoformat(), app_state.current_session_id))
-            conn.commit()
-        
+        with sqlite_conn(str(chatbot_manager.db_path)) as conn:
+            conn.execute(
+                "UPDATE sessions SET saved_memories = ?, last_activity = ? WHERE session_id = ?",
+                (saved_memories.strip(), datetime.now().isoformat(), app_state.current_session_id),
+            )
         status = get_current_session_status()
-        result = f"✅ **Health saved_memories updated successfully!**\n\n📝 **New data:** {saved_memories.strip()}"
-        
+        result = f"✅ **อัปเดตสถานะสุขภาพสำเร็จ!**\n\n📝 **ข้อมูลใหม่:** {saved_memories.strip()}"
         return status, result
     except Exception as e:
-        logger.error(f"Error updating medical saved_memories: {e}")
-        return get_current_session_status(), f"❌ **Could not update health saved_memories:** {str(e)}"
+        logger.error(f"Error updating saved_memories: {e}")
+        return get_current_session_status(), f"❌ **ไม่สามารถอัปเดตสถานะสุขภาพ:** {e}"
 
-def process_chat_message(message: str, history: List, health_context: str) -> Tuple[List, str]:
-    """Process chat message and return updated history."""
+def process_chat_message(user_message: str, history: List) -> Tuple[List, str]:
     if not app_state.current_session_id:
-        history.append({"role": "assistant", "content": "❌ **Please create a new session before starting**"})
+        history.append({"role": "assistant", "content": "❌ **กรุณาสร้าง Session ใหม่ก่อนใช้งาน**"})
         return history, ""
-    
-    if not message.strip():
+    if not user_message.strip():
         return history, ""
-    
-    try:
-        # Add user message to history immediately
-        history.append({"role": "user", "content": message})
-        
-        # Process message through chatbot manager
-        bot_response = chatbot_manager.handle_message(
-            session_id=app_state.current_session_id,
-            user_message=message,
-            health_context=health_context
-        )
-        
-        # Add bot response to history
-        history.append({"role": "assistant", "content": bot_response})
-        
-        # Update message count
-        app_state.message_count += 2
 
+    try:
+        history.append({"role": "user", "content": user_message})
+        bot = chatbot_manager.handle_message(
+            session_id=app_state.current_session_id,
+            user_message=user_message,
+        )
+        history.append({"role": "assistant", "content": bot})
+        app_state.message_count += 2
         return history, ""
     except Exception as e:
         logger.error(f"Error processing chat message: {e}")
-        history.append({"role": "assistant", "content": f"❌ **Error:** {str(e)}"})
+        history.append({"role": "assistant", "content": f"❌ **ข้อผิดพลาด:** {e}"})
         return history, ""
 
-def generate_health_notification(history: List) -> str:
-    """Generate health notification based on conversation history."""
-    # Simple notification generator - in production, use your prompt system
-    notifications = [
-        "💧 Remember to drink 8-10 glasses of water a day",
-        "🚶‍♀️ Get up, walk, and stretch every hour",
-        "😴 Get enough sleep, 7-8 hours a night",
-        "🥗 Eat plenty of fruits and vegetables",
-        "🧘‍♀️ Meditate or relax for 10 minutes a day",
-        "💊 Don't forget to take your medication as prescribed"
-    ]
-    
-    import random
-    return random.choice(notifications)
-
-def generate_manual_notification(history: List) -> List:
-    """Generate manual health notification."""
-    notification = generate_health_notification(history)
-    history.append({
-        "role": "assistant", 
-        "content": f"🔔 **Health Notification:** {notification}"
-    })
-    return history
-
-def force_update_summary() -> str:
-    """Force update session summary."""
+def generate_followup(history: List) -> List:
+    # No dedicated handle_followup in new manager.
+    # We just inject the follow-up note as a plain user turn.
     if not app_state.current_session_id:
-        return "❌ **No active session**"
-    
+        history.append({"role": "assistant", "content": "❌ **กรุณาสร้าง Session ใหม่ก่อนใช้งาน**"})
+        return history
     try:
-        summary = chatbot_manager.summarize_session(app_state.current_session_id)
-        return f"✅ **Summary successful!**\n\n📋 **Summary:** {summary}"
+        note = app_state.followup_note
+        history.append({"role": "user", "content": note})
+        bot = chatbot_manager.handle_message(
+            session_id=app_state.current_session_id,
+            user_message=note,
+        )
+        history.append({"role": "assistant", "content": bot})
+        app_state.message_count += 2
+        return history
     except Exception as e:
-        logger.error(f"Error forcing summary update: {e}")
-        return f"❌ **Could not summarize:** {str(e)}"
+        logger.error(f"Error generating follow-up: {e}")
+        history.append({"role": "assistant", "content": f"❌ **ไม่สามารถสร้างการวิเคราะห์:** {e}"})
+        return history
+
+
 
 def clear_session() -> Tuple[List, str, str, str, str]:
-    """Clear current session."""
     if not app_state.current_session_id:
-        return [], "", "❌ **No active session**", get_current_session_status(), ""
-    
+        return [], "", "❌ **ไม่มี Session ที่ใช้งาน**", get_current_session_status(), ""
     try:
-        old_session_id = app_state.current_session_id
-        chatbot_manager.delete_session(app_state.current_session_id)
+        old = app_state.current_session_id
+        chatbot_manager.delete_session(old)
         app_state.reset()
-        
-        result = f"✅ **Session deleted successfully!**\n\n🗑️ **Deleted session:** `{old_session_id}`"
-        return [], "", result, get_current_session_status(), ""
+        return [], "", f"✅ **ลบ Session สำเร็จ!**\n\n🗑️ **Session ที่ลบ:** `{old}`", get_current_session_status(), ""
     except Exception as e:
         logger.error(f"Error clearing session: {e}")
-        return [], "", f"❌ **Could not delete session:** {str(e)}", get_current_session_status(), ""
+        return [], "", f"❌ **ไม่สามารถลบ Session:** {e}", get_current_session_status(), ""
 
-def clear_summary() -> str:
-    """Clear session summary."""
+def clear_all_summaries() -> str:
     if not app_state.current_session_id:
-        return "❌ **No active session**"
-    
+        return "❌ **ไม่มี Session ที่ใช้งาน**"
     try:
-        with chatbot_manager._get_connection() as conn:
-            conn.execute("""
-                UPDATE sessions 
-                SET summarized_history = NULL, total_summaries = 0 
-                WHERE session_id = ?
-            """, (app_state.current_session_id,))
-            conn.commit()
-        
-        return f"✅ **Summary cleared successfully!**\n\n🗑️ **Session:** `{app_state.current_session_id}`"
+        with sqlite_conn(str(chatbot_manager.db_path)) as conn:
+            conn.execute("DELETE FROM summaries WHERE session_id = ?", (app_state.current_session_id,))
+        return f"✅ **ล้างสรุปสำเร็จ!**\n\n🗑️ **Session:** `{app_state.current_session_id}`"
     except Exception as e:
-        logger.error(f"Error clearing summary: {e}")
-        return f"❌ **Could not clear summary:** {str(e)}"
+        logger.error(f"Error clearing summaries: {e}")
+        return f"❌ **ไม่สามารถล้างสรุป:** {e}"
 
 def export_session() -> str:
-    """Export current session to JSON."""
     if not app_state.current_session_id:
-        return "❌ **No active session**"
-    
+        return "❌ **ไม่มี Session ที่ใช้งาน**"
     try:
-        json_data = chatbot_manager.export_session_json(app_state.current_session_id)
-        
-        return f"✅ **Export successful!**`"
+        chatbot_manager.export_session_json(app_state.current_session_id)
+        return "✅ **ส่งออกข้อมูลสำเร็จ!**"
     except Exception as e:
         logger.error(f"Error exporting session: {e}")
-        return f"❌ **Could not export data:** {str(e)}"
+        return f"❌ **ไม่สามารถส่งออกข้อมูล:** {e}"
+    
+def export_all_sessions() -> str:
+    try:
+        chatbot_manager.export_all_sessions_json()
+        return "✅ **ส่งออกข้อมูลสำเร็จ!**"
+    except Exception as e:
+        logger.error(f"Error exporting session: {e}")
+        return f"❌ **ไม่สามารถส่งออกข้อมูล:** {e}"
 
+# UI Helper Functions
 def show_buttons():
-    # Make the hidden buttons visible
     return gr.update(visible=True)
 
 def hide_buttons():
-    # Make the visible buttons hidden
     return gr.update(visible=False)
 
 def clear_all_buttons():
-    
     return [
-        gr.update(visible=False),  # button1
-        gr.update(visible=False),  # button2
-        gr.update(visible=False)   # textbox
+        gr.update(visible=False),  # chatbot_window
+        gr.update(visible=False),  # session_management
+        gr.update(visible=False)   # summary_page
     ]
 
-def set_button_loading():
-    return gr.update(value="⏳ processing...", variant="stop")
-def reset_send_button():
-    return gr.update(value="📤 send", variant="primary")
-def reset_followup_button():
-    return gr.update(value="🔔 สร้างการวิเคราะห์บทสนทนา", variant="secondary")
-def reset_update_summary_button():
-    return gr.update(value="📋 บังคับสรุปแชท (dev)", variant="secondary")
+def set_button_loading(text="⏳ ประมวลผล..."):
+    return gr.update(value=text, variant="stop")
 
-# UI Visual
+def reset_button(text, variant):
+    return gr.update(value=text, variant=variant)
+
+# -----------------------
+# UI
+# -----------------------
 def create_app() -> gr.Blocks:
-    """Create the Gradio application."""
     custom_css = """
     :root {
-        --kallam: #659435;
+        --kallam-primary: #659435;
+        --kallam-secondary: #5ea0bd;
+        --kallam-accent: #b8aa54;
+        --kallam-light: #f8fdf5;
+        --kallam-dark: #2d3748;
+        --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --border-radius: 12px;
+        --transition: all 0.3s ease;
     }
+
     .gradio-container {
         max-width: 100% !important;
         width: 100% !important;
         margin: 0 auto !important;
+        background: linear-gradient(135deg, #f8fdf5 0%, #ffffff 100%);
+        min-height: 100vh;
     }
-    .tab-nav {
-        background: linear-gradient(90deg,rgba(94, 160, 189, 1) 0%, rgba(82, 171, 118, 1) 50%, rgba(184, 170, 84, 1) 100%);
+
+    /* Header styling */
+    .kallam-header {
+        background: linear-gradient(135deg, var(--kallam-secondary) 0%, var(--kallam-primary) 50%, var(--kallam-accent) 100%);
+        border-radius: var(--border-radius);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-medium);
+        position: relative;
+        overflow: hidden;
     }
-    .chat-container {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .summary-box {
-        border-radius: 8px;
-        padding: 15px;
-        margin: 10px 0;
-        border: 4px solid var(--kallam);
+
+    .kallam-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
         bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+        pointer-events: none;
     }
+
+    .kallam-header h1 {
+        color: white !important;
+        font-size: 2.5rem !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        position: relative;
+        z-index: 1;
+    }
+
+    .kallam-subtitle {
+        color: rgba(255,255,255,0.9) !important;
+        font-size: 1.1rem !important;
+        margin-top: 0.5rem !important;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Tab navigation */
+    .tab-nav {
+        background: linear-gradient(135deg, var(--kallam-secondary) 0%, var(--kallam-primary) 50%, var(--kallam-accent) 100%) !important;
+        border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+        padding: 0.5rem !important;
+        box-shadow: var(--shadow-soft) !important;
+    }
+
+    .tab-nav button {
+        background: rgba(255,255,255,0.1) !important;
+        color: white !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 8px !important;
+        margin: 0 0.25rem !important;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 600 !important;
+        transition: var(--transition) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+
+    .tab-nav button:hover {
+        background: rgba(255,255,255,0.2) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: var(--shadow-soft) !important;
+    }
+
+    .tab-nav button.selected {
+        background: white !important;
+        color: var(--kallam-primary) !important;
+        box-shadow: var(--shadow-soft) !important;
+    }
+
+    /* Session info card */
     .session-info {
-        border-radius: 8px;
-        padding: 15px;
-        margin: 10px 0;
-        background: linear-gradient(90deg,rgba(94, 160, 189, 1) 0%, rgba(82, 171, 118, 1) 50%, rgba(184, 170, 84, 1) 100%);
+        background: linear-gradient(135deg, var(--kallam-secondary) 0%, var(--kallam-primary) 100%) !important;
+        border-radius: var(--border-radius) !important;
+        padding: 1.5rem !important;
+        margin: 1rem 0 !important;
+        color: white !important;
+        font-weight: 500 !important;
+        box-shadow: var(--shadow-medium) !important;
+        border: none !important;
+        position: relative !important;
+        overflow: hidden !important;
     }
-        color: white;
-        font-weight: 500;
+
+    .session-info::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        right: 0 !important;
+        width: 100px !important;
+        height: 100px !important;
+        background: rgba(255,255,255,0.1) !important;
+        border-radius: 50% !important;
+        transform: translate(30px, -30px) !important;
     }
-    .saved_memories-box {
-        border-radius: 8px;
-        padding: 10px;
-        margin: 5px 0;
-        border: 1px solid #ddd;
+
+    .session-info h2, .session-info h3 {
+        color: white !important;
+        margin-bottom: 1rem !important;
+        position: relative !important;
+        z-index: 1 !important;
     }
-    .stat-card {
-        background: white;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #28a745;
+
+    /* Chat container */
+    .chat-container {
+        background: white !important;
+        border-radius: var(--border-radius) !important;
+        border: 1px solid rgba(101, 148, 53, 0.1) !important;
+        box-shadow: var(--shadow-medium) !important;
+        overflow: hidden !important;
+    }
+
+    .chat-container .message {
+        padding: 1rem !important;
+        border-radius: 8px !important;
+        margin: 0.5rem !important;
+        transition: var(--transition) !important;
+    }
+
+    .chat-container .message.user {
+        background: linear-gradient(135deg, var(--kallam-light) 0%, #f0f9ff 100%) !important;
+        border-left: 4px solid var(--kallam-primary) !important;
+    }
+
+    .chat-container .message.bot {
+        background: linear-gradient(135deg, #fff 0%, #fafafa 100%) !important;
+        border-left: 4px solid var(--kallam-secondary) !important;
+    }
+
+    /* Sidebar styling */
+    .gradio-column.gradio-sidebar {
+        background: rgba(255,255,255,0.8) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: var(--border-radius) !important;
+        border: 1px solid rgba(101, 148, 53, 0.1) !important;
+        box-shadow: var(--shadow-soft) !important;
+        padding: 1.5rem !important;
+    }
+
+    /* Button styling */
+    .btn {
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 0.75rem 1.5rem !important;
+        transition: var(--transition) !important;
+        border: none !important;
+        box-shadow: var(--shadow-soft) !important;
+        cursor: pointer !important;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: var(--shadow-medium) !important;
+    }
+
+    .btn.btn-primary {
+        background: linear-gradient(135deg, var(--kallam-primary) 0%, var(--kallam-secondary) 100%) !important;
+        color: white !important;
+    }
+
+    .btn.btn-secondary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        color: var(--kallam-dark) !important;
+        border: 1px solid rgba(101, 148, 53, 0.2) !important;
+    }
+
+    .btn.btn-secondary:hover {
+        background: linear-gradient(135deg, var(--kallam-light) 0%, #f8f9fa 100%) !important;
+        border-color: var(--kallam-primary) !important;
+    }
+
+    /* Form elements */
+    .gradio-textbox, .gradio-dropdown {
+        border-radius: 8px !important;
+        border: 2px solid rgba(101, 148, 53, 0.1) !important;
+        transition: var(--transition) !important;
+        background: white !important;
+    }
+
+    .gradio-textbox:focus, .gradio-dropdown:focus {
+        border-color: var(--kallam-primary) !important;
+        box-shadow: 0 0 0 3px rgba(101, 148, 53, 0.1) !important;
+    }
+
+    /* Summary box */
+    .summary-box {
+        background: white !important;
+        border-radius: var(--border-radius) !important;
+        padding: 1.5rem !important;
+        margin: 1rem 0 !important;
+        border: 1px solid rgba(101, 148, 53, 0.1) !important;
+        box-shadow: var(--shadow-soft) !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .summary-box::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 4px !important;
+        height: 100% !important;
+        background: linear-gradient(135deg, var(--kallam-primary) 0%, var(--kallam-secondary) 100%) !important;
+    }
+
+    /* Health profile box */
+    .saved_memories-box textarea {
+        background: linear-gradient(135deg, var(--kallam-light) 0%, #ffffff 100%) !important;
+        border: 2px solid rgba(101, 148, 53, 0.1) !important;
+        border-radius: 8px !important;
+        transition: var(--transition) !important;
+    }
+
+    .saved_memories-box textarea:focus {
+        border-color: var(--kallam-primary) !important;
+        box-shadow: 0 0 0 3px rgba(101, 148, 53, 0.1) !important;
+    }
+
+    /* Loading animation */
+    .loading {
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .loading::after {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: -100% !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent) !important;
+        animation: loading-shine 2s infinite !important;
+    }
+
+    @keyframes loading-shine {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .kallam-header {
+            padding: 1.5rem !important;
+        }
+        
+        .kallam-header h1 {
+            font-size: 2rem !important;
+        }
+        
+        .gradio-column.gradio-sidebar {
+            margin-bottom: 1rem !important;
+        }
+    }
+
+    /* Smooth scrolling */
+    html {
+        scroll-behavior: smooth !important;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px !important;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1 !important;
+        border-radius: 4px !important;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--kallam-primary) !important;
+        border-radius: 4px !important;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--kallam-secondary) !important;
     }
     """
 
-
     with gr.Blocks(
-        title="🥬 KaLLaM",
-        theme=gr.themes.Default(primary_hue="green", secondary_hue="cyan"),
+        title="🥬 KaLLaM - Thai Motivational Therapeutic Advisor",
+        theme=gr.themes.Soft(primary_hue="green", secondary_hue="blue", neutral_hue="slate"),
         css=custom_css,
     ) as app:
+        # Beautiful header section
         gr.HTML(f"""      
-            <h1>{CABBAGE_SVG} KaLLaM - Thai Motivational Therapeutic Advisor</h1>
+            <div class="kallam-header">
+                <h1>{CABBAGE_SVG} KaLLaM</h1>
+                <p class="kallam-subtitle">Thai Motivational Therapeutic Advisor - ระบบให้คำปรึกษาสุขภาพอัจฉริยะ</p>
+            </div>
             """)
-        gr.Markdown(value="**Example session(s)**: Can be access via '🗂️ จัดการ Session' or '🗂️ Manage Session' on the left tab, then select any session.")
-        with gr.Tab("Main App (Thai Ver.)"):
+        
+        # Welcome message with better styling
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("""
+                🌟 **Welcome to KaLLaM:** Example sessions can be accessed via Session Management in the sidebar, then select any available session.
+                """, elem_classes=["welcome-message"])
+        
+        with gr.Tab("TH Ver."):
             # Session Status Display
-            with gr.Column(
-                elem_classes=["session-info"]
-            ):
-                gr.Markdown(
-                    value="## ข้อมูล Session",
-                )
+            with gr.Column(elem_classes=["session-info"]):
+                gr.Markdown(value="## ข้อมูล Session")
                 with gr.Row():
                     with gr.Column():
-                        session_status = gr.Markdown(
-                            value=get_current_session_status(), 
-                        )
+                        session_status = gr.Markdown(value=get_current_session_status())
+                        
             with gr.Sidebar():
                 with gr.Column():
-                    new_session_btn = gr.Button("➕ Session ใหม่", variant="primary")
-                    manage_session_btn = gr.Button("🗂️ จัดการ Session", variant="secondary")
-                    edit_profile_btn = gr.Button("✏️ แก้ไขข้อมูลสุขภาพ", variant="secondary")
-                    # update_summary_btn = gr.Button("📋 บังคับสรุปแชท (dev)", variant="secondary")
+                    gr.HTML("""
+                    <div style="text-align: center; padding: 0.5rem 0 1rem 0;">
+                        <h3 style="color: #659435; margin: 0; font-size: 1.2rem;">🎛️ การควบคุม</h3>
+                        <p style="color: #666; margin: 0.25rem 0 0 0; font-size: 0.9rem;">จัดการ Session และข้อมูลสุขภาพ</p>
+                    </div>
+                    """)
                     
-                # Session Details Accordion
+                    with gr.Group():
+                        new_session_btn = gr.Button(
+                            "➕ Session ใหม่", 
+                            variant="primary", 
+                            size="lg",
+                            elem_classes=["btn", "btn-primary"]
+                        )
+                        manage_session_btn = gr.Button(
+                            "🗂️ จัดการ Session", 
+                            variant="secondary",
+                            elem_classes=["btn", "btn-secondary"]
+                        )
+                        edit_profile_btn = gr.Button(
+                            "✏️ แก้ไขข้อมูลสุขภาพ", 
+                            variant="secondary",
+                            elem_classes=["btn", "btn-secondary"]
+                        )
+                    
+                    gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid #e0e0e0;"></div>')
+                    
+                    gr.HTML("""
+                    <div style="text-align: center; padding: 0.5rem 0;">
+                        <h4 style="color: #659435; margin: 0; font-size: 1rem;">📊 สถานะปัจจุบัน</h4>
+                    </div>
+                    """)
+                    
+                # Session Details with improved styling
                 session_result = gr.Markdown(
                     value="**กำลังรอการอัปเดต...**", 
                     elem_classes=["summary-box"],
                 )
+                
             with gr.Column(visible=False) as summary_page:
-                        back_btn_2 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
-                        summary_result = gr.Markdown(
-                            value="**กำลังรอคำสั่งสรุปแชท...**", 
-                            elem_classes=["summary-box"],
-                        )
+                back_btn_2 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
+                summary_result = gr.Markdown(
+                    value="**กำลังรอคำสั่งสรุปแชท...**", 
+                    elem_classes=["summary-box"],
+                )
+                
             with gr.Row(visible=False) as session_management:
                 with gr.Column(scale=3):
                     gr.Markdown("### 🗂️ การจัดการ Session")
@@ -527,10 +742,8 @@ def create_app() -> gr.Blocks:
                         with gr.Row():
                             switch_btn = gr.Button("🔀 โหลด Session", variant="secondary")
                             refresh_btn = gr.Button("🔄 รีเฟรช", variant="primary")
-                        # with gr.Row():
-                        #     export_btn = gr.Button("📤 ส่งออกข้อมูล Session (dev)", variant="secondary")
-                        #     clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
-                        #     clear_summary_btn = gr.Button("📝 ล้างสรุป", variant="secondary")
+                        with gr.Row():
+                            clear_chat_btn = gr.Button("🗑️ ล้าง Session", variant="secondary")
                         close_management_btn = gr.Button("❌ ปิดการจัดการ Session", variant="primary")
 
             # Health Management Section
@@ -548,252 +761,121 @@ def create_app() -> gr.Blocks:
                 back_btn_1 = gr.Button("⏪ กลับไปยังแชท", variant="primary")
 
             with gr.Column() as chatbot_window:
-                # Chat Interface Section
-                gr.Markdown("## 💬 แชทบอทให้คำปรึกษาสุขภาพ")
+                # Chat Interface Section with beautiful design
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.HTML("""
+                        <div style="text-align: center; padding: 1rem 0;">
+                            <h2 style="color: #659435; margin: 0; font-size: 1.5rem;">💬 แชทบอทให้คำปรึกษาสุขภาพ</h2>
+                            <p style="color: #666; margin: 0.5rem 0 0 0;">พูดคุยกับ KaLLaM เพื่อรับคำปรึกษาด้านสุขภาพ</p>
+                        </div>
+                        """)
 
                 chatbot = gr.Chatbot(
                     label="💭 พูดคุยกับ KaLLaM",
-                    height=300,
-                    show_label=True,
+                    height=400,
+                    show_label=False,
                     type="messages",
                     elem_classes=["chat-container"],
-                    value=[{"role": "assistant", "content": "สวัสดีค่ะ 😊 ฉันชื่อกะหล่ำ 🌿 เป็นคุณหมอที่จะคอยดูแลสุขภาพกายและใจของคุณนะคะ 💖 วันนี้รู้สึกยังไงบ้างคะ? 🌸"}]
+                    value=[{"role": "assistant", "content": "สวัสดีค่ะ 😊 ฉันชื่อกะหล่ำ 🌿 เป็นคุณหมอที่จะคอยดูแลสุขภาพกายและใจของคุณนะคะ 💖 วันนี้รู้สึกยังไงบ้างคะ? 🌸"}],
                 )
 
                 with gr.Row():
-                    with gr.Column(scale=4):
+                    with gr.Column(scale=5):
                         msg = gr.Textbox(
                             label="💬 พิมพ์ข้อความของคุณ",
-                            placeholder="พิมพ์คำถามหรือข้อมูลสุขภาพ...",
+                            placeholder="พิมพ์คำถามหรือข้อมูลสุขภาพที่ต้องการปรึกษา...",
                             lines=2,
-                            max_lines=8,
+                            max_lines=4,
+                            show_label=False,
                         )
-                    with gr.Column(scale=1):
-                        send_btn = gr.Button("📤 ส่งข้อความ", variant="primary")
+                    with gr.Column(scale=1, min_width=120):
+                        send_btn = gr.Button(
+                            "📤 ส่งข้อความ", 
+                            variant="primary", 
+                            size="lg",
+                            elem_classes=["btn", "btn-primary"]
+                        )
 
-            # Event Handlers
-            refresh_btn.click(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            switch_btn.click(
-                fn=switch_session,
-                inputs=[session_dropdown],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            back_btn_1.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-
-            back_btn_2.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-
-            new_session_btn.click(
-                fn=create_new_session,
-                inputs=[health_context],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            edit_profile_btn.click( 
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,session_management,summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            manage_session_btn.click( 
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,health_management,summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            close_management_btn.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            update_saved_memories_btn.click(
-                fn=update_medical_saved_memories,
-                inputs=[health_context],
-                outputs=[session_status, session_result]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            # update_summary_btn.click(
-            #     fn=set_button_loading,
-            #     outputs=[update_summary_btn]
-            # ).then(
-            #     fn=clear_all_buttons,
-            #     inputs=None,
-            #     outputs=[chatbot_window,health_management,session_management]
-            # ).then(
-            #     fn=show_buttons,
-            #     inputs=None,
-            #     outputs=[summary_page]
-            # ).then(
-            #     fn=force_update_summary, 
-            #     outputs=[summary_result]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # ).then(
-            #     fn=reset_update_summary_button,
-            #     outputs=[update_summary_btn]
-            # )
-
-            send_btn.click(
-                fn=set_button_loading,
-                outputs=[send_btn]
-            ).then(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            ).then(
-                fn=reset_send_button,
-                outputs=[send_btn]
-            )
-
-            msg.submit(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            # clear_chat_btn.click(
-            #     fn=clear_session,
-            #     outputs=[chatbot, msg, session_result, session_status, health_context]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # )
-
-            # clear_summary_btn.click(
-            #     fn=clear_summary, 
-            #     outputs=[session_result]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # )
-
-            # export_btn.click(
-            #     fn=export_session, 
-            #     outputs=[session_result]
-            # ) 
-
-        with gr.Tab("Main App (English Ver.)"):
+        with gr.Tab("ENG Ver."):
             # Session Status Display
-            with gr.Column(
-                elem_classes=["session-info"]
-            ):
-                gr.Markdown(
-                    value="## User Profile",
-                )
+            with gr.Column(elem_classes=["session-info"]):
+                gr.Markdown(value="## User Profile")
                 with gr.Row():
                     with gr.Column():
-                        session_status = gr.Markdown(
-                            value=get_current_session_status(), 
-                        )
+                        session_status_en = gr.Markdown(value=get_current_session_status())
+                        
             with gr.Sidebar():
                 with gr.Column():
-                    new_session_btn = gr.Button("➕ New Session", variant="primary")
-                    manage_session_btn = gr.Button("🗂️ Manage Session", variant="secondary")
-                    edit_profile_btn = gr.Button("✏️ Edit Health Profile", variant="secondary")
-                    # update_summary_btn = gr.Button("📋 Force Chat Summary (dev)", variant="secondary")
+                    gr.HTML("""
+                    <div style="text-align: center; padding: 0.5rem 0 1rem 0;">
+                        <h3 style="color: #659435; margin: 0; font-size: 1.2rem;">🎛️ Controls</h3>
+                        <p style="color: #666; margin: 0.25rem 0 0 0; font-size: 0.9rem;">Manage sessions and health profile</p>
+                    </div>
+                    """)
                     
-                # Session Details Accordion
-                session_result = gr.Markdown(
+                    with gr.Group():
+                        new_session_btn_en = gr.Button(
+                            "➕ New Session", 
+                            variant="primary", 
+                            size="lg",
+                            elem_classes=["btn", "btn-primary"]
+                        )
+                        manage_session_btn_en = gr.Button(
+                            "🗂️ Manage Session", 
+                            variant="secondary",
+                            elem_classes=["btn", "btn-secondary"]
+                        )
+                        edit_profile_btn_en = gr.Button(
+                            "✏️ Edit Health Profile", 
+                            variant="secondary",
+                            elem_classes=["btn", "btn-secondary"]
+                        )
+                    
+                    gr.HTML('<div style="margin: 1rem 0;"><hr style="border: none; border-top: 1px solid #e0e0e0;"></div>')
+                    
+                    gr.HTML("""
+                    <div style="text-align: center; padding: 0.5rem 0;">
+                        <h4 style="color: #659435; margin: 0; font-size: 1rem;">📊 Current Status</h4>
+                    </div>
+                    """)
+                    
+                # Session Details with improved styling
+                session_result_en = gr.Markdown(
                     value="**Waiting for update...**", 
                     elem_classes=["summary-box"],
                 )
-            with gr.Column(visible=False) as summary_page:
-                        back_btn_2 = gr.Button("⏪ Back to Chat", variant="primary")
-                        summary_result = gr.Markdown(
-                            value="**Waiting for summary command...**", 
-                            elem_classes=["summary-box"],
-                        )
-            with gr.Row(visible=False) as session_management:
+                
+            with gr.Column(visible=False) as summary_page_en:
+                back_btn_2_en = gr.Button("⏪ Back to Chat", variant="primary")
+                summary_result_en = gr.Markdown(
+                    value="**Waiting for summary command...**", 
+                    elem_classes=["summary-box"],
+                )
+                
+            with gr.Row(visible=False) as session_management_en:
                 with gr.Column(scale=3):
                     gr.Markdown("### 🗂️ Session Management")
-                    session_ids = get_session_list()
-                    initial_session = session_ids[0] if session_ids else None
+                    session_ids_en = get_session_list()
+                    initial_session_en = session_ids_en[0] if session_ids_en else None
 
-                    session_dropdown = gr.Dropdown(
-                        choices=session_ids,
-                        value=initial_session,
+                    session_dropdown_en = gr.Dropdown(
+                        choices=session_ids_en,
+                        value=initial_session_en,
                         label="🗒️ Select Session",
                         info="Select the session you want to switch to",
                     )
                     with gr.Column():
                         with gr.Row():
-                            switch_btn = gr.Button("🔀 Load Session", variant="secondary")
-                            refresh_btn = gr.Button("🔄 Refresh", variant="primary")
-                        # with gr.Row():
-                        #     export_btn = gr.Button("📤 Export Session (dev)", variant="secondary")
-                        #     clear_chat_btn = gr.Button("🗑️ Clear Session", variant="secondary")
-                        #     clear_summary_btn = gr.Button("📝 Clear Summary", variant="secondary")
-                        close_management_btn = gr.Button("❌ Close Session Management", variant="primary")
+                            switch_btn_en = gr.Button("🔀 Load Session", variant="secondary")
+                            refresh_btn_en = gr.Button("🔄 Refresh", variant="primary")
+                        with gr.Row():
+                            clear_chat_btn_en = gr.Button("🗑️ Clear Session", variant="secondary")
+                        close_management_btn_en = gr.Button("❌ Close Session Management", variant="primary")
 
             # Health Management Section
-            with gr.Column(visible=False) as health_management:
-                health_context = gr.Textbox(
+            with gr.Column(visible=False) as health_management_en:
+                health_context_en = gr.Textbox(
                     label="🏥 Patient's Health Information",
                     placeholder="e.g., Patient's name, age, high blood pressure, diabetes, sleep issues, stress level...",
                     value="",
@@ -802,381 +884,343 @@ def create_app() -> gr.Blocks:
                     info="This information will be saved in the session and used to personalize advice",
                     elem_classes=["saved_memories-box"]
                 )
-                update_saved_memories_btn = gr.Button("💾 Update Health Information", variant="primary")
-                back_btn_1 = gr.Button("⏪ Back to Chat", variant="primary")
-            with gr.Column() as chatbot_window:
-                # Chat Interface Section
-                gr.Markdown("## 💬 Health Consultation Chatbot")
+                update_saved_memories_btn_en = gr.Button("💾 Update Health Information", variant="primary")
+                back_btn_1_en = gr.Button("⏪ Back to Chat", variant="primary")
 
-                chatbot = gr.Chatbot(
+            with gr.Column() as chatbot_window_en:
+                # Chat Interface Section with beautiful design
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.HTML("""
+                        <div style="text-align: center; padding: 1rem 0;">
+                            <h2 style="color: #659435; margin: 0; font-size: 1.5rem;">💬 Health Consultation Chatbot</h2>
+                            <p style="color: #666; margin: 0.5rem 0 0 0;">Chat with KaLLaM for personalized health guidance</p>
+                        </div>
+                        """)
+
+                chatbot_en = gr.Chatbot(
                     label="💭 Chat with KaLLaM",
-                    height=300,
-                    show_label=True,
+                    height=400,
+                    show_label=False,
                     type="messages",
                     elem_classes=["chat-container"],
-                    value=[{"role": "assistant", "content": "Hello there I’m KaLLaM 🌿, your caring doctor chatbot 💖 I’ll be here to support your health and well-being. How are you feeling today? 😊"}]
-
+                    value=[{"role": "assistant", "content": "Hello there! I'm KaLLaM 🌿, your caring doctor chatbot 💖 I'll be here to support your health and well-being. How are you feeling today? 😊"}],
                 )
 
                 with gr.Row():
-                    with gr.Column(scale=4):
-                        msg = gr.Textbox(
+                    with gr.Column(scale=5):
+                        msg_en = gr.Textbox(
                             label="💬 Type your message",
-                            placeholder="Type your question or health information...",
+                            placeholder="Type your question or health information for consultation...",
                             lines=2,
-                            max_lines=8,
+                            max_lines=4,
+                            show_label=False,
                         )
-                    with gr.Column(scale=1):
-                        send_btn = gr.Button("📤 Send Message", variant="primary")
+                    with gr.Column(scale=1, min_width=120):
+                        send_btn_en = gr.Button(
+                            "📤 Send Message", 
+                            variant="primary", 
+                            size="lg",
+                            elem_classes=["btn", "btn-primary"]
+                        )
 
-            # Event Handlers
-            refresh_btn.click(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            switch_btn.click(
-                fn=switch_session,
-                inputs=[session_dropdown],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            back_btn_1.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-
-            back_btn_2.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-
-            new_session_btn.click(
-                fn=create_new_session,
-                inputs=[health_context],
-                outputs=[chatbot, msg, session_result, session_status, health_context]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            edit_profile_btn.click( 
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,session_management,summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            manage_session_btn.click( 
-                fn=clear_all_buttons,
-                inputs=None,
-                outputs=[chatbot_window,health_management,summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            close_management_btn.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[session_management]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            update_saved_memories_btn.click(
-                fn=update_medical_saved_memories,
-                inputs=[health_context],
-                outputs=[session_status, session_result]
-            ).then(
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            ).then( 
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            # update_summary_btn.click(
-            #     fn=set_button_loading,
-            #     outputs=[update_summary_btn]
-            # ).then(
-            #     fn=clear_all_buttons,
-            #     inputs=None,
-            #     outputs=[chatbot_window,health_management,session_management]
-            # ).then(
-            #     fn=show_buttons,
-            #     inputs=None,
-            #     outputs=[summary_page]
-            # ).then(
-            #     fn=force_update_summary, 
-            #     outputs=[summary_result]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # ).then(
-            #     fn=reset_update_summary_button,
-            #     outputs=[update_summary_btn]
-            # )
-
-            send_btn.click(
-                fn=set_button_loading,
-                outputs=[send_btn]
-            ).then(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            ).then(
-                fn=reset_send_button,
-                outputs=[send_btn]
-            )
-
-            msg.submit(
-                fn=process_chat_message,
-                inputs=[msg, chatbot, health_context],
-                outputs=[chatbot, msg]
-            ).then(
-                fn=refresh_session_list, 
-                outputs=[session_dropdown]
-            )
-
-            # clear_chat_btn.click(
-            #     fn=clear_session,
-            #     outputs=[chatbot, msg, session_result, session_status, health_context]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # )
-
-            # clear_summary_btn.click(
-            #     fn=clear_summary, 
-            #     outputs=[session_result]
-            # ).then(
-            #     fn=refresh_session_list, 
-            #     outputs=[session_dropdown]
-            # )
-
-            back_btn_1.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[health_management]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-
-            back_btn_2.click(
-                fn=hide_buttons,
-                inputs=None,
-                outputs=[summary_page]
-            ).then( 
-                fn=show_buttons,
-                inputs=None,
-                outputs=[chatbot_window]
-            )
-        with gr.Tab("POC Description"):
+        with gr.Tab("Contact Us"):
             gr.Markdown("""
-# 🧪 **Note for Proof of Concept (POC)**
-
-## What is KaLLaM?
-
-**KaLLaM** (กะหล่ำ) is a warm Thai AI healthcare caring female doctor chatbot. Providing medical guidance and mental health support in Thai language, helping patients take better care of themselves.
-
-## Main Features
-
-### 🩺 **Thai Medical Assistant**
-- Speaks naturally in Thai with appropriate medical terminology
-- Behaves like a friendly Thai female doctor/psychiatrist
-- Understands Thai culture and communication style
-- Uses respectful Thai addressing from the according local cultural context
-
-### 💬 **Smart Conversations**
-- Remembers what you talked about before (up to 200 responses)
-- Can shoot follow-up questions
-- Can handle long conversations without losing main context
-
-### 🎯 **Health Assessment**
-- Asks about sleep, eating, exercise, mood, and stress
-- Digs deeper to find the real cause of problems
-- Uses proven questioning techniques from real doctors
-- Helps stubborn patients who don't want to change their habits
-
-### 🧠 **Two AI Options**
-- **SEA-Lion**: Specialized for Southeast Asian languages and context
-- **Gemini**: Google's AI as backup option
-
-## How It Works
-
-### Basic Usage
-```python
-# Create the chatbot
-doctor = KaLLaMChatbot(api_provider="sea_lion")
-
-# Get medical advice
-response = doctor.get_chatbot_response(
-    chat_history=previous_messages,
-    user_message="ปวดหัวมาก 3 วันแล้ว",
-    health_status="patient_info"
-)
-```
-
-### Key Capabilities
-1. **Medical Consultation**: Analyzes symptoms and gives advice
-2. **Follow-up Care**: Capable of asking "How are you doing now?" as poking conversation (automatically in future)
-3. **Conversation Summary**: Remembers important details from long chats
-4. **Progress Tracking**: Monitors if patients are following advice
-
-## What Makes It Special
-
-### 🇹🇭 **Thai-First Design**
-- Built specifically for Thai patients
-- Understands Thai medical culture
-- Uses appropriate Thai's level of formality
-- Considers Thai cultural context dynamics
-
-### 💪 **Handles Difficult Patients**
-- Doesn't give up when patients resist advice
-- Uses medical facts to motivate change
-- Handle behavior bhange & lifestyle interventions
-- Stays calm with angry or frustrated patients
-- Capable of using multiple professional psychologist techniques
-
-## Real-World Applications
-
-### 🏥 **Primary Healthcare**
-- First-line medical consultation
-- Symptom assessment and triage
-- Basic health screening
-- Referral guidance
-
-### 🧘 **Mental Health Support**
-- Stress and anxiety management
-- Depression screening
-- Emotional support
-- Crisis prevention
-
-### 🔄 **Chronic Care Management**
-- Medication reminders
-- Lifestyle coaching
-- Symptom monitoring
-- Patient education
-
-## POC Success Goals
-
-### Patient Experience
-- Patients feel understood and cared for
-- High engagement and return usage
-- Improved health awareness
-- Better compliance with medical advice
-
-### Clinical Impact
-- Accurate behavioral and medical guidance
-- Early problem detection
-- Better overall health outcomes
-
-### System Performance
-- Fast responses (under 3 seconds)
-- Works reliably 24/7
-- Handles multiple conversations
-- Graceful error recovery
-
-## Why This POC Matters
-
-Thailand’s Universal Coverage Scheme (UCS) offers highly affordable healthcare, often requiring only a 30 THB co-payment per visit. While this ensures accessibility, it has led to overutilization, with many individuals seeking hospital care for saved_memoriess that could be managed at home. This pattern places immense strain on medical professionals, who face overwhelming patient loads while receiving relatively low compensation, prompting many to seek employment in private institutions. The problem is further exacerbated by uneven resource distribution, with rural areas experiencing a significant shortage of medical personnel compared to urban centers. Additionally, lifestyle changes in rural communities, such as increased consumption of processed foods and reduced physical activity, have contributed to a rise in chronic diseases. Many individuals in these areas lack adequate health literacy, hindering their ability to manage their health effectively and leading to poor self-care practices.
-
-To address these multifaceted challenges, we propose KaLLaM—a Thai Motivational Therapeutic Advisor chatbot powered by a large language model (LLM). KaLLaM is designed to act as an empathetic and supportive healthcare advisor, guiding patients in managing their health while reducing unnecessary hospital visits. By collecting medical history, symptoms, and lifestyle information, the chatbot provides users with personalized, evidence-based guidance tailored to their unique situation. This approach aims to bridge the gap between patients and healthcare providers, especially in underserved rural areas.
-
-KaLLaM offers a comprehensive approach to patient engagement. It provides actionable recommendations for both physical and mental well-being, using motivational and empathetic prompts to encourage healthy habits. The system can communicate in Thai or English, adapting its responses to cultural and linguistic context. Beyond advice, KaLLaM educates users about their own saved_memoriess, promoting self-care, disease prevention, and early intervention strategies—all in a patient-friendly conversational format. This feature is particularly crucial in rural areas, where access to healthcare professionals is limited, and health literacy is often low.
-
-By simulating a trusted healthcare adviser, KaLLaM empowers patients to take proactive steps toward managing their health. It has the potential to reduce unnecessary hospital visits, ease the workload of medical professionals, and optimize healthcare resource allocation. Furthermore, by enhancing health literacy and encouraging preventive care, the chatbot contributes to long-term improvements in public health and supports a more sustainable, equitable healthcare system across Thailand. In rural communities, where lifestyle changes and limited health education have led to increased chronic diseases, KaLLaM can play a pivotal role in reversing these trends and promoting healthier living.
-
-                                           
-**Build with ❤️ by:** 
+### **Built with ❤️ by:**
                         
-Nopnatee Trivoravong nopnatee.triv@gmail.com
-                        
-Khamic Srisutrapon khamic.sk@gmail.com
-                        
-Napas Siripala millynapas@gmail.com
-                        
-Kongtup Sai-aroon kongtup.sip@student.mahidol.edu
-                        """)
+**👨‍💻 Nopnatee Trivoravong** 📧 nopnatee.triv@gmail.com 🐙 [GitHub Profile](https://github.com/Nopnatee)
 
+**👨‍💻 Khamic Srisutrapon** 📧 khamic.sk@gmail.com 🐙 [GitHub Profile](https://github.com/Khamic672)
+
+**👩‍💻 Napas Siripala** 📧 millynapas@gmail.com 🐙 [GitHub Profile](https://github.com/kaoqueri)
+
+---
+""")
+
+        # ====== EVENT HANDLERS ======
         
+        # Thai Version Event Handlers
+        refresh_btn.click(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        switch_btn.click(
+            fn=switch_session,
+            inputs=[session_dropdown],
+            outputs=[chatbot, msg, session_result, session_status, health_context]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        back_btn_1.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        )
+
+        back_btn_2.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[summary_page]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        )
+
+        new_session_btn.click(
+            fn=create_new_session,
+            inputs=[health_context],
+            outputs=[chatbot, msg, session_result, session_status, health_context]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        edit_profile_btn.click( 
+            fn=clear_all_buttons,
+            inputs=None,
+            outputs=[chatbot_window, session_management, summary_page]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        manage_session_btn.click( 
+            fn=clear_all_buttons,
+            inputs=None,
+            outputs=[chatbot_window, health_management, summary_page]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[session_management]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        close_management_btn.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[session_management]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        update_saved_memories_btn.click(
+            fn=update_medical_saved_memories,
+            inputs=[health_context],
+            outputs=[session_status, session_result]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window]
+        ).then( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        send_btn.click(
+            fn=lambda: set_button_loading("⏳ ประมวลผล..."),
+            outputs=[send_btn]
+        ).then(
+            fn=process_chat_message,
+            inputs=[msg, chatbot],
+            outputs=[chatbot, msg]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        ).then(
+            fn=lambda: reset_button("📤 ส่งข้อความ", "primary"),
+            outputs=[send_btn]
+        )
+
+        msg.submit(
+            fn=process_chat_message,
+            inputs=[msg, chatbot],
+            outputs=[chatbot, msg]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown]
+        )
+
+        clear_chat_btn.click(
+            fn=lambda: set_button_loading("⏳ กำลังลบ..."),
+            outputs=[clear_chat_btn]
+        ).then(
+            fn=clear_session,
+            outputs=[chatbot, msg, session_result, session_status, health_context]
+        ).then(
+            fn=lambda: reset_button("🗑️ ล้าง Session", "secondary"),
+            outputs=[clear_chat_btn]
+        )
+
+        # English Version Event Handlers (mirror Thai version)
+        refresh_btn_en.click(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        switch_btn_en.click(
+            fn=switch_session,
+            inputs=[session_dropdown_en],
+            outputs=[chatbot_en, msg_en, session_result_en, session_status_en, health_context_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        back_btn_1_en.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management_en]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en]
+        )
+
+        back_btn_2_en.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[summary_page_en]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en]
+        )
+
+        new_session_btn_en.click(
+            fn=create_new_session,
+            inputs=[health_context_en],
+            outputs=[chatbot_en, msg_en, session_result_en, session_status_en, health_context_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        edit_profile_btn_en.click( 
+            fn=clear_all_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en, session_management_en, summary_page_en]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[health_management_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        manage_session_btn_en.click( 
+            fn=clear_all_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en, health_management_en, summary_page_en]
+        ).then( 
+            fn=show_buttons,
+            inputs=None,
+            outputs=[session_management_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        close_management_btn_en.click(
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[session_management_en]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        update_saved_memories_btn_en.click(
+            fn=update_medical_saved_memories,
+            inputs=[health_context_en],
+            outputs=[session_status_en, session_result_en]
+        ).then(
+            fn=show_buttons,
+            inputs=None,
+            outputs=[chatbot_window_en]
+        ).then( 
+            fn=hide_buttons,
+            inputs=None,
+            outputs=[health_management_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        send_btn_en.click(
+            fn=lambda: set_button_loading("⏳ Processing..."),
+            outputs=[send_btn_en]
+        ).then(
+            fn=process_chat_message,
+            inputs=[msg_en, chatbot_en],
+            outputs=[chatbot_en, msg_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        ).then(
+            fn=lambda: reset_button("📤 Send Message", "primary"),
+            outputs=[send_btn_en]
+        )
+
+        msg_en.submit(
+            fn=process_chat_message,
+            inputs=[msg_en, chatbot_en],
+            outputs=[chatbot_en, msg_en]
+        ).then(
+            fn=refresh_session_list, 
+            outputs=[session_dropdown_en]
+        )
+
+        clear_chat_btn_en.click(
+            fn=lambda: set_button_loading("⏳ Deleting..."),
+            outputs=[clear_chat_btn_en]
+        ).then(
+            fn=clear_session,
+            outputs=[chatbot_en, msg_en, session_result_en, session_status_en, health_context_en]
+        ).then(
+            fn=lambda: reset_button("🗑️ Clear Session", "secondary"),
+            outputs=[clear_chat_btn_en]
+        )
+
     return app
 
-
 def main():
-    """Main function to launch the application"""
-    try:
-        app = create_app()
-        
-        # Check if we should try to create a share link
-        try_share = True
-        
-        if try_share:
-            print("Attempting to create share link...")
-            print("Note: If share link creation fails, the app will still run locally")
-            
-            # Launch with share=True, but it will fallback to local automatically
-            app.launch(
-                share=False,  # Set to True if you want to try sharing
-                server_name="0.0.0.0",
-                server_port=7860,
-                debug=True,
-                show_error=True,
-                inbrowser=True
-            )
-        else:
-            print("Launching locally only...")
-            app.launch(
-                share=False,
-                server_name="127.0.0.1", # for cloud 127.0.0.1 for local
-                server_port=8080, # for cloud 7860 for local
-                debug=True,
-                show_error=True,
-                inbrowser=True
-            )
-            
-    except Exception as e:
-        logger.error(f"Failed to launch application: {e}")
-        raise
+    app = create_app()
+    app.launch(
+        share=False,
+        server_name="0.0.0.0", # for cloud 127.0.0.1 for local
+        server_port=int(os.getenv("PORT", 8080)), # for cloud 7860 for local
+        debug=True,
+        show_error=True,
+        inbrowser=False
+    )
 
 def main_local_only():
     """Launch application locally only (no share link attempt)"""
@@ -1197,81 +1241,6 @@ def main_local_only():
         logger.error(f"Failed to launch application: {e}")
         raise
 
-def main_with_timeout():
-    """Launch with share link timeout detection"""
-    import time
-    import threading
-    
-    try:
-        app = create_app()
-        
-        # Create a flag to track if share link was created
-        share_success = threading.Event()
-        
-        def launch_with_monitoring():
-            try:
-                print("Attempting to create share link (with timeout monitoring)...")
-                app.launch(
-                    share=True,
-                    server_name="0.0.0.0",
-                    server_port=7860,
-                    debug=True,
-                    show_error=True,
-                    inbrowser=True
-                )
-                share_success.set()
-            except Exception as e:
-                print(f"Launch failed: {e}")
-        
-        # Start the launch in a separate thread
-        launch_thread = threading.Thread(target=launch_with_monitoring)
-        launch_thread.daemon = True
-        launch_thread.start()
-        
-        # Wait for a bit to see if share link gets created
-        time.sleep(5)
-        
-        if not share_success.is_set():
-            print("Share link creation is taking time or failed.")
-            print("Check the console output above for share link status.")
-            print("Your app should still be accessible locally at: http://localhost:7860")
-        
-        # Wait for the thread to complete
-        launch_thread.join()
-        
-    except Exception as e:
-        logger.error(f"Failed to launch application: {e}")
-        raise
-
-# Alternative: Use ngrok for sharing (requires installation)
-def main_with_ngrok():
-    """Alternative main function using ngrok for sharing"""
-    try:
-        # Install ngrok first: pip install pyngrok
-        from pyngrok import ngrok
-        
-        # Start ngrok tunnel
-        public_url = ngrok.connect(7860)
-        print(f"🌐 Public URL: {public_url}")
-        print(f"🏠 Local URL: http://localhost:7860")
-        
-        app = create_app()
-        app.launch(
-            share=False,
-            server_name="127.0.0.1",
-            server_port=7860,
-            debug=True,
-            show_error=True,
-            inbrowser=False 
-        )
-    except ImportError:
-        print("pyngrok not installed. Install with: pip install pyngrok")
-        print("Falling back to regular launch...")
-        main_local_only()
-    except Exception as e:
-        logger.error(f"Failed to launch application: {e}")
-        raise
-
 if __name__ == "__main__":
     # Choose which version to use:
     
@@ -1279,10 +1248,4 @@ if __name__ == "__main__":
     # main()
     
     # Option 2: Local only (uncomment to use instead)
-    # main_local_only()
-    
-    # Option 3: Use ngrok for sharing (uncomment to use instead)
-    main_with_ngrok()
-    
-    # Option 4: With timeout monitoring (uncomment to use instead)
-    # main_with_timeout()
+    main_local_only()
