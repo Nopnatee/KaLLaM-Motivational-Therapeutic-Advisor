@@ -351,7 +351,7 @@ Please follow the guidance above."""
             return "I apologize, but I'm experiencing technical difficulties. Please try again later, and if you're having thoughts of self-harm or are in crisis, please contact a mental health professional or emergency services immediately."
 
     # ===== ANALYSIS METHODS FOR ORCHESTRATOR =====
-    def analyze(self, message: str, history: List[Dict[str, str]], chain_of_thoughts: List[Dict[str, str]], summarized_histories: List[Dict[str, str]]) -> str:
+    def analyze(self, message: str, history: List[Dict[str, str]], chain_of_thoughts: str, summarized_histories: str) -> str:
         """
         Analyze method expected by the orchestrator
         Provides psychological analysis and therapeutic guidance
@@ -552,7 +552,7 @@ if __name__ == "__main__":
     print(f"\n ANALYZE METHOD RESPONSE:")
     print("-" * 50)
     
-    analyze_response = psychologist.analyze(test_message, test_history, test_chain_of_thoughts, test_summarized_histories)
+    analyze_response = psychologist.analyze(test_message, test_history, str(test_chain_of_thoughts), str(test_summarized_histories))
     print(analyze_response)
 
     # Run other tests

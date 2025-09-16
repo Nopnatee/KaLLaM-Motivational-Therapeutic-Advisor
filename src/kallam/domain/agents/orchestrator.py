@@ -162,13 +162,13 @@ class Orchestrator:
         if flags.get("doctor"):  # Dummy for now
             self.logger.debug("Activating DoctorAgent")
             commentary["doctor"] = self.doctor.analyze(
-                eng_message, eng_history, json.dumps(chain_of_thoughts), json.dumps(summarized_histories)
+                eng_message, eng_history, json.dumps(chain_of_thoughts, ensure_ascii=False), json.dumps(summarized_histories, ensure_ascii=False)
             )
 
         if flags.get("psychologist"):  # Dummy for now
             self.logger.debug("Activating PsychologistAgent")
             commentary["psychologist"] = self.psychologist.analyze(
-                original_message, original_history, chain_of_thoughts, summarized_histories
+                original_message, original_history, json.dumps(chain_of_thoughts, ensure_ascii=False), json.dumps(summarized_histories, ensure_ascii=False)
             )
 
         commentary["final_output"] = self.supervisor.generate_feedback(
