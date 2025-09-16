@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import List, Tuple, Optional
 import os
+import socket
 
 from kallam.app.chatbot_manager import ChatbotManager
 from kallam.infra.db import sqlite_conn  # use the shared helper
@@ -1213,13 +1214,49 @@ def create_app() -> gr.Blocks:
 
 def main():
     app = create_app()
+    # Resolve bind address and port
+    server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    server_port = int(os.getenv("PORT", os.getenv("GRADIO_SERVER_PORT", 8080)))
+
+    # Basic health log to confirm listening address
+    try:
+        hostname = socket.gethostname()
+        ip_addr = socket.gethostbyname(hostname)
+    except Exception:
+        hostname = "unknown"
+        ip_addr = "unknown"
+
+    logger.info(
+        "Starting Gradio app | bind=%s:%s | host=%s ip=%s",
+        server_name,
+        server_port,
+        hostname,
+        ip_addr,
+    )
+    logger.info(
+        "Env: PORT=%s GRADIO_SERVER_NAME=%s GRADIO_SERVER_PORT=%s",
+        os.getenv("PORT"),
+        os.getenv("GRADIO_SERVER_NAME"),
+        os.getenv("GRADIO_SERVER_PORT"),
+    )
+    # Secrets presence check (mask values)
+    def _mask(v: str | None) -> str:
+        if not v:
+            return "<missing>"
+        return f"set(len={len(v)})"
+    logger.info(
+        "Secrets: SEA_LION_API_KEY=%s GEMINI_API_KEY=%s",
+        _mask(os.getenv("SEA_LION_API_KEY")),
+        _mask(os.getenv("GEMINI_API_KEY")),
+    )
+
     app.launch(
-        share=False,
-        server_name="0.0.0.0", # for cloud 127.0.0.1 for local
-        server_port=int(os.getenv("PORT", 8080)), # for cloud 7860 for local
+        share=True,
+        server_name=server_name,  # cloud: 0.0.0.0, local: 127.0.0.1
+        server_port=server_port,  # cloud: $PORT, local: 7860/8080
         debug=True,
         show_error=True,
-        inbrowser=False
+        inbrowser=True,
     )
 
 def main_local_only():

@@ -12,7 +12,7 @@ run:
   pre-run:
     - python3 -m pip install --no-cache-dir .
     - python3 -c "import gradio, kallam; print('deps-ok', kallam.file)"
-  command: python3 gui/chatbot_dev_app.py
+  command: python3 gui/chatbot_demo.py
   env:
     - name: GRADIO_SERVER_NAME
       value: "0.0.0.0"
