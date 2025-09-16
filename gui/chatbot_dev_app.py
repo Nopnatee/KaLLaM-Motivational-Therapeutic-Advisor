@@ -484,6 +484,16 @@ def main():
         os.getenv("GRADIO_SERVER_NAME"),
         os.getenv("GRADIO_SERVER_PORT"),
     )
+    # Secrets presence check (mask values)
+    def _mask(v: str | None) -> str:
+        if not v:
+            return "<missing>"
+        return f"set(len={len(v)})"
+    logger.info(
+        "Secrets: SEA_LION_API_KEY=%s GEMINI_API_KEY=%s",
+        _mask(os.getenv("SEA_LION_API_KEY")),
+        _mask(os.getenv("GEMINI_API_KEY")),
+    )
 
     app.launch(
         share=False,
