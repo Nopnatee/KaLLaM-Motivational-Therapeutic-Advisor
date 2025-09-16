@@ -104,7 +104,7 @@ class ChatbotManager:
     """
 
     def __init__(self,
-                 db_path: str = "chatbot_data.db",
+                 db_path: str = "chatbot_single_llm_data.db",
                  summarize_every_n_messages: int = 10,
                  message_limit: int = 10,
                  sunmmary_limit: int = 20,
