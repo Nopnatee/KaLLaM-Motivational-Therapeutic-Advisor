@@ -8,21 +8,34 @@ build:
       - pip3 install --upgrade pip setuptools wheel
 
 run:
-  # pin to a supported minor; or omit this line to let AWS pick latest 3.11
   runtime-version: 3.11.13
-  # Py311 revised-build quirk: install your package here, not in build
   pre-run:
-    - pip3 install --no-cache-dir .
-  # start like your Dockerfile's CMD
+    - python3 -m pip install --no-cache-dir .
+    - python3 -c "import gradio, kallam; print('deps-ok', kallam.file)"
   command: python3 gui/chatbot_dev_app.py
-  # optional envs (valid location is under run.env)
   env:
     - name: GRADIO_SERVER_NAME
       value: "0.0.0.0"
-    - name: PIP_NO_CACHE_DIR
+    - name: PYTHONUNBUFFERED
       value: "1"
     - name: PYTHONDONTWRITEBYTECODE
       value: "1"
-    - name: PYTHONUNBUFFERED
+    - name: PIP_NO_CACHE_DIR
       value: "1"
-    # Do NOT set PORT here; App Runner injects it
+
+    - name: SEA_LION_API_KEY
+      type: secretsmanager
+      value: arn:aws:secretsmanager:ap-southeast-2:600748199322:secret:prod/kallam/api-keys-cYfuO3
+      key: SEA_LION_API_KEY
+    - name: GEMINI_API_KEY
+      type: secretsmanager
+      value: arn:aws:secretsmanager:ap-southeast-2:600748199322:secret:prod/kallam/api-keys-cYfuO3
+      key: GEMINI_API_KEY
+    - name: NGROK_AUTHTOKEN
+      type: secretsmanager
+      value: arn:aws:secretsmanager:ap-southeast-2:600748199322:secret:prod/kallam/api-keys-cYfuO3
+      key: NGROK_AUTHTOKEN
+    - name: OPENAI_API_KEY
+      type: secretsmanager
+      value: arn:aws:secretsmanager:ap-southeast-2:600748199322:secret:prod/kallam/api-keys-cYfuO3
+      key: OPENAI_API_KEY
