@@ -13,14 +13,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API clients
-import openai
 import google.generativeai as genai
 import requests
 logger = logging.getLogger(__name__)
 
 class APIProvider(Enum):
     GEMINI = "gemini"
-    GPT = "gpt"
     SEALION = "sealion"
 
 @dataclass
@@ -39,22 +37,51 @@ class UniversalExpertAgent:
     
         logger.setLevel(log_level)
 
-        # API provider
-        self.api_provider = APIProvider(api_provider) if isinstance(api_provider, str) else api_provider
+        # API provider - with explicit logging
+        logger.info(f"Raw api_provider parameter received: {api_provider} (type: {type(api_provider)})")
+        
+        if isinstance(api_provider, str):
+            logger.info(f"Converting string '{api_provider}' to APIProvider enum")
+            self.api_provider = APIProvider(api_provider.lower())
+        else:
+            self.api_provider = api_provider
+            
+        logger.info(f"Final api_provider set to: {self.api_provider}")
+        
+        # Force SeaLion if we detect it should be used
+        if api_provider == "sealion" or api_provider == APIProvider.SEALION:
+            self.api_provider = APIProvider.SEALION
+            logger.info("Explicitly forcing SeaLion provider")
 
-        # --- Load all keys like orchestrator ---
-        self._openai_key = os.getenv("OPENAI_API_KEY")
+        # --- Load API keys ---
         self._gemini_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-        self._sealion_key = os.getenv("SEALION_API_KEY")
-        self._sealion_url = os.getenv("SEALION_API_URL", "https://api.sealion.ai/v1/generate")
+        # Try multiple possible environment variable names for SeaLion
+        self._sealion_key = (os.getenv("SEALION_API_KEY") or 
+                            os.getenv("SEA_LION_API_KEY") or 
+                            os.getenv("SEALION_KEY"))
+        self._sealion_url = os.getenv("SEALION_API_URL", "https://api.sea-lion.ai/v1/chat/completions")
 
         # choose api key based on provider
         self.api_key = api_key or self._get_api_key_from_env(self.api_provider)
 
         # Debug logging to see what's happening
-        logger.info(f"Initializing with provider: {self.api_provider}")
+        logger.info(f"Requested provider: {self.api_provider}")
         logger.info(f"SeaLion key available: {bool(self._sealion_key)}")
+        logger.info(f"SeaLion key preview: {self._sealion_key[:10] + '...' if self._sealion_key else 'None'}")
+        logger.info(f"Gemini key available: {bool(self._gemini_key)}")
         logger.info(f"Final API key set: {bool(self.api_key)}")
+        logger.info(f"Final API key preview: {self.api_key[:10] + '...' if self.api_key else 'None'}")
+        
+        # Failsafe check - if we want SeaLion but don't have the key, show clear error
+        if self.api_provider == APIProvider.SEALION and not self._sealion_key:
+            logger.error("CRITICAL: SeaLion provider requested but no SeaLion API key found!")
+            logger.error("Checked environment variables: SEALION_API_KEY, SEA_LION_API_KEY, SEALION_KEY")
+            logger.error(f"Available environment variables: {list(os.environ.keys())}")
+            raise ValueError("SeaLion API key not found in environment variables")
+            
+        # Another failsafe - if we want SeaLion and have the key, make sure we don't fall back
+        if self.api_provider == APIProvider.SEALION and self._sealion_key:
+            logger.info("✓ SeaLion provider confirmed with valid API key")
 
         # Initialize API client
         self._initialize_api_client()
@@ -66,9 +93,7 @@ class UniversalExpertAgent:
         logger.info(f"UniversalExpertAgent initialized with provider {self.api_provider.value}")
             
     def _get_api_key_from_env(self, provider: APIProvider) -> Optional[str]:
-        if provider == APIProvider.GPT:
-            return self._openai_key
-        elif provider == APIProvider.GEMINI:
+        if provider == APIProvider.GEMINI:
             return self._gemini_key
         elif provider == APIProvider.SEALION:
             return self._sealion_key
@@ -78,14 +103,7 @@ class UniversalExpertAgent:
     def _initialize_api_client(self) -> None:
         """Initialize the appropriate API client like orchestrator does."""
         try:
-            if self.api_provider == APIProvider.GPT:
-                if not self._openai_key:
-                    raise ValueError("OPENAI_API_KEY required for GPT provider")
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self._openai_key)
-                logger.info("OpenAI GPT client initialized")
-
-            elif self.api_provider == APIProvider.GEMINI:
+            if self.api_provider == APIProvider.GEMINI:
                 if not self._gemini_key:
                     raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY required for Gemini provider")
                 genai.configure(api_key=self._gemini_key)
@@ -101,18 +119,14 @@ class UniversalExpertAgent:
 
             elif self.api_provider == APIProvider.SEALION:
                 if not self._sealion_key:
-                    raise ValueError("SEALION_API_KEY required for SeaLion provider")
-                # Store SeaLion configuration as a dict for requests
-                self.client = None  # SeaLion doesn't need a client object
-                self.sealion_config = {
-                    "api_key": self._sealion_key,
-                    "api_url": self._sealion_url,
-                    "headers": {
-                        "Authorization": f"Bearer {self._sealion_key}",
-                        "Content-Type": "application/json",
-                    },
-                }
-                logger.info("SeaLion API client configured")
+                    raise ValueError("SEALION_API_KEY, SEA_LION_API_KEY, or SEALION_KEY required for SeaLion provider")
+                # SeaLion API is OpenAI-compatible, so we use OpenAI client with SeaLion endpoint
+                from openai import OpenAI
+                self.client = OpenAI(
+                    api_key=self._sealion_key,
+                    base_url="https://api.sea-lion.ai/v1"
+                )
+                logger.info("SeaLion API client initialized (OpenAI-compatible)")
 
         except Exception as e:
             logger.error(f"Failed to initialize {self.api_provider.value} API client: {e}")
@@ -409,9 +423,16 @@ class UniversalExpertAgent:
         logger.info(f"Generating response with provider: {self.api_provider.value}")
         
         try:
-            if self.api_provider == APIProvider.SEALION:
+            if self.api_provider == APIProvider.GEMINI:
+                # Use the initialized client directly
+                full_prompt = f"{config.system_prompt}\n\n{context}"
+                result = self.client.generate_content(full_prompt)
+                return result.text.strip()
+
+            elif self.api_provider == APIProvider.SEALION:
+                # SeaLion API is OpenAI-compatible
                 response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="aisingapore/Gemma-SEA-LION-v3-9B-IT",  # Default SeaLion model
                     messages=[
                         {"role": "system", "content": config.system_prompt},
                         {"role": "user", "content": context}
@@ -420,58 +441,6 @@ class UniversalExpertAgent:
                     max_tokens=config.max_tokens
                 )
                 return response.choices[0].message.content.strip()
-
-            elif self.api_provider == APIProvider.GEMINI:
-                # Use the initialized client directly
-                full_prompt = f"{config.system_prompt}\n\n{context}"
-                result = self.client.generate_content(full_prompt)
-                return result.text.strip()
-
-            elif self.api_provider == APIProvider.SEALION:
-                # Use the stored configuration
-                headers = self.sealion_config["headers"]
-                url = self.sealion_config["api_url"]
-                
-                # Construct the payload according to SeaLion API spec
-                payload = {
-                    "prompt": f"{config.system_prompt}\n\n{context}",
-                    "temperature": config.temperature,
-                    "max_tokens": config.max_tokens,
-                    "top_p": 0.9,
-                    "frequency_penalty": 0.0,
-                    "presence_penalty": 0.0
-                }
-                
-                logger.info(f"Making SeaLion API request to: {url}")
-                logger.info(f"Payload keys: {list(payload.keys())}")
-                
-                response = requests.post(
-                    url, 
-                    headers=headers, 
-                    json=payload, 
-                    timeout=60
-                )
-                
-                logger.info(f"SeaLion response status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    logger.info(f"SeaLion response keys: {list(result.keys())}")
-                    
-                    # Handle different possible response formats
-                    if "text" in result:
-                        return result["text"].strip()
-                    elif "choices" in result and len(result["choices"]) > 0:
-                        return result["choices"][0].get("text", "").strip()
-                    elif "completion" in result:
-                        return result["completion"].strip()
-                    else:
-                        logger.error(f"Unexpected SeaLion response format: {result}")
-                        return f"Error: Unexpected response format from SeaLion API"
-                else:
-                    error_msg = f"SeaLion API error {response.status_code}: {response.text}"
-                    logger.error(error_msg)
-                    return f"Error: {error_msg}"
 
             else:
                 return f"Error: Unknown API provider {self.api_provider.value}"
@@ -565,18 +534,41 @@ def create_gemini_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExp
         **kwargs
     )
 
-def create_gpt_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExpertAgent:
-    """Create agent with GPT API - auto-loads from OPENAI_API_KEY if not provided"""
-    return UniversalExpertAgent(
-        api_provider=APIProvider.GPT,
-        api_key=api_key,
-        **kwargs
-    )
-
 def create_sealion_agent(api_key: Optional[str] = None, **kwargs) -> UniversalExpertAgent:
-    """Create agent with SeaLion API - auto-loads from SEALION_API_KEY if not provided"""
-    return UniversalExpertAgent(
+    """Create agent with SeaLion API - auto-loads from SEA_LION_API_KEY if not provided"""
+    print(f"create_sealion_agent called with api_key: {bool(api_key)}")
+    print(f"Available env vars: SEA_LION_API_KEY={bool(os.getenv('SEA_LION_API_KEY'))}")
+    
+    agent = UniversalExpertAgent(
         api_provider=APIProvider.SEALION,
         api_key=api_key,
         **kwargs
     )
+    print(f"Agent created with provider: {agent.api_provider}")
+    return agent
+
+def test_sealion_setup():
+    """Test function to verify SeaLion setup"""
+    print("=== SeaLion Setup Test ===")
+    print(f"Environment check:")
+    print(f"  SEA_LION_API_KEY: {bool(os.getenv('SEA_LION_API_KEY'))}")
+    print(f"  SEALION_API_KEY: {bool(os.getenv('SEALION_API_KEY'))}")
+    print(f"  SEALION_KEY: {bool(os.getenv('SEALION_KEY'))}")
+    
+    try:
+        agent = create_sealion_agent()
+        print(f"✓ Agent created successfully")
+        print(f"  Provider: {agent.api_provider}")
+        print(f"  API key set: {bool(agent.api_key)}")
+        
+        # Test connection
+        if agent.test_api_connection():
+            print("✓ SeaLion API connection successful!")
+            return True
+        else:
+            print("✗ SeaLion API connection failed")
+            return False
+            
+    except Exception as e:
+        print(f"✗ Failed to create SeaLion agent: {e}")
+        return False
