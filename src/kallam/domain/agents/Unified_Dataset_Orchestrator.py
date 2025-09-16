@@ -14,7 +14,7 @@ from .doctor import DoctorAgent
 from .psychologist import PsychologistAgent
 
 from openai import OpenAI
-from google import genai
+import google.generativeai as genai
 
 import requests
 
@@ -55,10 +55,10 @@ class UnifiedDatasetOrchestrator:
         self.psychologist = PsychologistAgent()
 
         # which provider to use per task — FIXED: removed trailing commas
-        flags_model: Literal["gpt", "gemini", "sealion"] = "gpt"
-        translation_model: Literal["gpt", "gemini", "sealion"] = "gpt"
-        response_model: Literal["gpt", "gemini", "sealion"] = "gpt"
-        summarization_model: Literal["gpt", "gemini", "sealion"] = "gpt"
+        flags_model: Literal["gpt", "gemini", "sealion"] = "gemini"
+        translation_model: Literal["gpt", "gemini", "sealion"] = "gemini"
+        response_model: Literal["gpt", "gemini", "sealion"] = "gemini"
+        summarization_model: Literal["gpt", "gemini", "sealion"] = "gemini"
 
         # model names
         gpt_model: str = "gpt-4o"
