@@ -70,17 +70,20 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
-        try:
-            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-            if not self.gemini_api_key:
-                raise ValueError("GEMINI_API_KEY not found in environment variables")
-            
-            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-            self.gemini_model_name = "gemini-2.5-flash-lite"
-            self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize API clients: {str(e)}")
-            raise
+        # Initialize Gemini if available; otherwise, degrade gracefully
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if self.gemini_api_key:
+            try:
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+                self.gemini_model_name = "gemini-2.5-flash-lite"
+                self.gemini_enabled = True
+                self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
+            except Exception as e:
+                self.gemini_enabled = False
+                self.logger.error(f"Failed to initialize Gemini client: {str(e)}")
+        else:
+            self.gemini_enabled = False
+            self.logger.warning("GEMINI_API_KEY not set. DoctorAgent will return fallback responses.")
 
     def _format_prompt_gemini(self, message_context: str, medical_context: str = "") -> str:
         now = datetime.now()
@@ -99,6 +102,10 @@ Please provide your medical guidance following the guidelines above."""
         return prompt
 
     def _generate_response_gemini(self, prompt: str) -> str:
+        # If Gemini unavailable, return a safe fallback immediately
+        if not getattr(self, "gemini_enabled", False):
+            return "ขออภัยค่ะ ขณะนี้ไม่สามารถให้คำแนะนำทางการแพทย์เชิงลึกได้ กรุณาลองใหม่อีกครั้งหรือปรึกษาผู้เชี่ยวชาญค่ะ"
+
         try:
             self.logger.debug(f"Sending prompt to Gemini API (length: {len(prompt)} chars)")
             

@@ -51,30 +51,30 @@ class PsychologistAgent:
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
-        """Setup both API clients"""
-        try:
-            # Setup SEA-Lion API
-            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-            
-            if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not found in environment variables")
-                
+        """Setup both API clients with graceful degradation."""
+        # SEA-Lion API (Thai)
+        self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
+        self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+        self.sea_enabled = bool(self.sea_lion_api_key)
+        if self.sea_enabled:
             self.logger.info("SEA-Lion API client initialized")
-            
-            # Setup Gemini API
-            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-            
-            if not self.gemini_api_key:
-                raise ValueError("GEMINI_API_KEY not found in environment variables")
-                
-            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-            self.gemini_model_name = "gemini-2.5-flash-lite"
-            self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
-                
-        except Exception as e:
-            self.logger.error(f"Failed to initialize API clients: {str(e)}")
-            raise
+        else:
+            self.logger.warning("SEA_LION_API_KEY not set. Thai responses will use fallbacks.")
+
+        # Gemini API (English)
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if self.gemini_api_key:
+            try:
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+                self.gemini_model_name = "gemini-2.5-flash-lite"
+                self.gemini_enabled = True
+                self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
+            except Exception as e:
+                self.gemini_enabled = False
+                self.logger.error(f"Failed to initialize Gemini client: {str(e)}")
+        else:
+            self.gemini_enabled = False
+            self.logger.warning("GEMINI_API_KEY not set. English responses will use fallbacks.")
 
     ##############USE PROMPT ENGINERING LATER#################
     def _detect_language(self, text: str) -> str:
@@ -180,6 +180,8 @@ class PsychologistAgent:
 
     def _generate_response_sealion(self, messages: List[Dict[str, str]]) -> str:
         """Generate response using SEA-Lion API for Thai"""
+        if not getattr(self, "sea_enabled", False):
+            return "ขออภัยค่ะ ขณะนี้ไม่สามารถให้คำแนะนำด้านจิตวิทยาเชิงลึกได้ กรุณาลองใหม่อีกครั้งค่ะ"
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
@@ -325,6 +327,8 @@ Please follow the guidance above."""
 
     def _generate_response_gemini(self, prompt: str) -> str:
         """Generate response using Gemini API for English"""
+        if not getattr(self, "gemini_enabled", False):
+            return "I’m unable to provide detailed psychological guidance right now. Please try again later."
         try:
             self.logger.debug(f"Sending prompt to Gemini API (length: {len(prompt)} chars)")
             

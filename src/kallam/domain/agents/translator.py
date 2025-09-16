@@ -55,19 +55,18 @@ class TranslatorAgent:
         self.logger.addHandler(console_handler)
 
     def _setup_api_client(self) -> None:
-        """Setup SEA-Lion API client"""
-        try:
-            self.api_key = os.getenv("SEA_LION_API_KEY")
-            self.api_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-            
-            if not self.api_key:
-                raise ValueError("SEA_LION_API_KEY not found in environment variables")
-                
+        """Setup SEA-Lion API client; degrade gracefully if missing."""
+        self.api_key = os.getenv("SEA_LION_API_KEY")
+        self.api_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+        # Enable/disable external API usage based on key presence
+        self.enabled = bool(self.api_key)
+        if self.enabled:
             self.logger.info("SEA-Lion API client initialized")
-                
-        except Exception as e:
-            self.logger.error(f"Failed to initialize API client: {str(e)}")
-            raise
+        else:
+            # Do NOT raise: allow app to start and operate in passthrough mode
+            self.logger.warning(
+                "SEA_LION_API_KEY not set. Translator will run in passthrough mode (no external calls)."
+            )
 
     def _call_api(self, text: str, target_language: str) -> str:
         """
@@ -80,6 +79,10 @@ class TranslatorAgent:
         Returns:
             Translated text or original on error
         """
+        # Short-circuit if API disabled
+        if not getattr(self, "enabled", False):
+            return text
+
         try:
             # Build simple translation prompt
             system_prompt = f"""

@@ -67,20 +67,18 @@ Your goal is to provide actionable guidance that motivates patients to take bett
         self.logger.addHandler(console_handler)
 
     def _setup_api_clients(self) -> None:
-        """Setup API clients - always setup both for mixed usage"""
-        try:
-            # Setup SEA-Lion API (for main chat)
-            self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-            self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-            
-            if not self.sea_lion_api_key:
-                raise ValueError("SEA_LION_API_KEY not provided and not found in environment variables")
-                
+        """Setup API clients; do not hard-fail if env is missing."""
+        # SEA-Lion API (for main chat)
+        self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
+        self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+        self.api_enabled = bool(self.sea_lion_api_key)
+        if self.api_enabled:
             self.logger.info("SEA-Lion API client initialized")
-                
-        except Exception as e:
-            self.logger.error(f"Failed to initialize API clients: {str(e)}")
-            raise
+        else:
+            # Keep running; downstream logic will use safe fallbacks
+            self.logger.warning(
+                "SEA_LION_API_KEY not set. Supervisor will use safe fallback responses."
+            )
 
     def _format_chat_history_for_sea_lion(
             self, 
@@ -272,6 +270,14 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
         return self._extract_and_validate_json(raw_content)
     
     def _generate_feedback_sea_lion(self, messages: List[Dict[str, str]], show_thinking: bool = False) -> str:
+        # If API is disabled, return conservative fallback immediately
+        if not getattr(self, "api_enabled", False):
+            is_flag_task = any("Return ONLY a single JSON object" in msg.get("content", "")
+                               for msg in messages if msg.get("role") == "system")
+            if is_flag_task:
+                return '{"language": "english", "doctor": false, "psychologist": false}'
+            return "ขออภัยค่ะ ระบบมีปัญหาชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ"
+
         try:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
