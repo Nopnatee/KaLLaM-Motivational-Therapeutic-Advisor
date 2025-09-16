@@ -151,7 +151,7 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
 {context_info}
 
 **Specific Task:**
-- You **Always** answer in the same language the user used with no exception.
+- You can only use the same language the user used in your response with no exception.
 - You are a professional medical advisor.
 - Read the given context and response throughly.
 - Response concisely and short according to most recommendation from the commentary of each agents (may or maynot given).
