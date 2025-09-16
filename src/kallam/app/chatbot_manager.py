@@ -294,7 +294,7 @@ class ChatbotManager:
                 eng_message=eng_msg,
                 flags=flags,
                 chain_of_thoughts=chain,
-                memory_context=memory_context,
+                memory_context=memory_context, # type: ignore
                 summarized_histories=eng_summaries,
             )
 
@@ -358,9 +358,9 @@ class ChatbotManager:
         eng_summary = self.orchestrator.summarize_history(
             chat_history=eng_history, eng_summaries=eng_summaries
         )
-        self.summaries.add(session_id, eng_summary)
+        self.summaries.add(session_id, eng_summary) # type: ignore
         logger.debug("summary_len=%d total_summaries=%d", len(eng_summary or ""), len(eng_summaries or []) + 1)
-        return eng_summary
+        return eng_summary # type: ignore
 
     @_with_trace()
     def get_session_stats(self, session_id: str) -> dict:

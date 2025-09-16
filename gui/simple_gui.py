@@ -63,25 +63,24 @@ def force_summary(session_id: str):
 # Gradio app
 # -----------------------
 def create_app():
-    with gr.Blocks(title="Minimal Chat Sessions") as demo:
+    with gr.Blocks(title="Minimal Therapeutic Chat Sessions") as demo:
         gr.Markdown("# Minimal Chat Sessions • clean and boring but try me.")
 
         session_id = gr.State(value="")
         with gr.Row():
             status_md = gr.Markdown(value="🔄 Initializing session...")
-        with gr.Row():
-            saved_memories = gr.Textbox(
-                label="Session context (optional)",
-                placeholder="e.g., child age, focus behavior, constraints...",
-                lines=2,
-            )
-            new_btn = gr.Button("➕ New Session", variant="primary")
-            # summarize_btn = gr.Button("📋 Summarize", variant="secondary")
+        saved_memories = gr.Textbox(
+            label="เนื้อหาเกี่ยวกับคุณ (optional)",
+            placeholder="กด ➕ session ใหม่เพื่อใช้งาน e.g., อายุ, เพศ, นิสัย",
+            lines=2,
+        )
+        new_btn = gr.Button("➕ session ใหม่", variant="primary")
+        # summarize_btn = gr.Button("📋 Summarize", variant="secondary")
 
         chat = gr.Chatbot(label="Chat", type="messages", height=420)
         with gr.Row():
-            msg = gr.Textbox(placeholder="Type your message", lines=2)
-            send = gr.Button("Send", variant="primary")
+            msg = gr.Textbox(label="Message box", placeholder="พิมพ์ข้อความ", lines=1, scale=9)
+            send = gr.Button("↩", variant="primary", scale=1, min_width=40)
 
         result_md = gr.Markdown(visible=True)
 
@@ -110,9 +109,6 @@ def create_app():
             inputs=[msg, chat, session_id],
             outputs=[chat, msg, session_id, status_md],
         )
-
-        # Optional: force summary
-        # summarize_btn.click(force_summary, inputs=[session_id], outputs=[result_md])
 
     return demo
 
