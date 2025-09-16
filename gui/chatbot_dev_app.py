@@ -496,12 +496,12 @@ def main():
     )
 
     app.launch(
-        share=False,
+        share=True,
         server_name=server_name,  # cloud: 0.0.0.0, local: 127.0.0.1
         server_port=server_port,  # cloud: $PORT, local: 7860/8080
         debug=True,
         show_error=True,
-        inbrowser=False,
+        inbrowser=True,
     )
 
 if __name__ == "__main__":
