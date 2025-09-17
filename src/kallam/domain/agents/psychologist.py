@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+from kallam.infrastructure.sea_lion import load_sea_lion_settings, fingerprint_secret
+
+
 class PsychologistAgent:
     TherapyApproach = Literal["cbt", "dbt", "act", "motivational", "solution_focused", "mindfulness"]
     CrisisLevel = Literal["none", "mild", "moderate", "severe", "emergency"]
@@ -53,17 +56,23 @@ class PsychologistAgent:
     def _setup_api_clients(self) -> None:
         """Setup both API clients with graceful degradation."""
         # SEA-Lion API (Thai)
-        raw_sea_key = os.getenv("SEA_LION_API_KEY", "")
-        self.sea_lion_api_key = raw_sea_key.strip()
-        base_url = os.getenv("SEA_LION_BASE_URL") or "https://api.sea-lion.ai/v1"
-        self.sea_lion_base_url = base_url.rstrip('/')
-        self.sea_enabled = bool(self.sea_lion_api_key)
-        if raw_sea_key and not self.sea_lion_api_key:
-            self.logger.warning("SEA_LION_API_KEY contained only whitespace after stripping")
+        sea_settings = load_sea_lion_settings(default_model="aisingapore/Gemma-SEA-LION-v4-27B-IT")
+        self.sea_lion_base_url = sea_settings.base_url
+        self.sea_lion_token = sea_settings.token
+        self.sea_lion_model = sea_settings.model
+        self.sea_mode = sea_settings.mode
+        self.sea_enabled = self.sea_lion_token is not None
+
         if self.sea_enabled:
-            self.logger.info("SEA-Lion API client initialized")
+            self.logger.info(
+                "SEA-Lion API client initialized (mode=%s, base_url=%s, model=%s, token_fp=%s)",
+                self.sea_mode,
+                self.sea_lion_base_url,
+                self.sea_lion_model,
+                fingerprint_secret(self.sea_lion_token),
+            )
         else:
-            self.logger.warning("SEA_LION_API_KEY not set. Thai responses will use fallbacks.")
+            self.logger.warning("SEA_LION credentials not set. Thai responses will use fallbacks.")
 
         # Gemini API (English)
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -190,12 +199,13 @@ class PsychologistAgent:
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
             headers = {
-                "Authorization": f"Bearer {self.sea_lion_api_key}",
                 "Content-Type": "application/json"
             }
-            
+            if self.sea_lion_token:
+                headers["Authorization"] = f"Bearer {self.sea_lion_token}"
+
             payload = {
-                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
+                "model": self.sea_lion_model,
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "on"
@@ -261,6 +271,14 @@ class PsychologistAgent:
                 body_preview,
                 str(e),
             )
+            if status_code == 401:
+                self.logger.error(
+                    "SEA-Lion psychologist authentication failed. mode=%s model=%s token_fp=%s base_url=%s",
+                    getattr(self, "sea_mode", "unknown"),
+                    getattr(self, "sea_lion_model", "unknown"),
+                    fingerprint_secret(getattr(self, "sea_lion_token", None)),
+                    getattr(self, "sea_lion_base_url", "unknown"),
+                )
             return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
             self.logger.error(f"Error generating SEA-Lion response: {str(e)}")
@@ -498,9 +516,9 @@ Please follow the guidance above."""
         status = {
             "status": "healthy",
             "language_routing": "thai->SEA-Lion, english->Gemini",
-            "sea_lion_configured": hasattr(self, 'sea_lion_api_key') and self.sea_lion_api_key,
+            "sea_lion_configured": getattr(self, "sea_lion_token", None) is not None,
             "gemini_configured": hasattr(self, 'gemini_api_key') and self.gemini_api_key,
-            "sea_lion_model": "aisingapore/Llama-SEA-LION-v3.5-8B-R",
+            "sea_lion_model": getattr(self, "sea_lion_model", "unknown"),
             "gemini_model": self.gemini_model_name,
             "timestamp": datetime.now().isoformat(),
             "logging_enabled": True,

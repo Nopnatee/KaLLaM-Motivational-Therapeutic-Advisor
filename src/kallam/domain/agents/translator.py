@@ -1,4 +1,3 @@
-import os
 import logging
 import requests
 import re
@@ -8,6 +7,8 @@ from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 load_dotenv()
+
+from kallam.infrastructure.sea_lion import load_sea_lion_settings, fingerprint_secret
 
 
 class TranslatorAgent:
@@ -56,20 +57,26 @@ class TranslatorAgent:
 
     def _setup_api_client(self) -> None:
         """Setup SEA-Lion API client; degrade gracefully if missing."""
-        raw_api_key = os.getenv("SEA_LION_API_KEY", "")
-        self.api_key = raw_api_key.strip()
-        base_url = os.getenv("SEA_LION_BASE_URL") or "https://api.sea-lion.ai/v1"
-        self.api_url = base_url.rstrip('/')
-        # Enable/disable external API usage based on key presence
-        self.enabled = bool(self.api_key)
-        if raw_api_key and not self.api_key:
-            self.logger.warning("SEA_LION_API_KEY contained only whitespace after stripping")
+        settings = load_sea_lion_settings(default_model="aisingapore/Gemma-SEA-LION-v4-27B-IT")
+        self.api_url = settings.base_url
+        self.api_key = settings.token
+        self.model_id = settings.model
+        self.api_mode = settings.mode
+        # Enable/disable external API usage based on token presence
+        self.enabled = self.api_key is not None
+
         if self.enabled:
-            self.logger.info("SEA-Lion API client initialized")
+            self.logger.info(
+                "SEA-Lion API client initialized (mode=%s, base_url=%s, model=%s, token_fp=%s)",
+                self.api_mode,
+                self.api_url,
+                self.model_id,
+                fingerprint_secret(self.api_key),
+            )
         else:
             # Do NOT raise: allow app to start and operate in passthrough mode
             self.logger.warning(
-                "SEA_LION_API_KEY not set. Translator will run in passthrough mode (no external calls)."
+                "SEA_LION credentials not set. Translator will run in passthrough mode (no external calls)."
             )
 
     def _call_api(self, text: str, target_language: str) -> str:
@@ -106,12 +113,13 @@ You are a translator for a chatbot which is used for medical and psychological h
             ]
             
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+
             payload = {
-                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
+                "model": self.model_id,
                 "messages": messages,
                 "chat_template_kwargs": {"thinking_mode": "off"},
                 "max_tokens": 2000,
@@ -164,6 +172,14 @@ You are a translator for a chatbot which is used for medical and psychological h
                 body_preview,
                 str(e),
             )
+            if status_code == 401:
+                self.logger.error(
+                    "SEA-Lion translation authentication failed. mode=%s model=%s token_fp=%s base_url=%s",
+                    getattr(self, "api_mode", "unknown"),
+                    getattr(self, "model_id", "unknown"),
+                    fingerprint_secret(getattr(self, "api_key", None)),
+                    getattr(self, "api_url", "unknown"),
+                )
             return text
         except Exception as e:
             self.logger.error(f"Translation API error: {str(e)}")
