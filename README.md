@@ -1,6 +1,7 @@
 # KaLLaM - Motivational-Therapeutic Advisor
 
 KaLLaM is a bilingual (Thai/English) multi-agent assistant designed for physical and mental-health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists state in SQLite, and exposes Gradio front-ends alongside data and evaluation tooling.
+Finalist in PAN-SEA AI DEVELOPER CHALLENGE 2025 Round 2: Develop Deployable Solutions & Pitch
 
 ## Highlights
 - Multi-agent orchestration that routes requests to domain specialists.
@@ -121,8 +122,11 @@ The `scripts/` directory includes:
 - `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered coding pipelines.
 - `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
-## Citation
+## Note:
+### Proporsal
+Refer to KaLLaM Proporsal.pdf for more information of the project
+### Citation
 See `Citation.md` for references and datasets.
-
-## License
+### License
 Apache License 2.0. Refer to `LICENSE` for full terms.
+
