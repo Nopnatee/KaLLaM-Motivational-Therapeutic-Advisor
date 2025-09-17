@@ -356,7 +356,7 @@ def create_app() -> gr.Blocks:
     """
 
     # Create a light theme with explicit light mode settings
-    light_theme = gr.themes.Soft(
+    light_theme = gr.themes.Soft( # type: ignore
         primary_hue="green", 
         secondary_hue="blue", 
         neutral_hue="slate"
@@ -480,7 +480,7 @@ def create_app() -> gr.Blocks:
                         msg = gr.Textbox(
                             label="Message",
                             placeholder="Ask about your health in Thai or English...",
-                            lines=2,
+                            lines=1,
                             max_lines=4,
                             show_label=False,
                             elem_classes=["chat-container"]
