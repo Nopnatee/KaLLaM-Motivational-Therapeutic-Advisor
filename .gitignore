@@ -10,6 +10,7 @@ Dockerfile
 .dockerignore
 *.csv
 *.jsonl
+radar_outputs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
