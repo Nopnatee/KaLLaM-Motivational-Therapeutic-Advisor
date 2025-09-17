@@ -249,7 +249,7 @@ class PsychologistAgent:
             body_preview = None
             if getattr(e, 'response', None) is not None:
                 try:
-                    body_preview = e.response.text[:500]
+                    body_preview = e.response.text[:500] # type: ignore
                 except Exception:
                     body_preview = '<unavailable>'
             request_url = getattr(getattr(e, 'request', None), 'url', None)
