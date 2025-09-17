@@ -56,10 +56,14 @@ class TranslatorAgent:
 
     def _setup_api_client(self) -> None:
         """Setup SEA-Lion API client; degrade gracefully if missing."""
-        self.api_key = os.getenv("SEA_LION_API_KEY")
-        self.api_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+        raw_api_key = os.getenv("SEA_LION_API_KEY", "")
+        self.api_key = raw_api_key.strip()
+        base_url = os.getenv("SEA_LION_BASE_URL") or "https://api.sea-lion.ai/v1"
+        self.api_url = base_url.rstrip('/')
         # Enable/disable external API usage based on key presence
         self.enabled = bool(self.api_key)
+        if raw_api_key and not self.api_key:
+            self.logger.warning("SEA_LION_API_KEY contained only whitespace after stripping")
         if self.enabled:
             self.logger.info("SEA-Lion API client initialized")
         else:
@@ -143,6 +147,24 @@ You are a translator for a chatbot which is used for medical and psychological h
             
             return content if content else text
             
+        except requests.exceptions.RequestException as e:
+            status_code = getattr(getattr(e, 'response', None), 'status_code', None)
+            body_preview = None
+            if getattr(e, 'response', None) is not None:
+                try:
+                    body_preview = e.response.text[:500]
+                except Exception:
+                    body_preview = '<unavailable>'
+            request_url = getattr(getattr(e, 'request', None), 'url', None)
+            self.logger.error(
+                "SEA-Lion translation request failed (%s) url=%s status=%s body=%s message=%s",
+                e.__class__.__name__,
+                request_url,
+                status_code,
+                body_preview,
+                str(e),
+            )
+            return text
         except Exception as e:
             self.logger.error(f"Translation API error: {str(e)}")
             return text  # Return original on error

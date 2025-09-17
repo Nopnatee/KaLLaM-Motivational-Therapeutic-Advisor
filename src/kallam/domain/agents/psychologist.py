@@ -53,9 +53,13 @@ class PsychologistAgent:
     def _setup_api_clients(self) -> None:
         """Setup both API clients with graceful degradation."""
         # SEA-Lion API (Thai)
-        self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-        self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
+        raw_sea_key = os.getenv("SEA_LION_API_KEY", "")
+        self.sea_lion_api_key = raw_sea_key.strip()
+        base_url = os.getenv("SEA_LION_BASE_URL") or "https://api.sea-lion.ai/v1"
+        self.sea_lion_base_url = base_url.rstrip('/')
         self.sea_enabled = bool(self.sea_lion_api_key)
+        if raw_sea_key and not self.sea_lion_api_key:
+            self.logger.warning("SEA_LION_API_KEY contained only whitespace after stripping")
         if self.sea_enabled:
             self.logger.info("SEA-Lion API client initialized")
         else:
@@ -241,7 +245,22 @@ class PsychologistAgent:
             return final_answer
             
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error with SEA-Lion API: {str(e)}")
+            status_code = getattr(getattr(e, 'response', None), 'status_code', None)
+            body_preview = None
+            if getattr(e, 'response', None) is not None:
+                try:
+                    body_preview = e.response.text[:500]
+                except Exception:
+                    body_preview = '<unavailable>'
+            request_url = getattr(getattr(e, 'request', None), 'url', None)
+            self.logger.error(
+                "SEA-Lion psychologist request failed (%s) url=%s status=%s body=%s message=%s",
+                e.__class__.__name__,
+                request_url,
+                status_code,
+                body_preview,
+                str(e),
+            )
             return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
         except Exception as e:
             self.logger.error(f"Error generating SEA-Lion response: {str(e)}")
