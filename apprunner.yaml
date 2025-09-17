@@ -1,0 +1,32 @@
+# apprunner.yaml (managed runtime)
+version: 1.0
+runtime: python311
+
+build:
+  commands:
+    build:
+      - pip3 install --upgrade pip setuptools wheel
+
+run:
+  runtime-version: 3.11.13
+  pre-run:
+    - python3 -m pip install --no-cache-dir .
+    - python3 -c "import gradio, kallam; print('deps-ok', kallam.file)"
+  command: python3 gui/chatbot_demo.py
+  env:
+    - name: GRADIO_SERVER_NAME
+      value: "0.0.0.0"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PYTHONDONTWRITEBYTECODE
+      value: "1"
+    - name: PIP_NO_CACHE_DIR
+      value: "1"
+    - name: SEA_LION_API_KEY
+      value: "{{resolve:secretsmanager:prod/kallam/api-keys:SecretString:SEA_LION_API_KEY}}"
+    - name: GEMINI_API_KEY
+      value: "{{resolve:secretsmanager:prod/kallam/api-keys:SecretString:GEMINI_API_KEY}}"
+    - name: NGROK_AUTHTOKEN
+      value: "{{resolve:secretsmanager:prod/kallam/api-keys:SecretString:NGROK_AUTHTOKEN}}"
+    - name: OPENAI_API_KEY
+      value: "{{resolve:secretsmanager:prod/kallam/api-keys:SecretString:OPENAI_API_KEY}}"
