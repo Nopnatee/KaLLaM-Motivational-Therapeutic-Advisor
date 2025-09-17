@@ -71,7 +71,10 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
 
     def _setup_api_clients(self) -> None:
         # Initialize Gemini if available; otherwise, degrade gracefully
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        raw_gemini_key = os.getenv("GEMINI_API_KEY", "")
+        self.gemini_api_key = raw_gemini_key.strip()
+        if raw_gemini_key and not self.gemini_api_key:
+            self.logger.warning("GEMINI_API_KEY contained only whitespace after stripping")
         if self.gemini_api_key:
             try:
                 self.gemini_client = genai.Client(api_key=self.gemini_api_key)
@@ -80,7 +83,11 @@ You are an expert doctor assisting medical personnel. You provide helpful medica
                 self.logger.info(f"Gemini API client initialized with model: {self.gemini_model_name}")
             except Exception as e:
                 self.gemini_enabled = False
-                self.logger.error(f"Failed to initialize Gemini client: {str(e)}")
+                self.logger.error(
+                    "Failed to initialize Gemini client (%s): %s",
+                    e.__class__.__name__,
+                    str(e),
+                )
         else:
             self.gemini_enabled = False
             self.logger.warning("GEMINI_API_KEY not set. DoctorAgent will return fallback responses.")
@@ -128,7 +135,7 @@ Please provide your medical guidance following the guidelines above."""
             return commentary
             
         except Exception as e:
-            self.logger.error(f"Error generating Gemini response: {str(e)}")
+            self.logger.error("Error generating Gemini response (%s): %s", e.__class__.__name__, str(e))
             return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ"
 
     def analyze(self, user_message: str, chat_history: List[Dict], chain_of_thoughts: str = "", summarized_histories: str = "") -> str:

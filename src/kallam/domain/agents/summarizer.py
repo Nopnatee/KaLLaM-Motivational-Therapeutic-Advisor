@@ -26,10 +26,13 @@ class SummarizerAgent:
             self.logger.addHandler(handler)
 
     def _setup_api_clients(self) -> None:
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        raw_gemini_key = os.getenv("GEMINI_API_KEY", "")
+        self.gemini_api_key = raw_gemini_key.strip()
+        if raw_gemini_key and not self.gemini_api_key:
+            self.logger.warning("GEMINI_API_KEY contained only whitespace after stripping")
         if not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
-        
+
         self.gemini_client = genai.Client(api_key=self.gemini_api_key)
         self.gemini_model_name = "gemini-1.5-flash"
 
@@ -41,7 +44,7 @@ class SummarizerAgent:
             )
             return response.text.strip() if response.text else "Unable to generate summary"
         except Exception as e:
-            self.logger.error(f"Error generating response: {str(e)}")
+            self.logger.error("Error generating summary (%s): %s", e.__class__.__name__, str(e))
             return "Error generating summary"
 
     def _format_history(self, history: List[Dict[str, str]]) -> str:

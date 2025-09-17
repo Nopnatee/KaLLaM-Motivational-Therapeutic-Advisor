@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 load_dotenv()
 import logging
@@ -9,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 from typing import Literal, Optional, Dict, Any, List
+from kallam.infrastructure.sea_lion import load_sea_lion_settings, fingerprint_secret
 from strands import Agent, tool
 
 
@@ -70,16 +70,25 @@ Your goal is to provide actionable guidance that motivates patients to take bett
 
     def _setup_api_clients(self) -> None:
         """Setup API clients; do not hard-fail if env is missing."""
-        # SEA-Lion API (for main chat)
-        self.sea_lion_api_key = os.getenv("SEA_LION_API_KEY")
-        self.sea_lion_base_url = os.getenv("SEA_LION_BASE_URL", "https://api.sea-lion.ai/v1")
-        self.api_enabled = bool(self.sea_lion_api_key)
+        settings = load_sea_lion_settings(default_model="aisingapore/Gemma-SEA-LION-v4-27B-IT")
+        self.sea_lion_base_url = settings.base_url
+        self.sea_lion_token = settings.token
+        self.sea_lion_model = settings.model
+        self.sea_lion_mode = settings.mode
+        self.api_enabled = self.sea_lion_token is not None
+
         if self.api_enabled:
-            self.logger.info("SEA-Lion API client initialized")
+            self.logger.info(
+                "SEA-Lion client ready (mode=%s, base_url=%s, model=%s, token_fp=%s)",
+                self.sea_lion_mode,
+                self.sea_lion_base_url,
+                self.sea_lion_model,
+                fingerprint_secret(self.sea_lion_token),
+            )
         else:
             # Keep running; downstream logic will use safe fallbacks
             self.logger.warning(
-                "SEA_LION_API_KEY not set. Supervisor will use safe fallback responses."
+                "SEA_LION credentials not set. Supervisor will use safe fallback responses."
             )
 
     def _format_chat_history_for_sea_lion(
@@ -292,12 +301,13 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
             self.logger.debug(f"Sending {len(messages)} messages to SEA-Lion API")
             
             headers = {
-                "Authorization": f"Bearer {self.sea_lion_api_key}",
                 "Content-Type": "application/json"
             }
-            
+            if self.sea_lion_token:
+                headers["Authorization"] = f"Bearer {self.sea_lion_token}"
+
             payload = {
-                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
+                "model": self.sea_lion_model,
                 "messages": messages,
                 "chat_template_kwargs": {
                     "thinking_mode": "off"
@@ -369,7 +379,30 @@ Return ONLY a single JSON object and nothing else. No intro, no markdown, no cod
             return final_answer
             
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error generating feedback from SEA-Lion API: {str(e)}")
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            body_preview = None
+            if getattr(e, "response", None) is not None:
+                try:
+                    body_preview = e.response.text[:500] # type: ignore
+                except Exception:
+                    body_preview = "<unavailable>"
+            request_url = getattr(getattr(e, "request", None), "url", None)
+            self.logger.error(
+                "SEA-Lion request failed (%s) url=%s status=%s body=%s message=%s",
+                e.__class__.__name__,
+                request_url,
+                status_code,
+                body_preview,
+                str(e),
+            )
+            if status_code == 401:
+                self.logger.error(
+                    "SEA-Lion authentication failed. mode=%s model=%s token_fp=%s base_url=%s",
+                    getattr(self, "sea_lion_mode", "unknown"),
+                    getattr(self, "sea_lion_model", "unknown"),
+                    fingerprint_secret(getattr(self, "sea_lion_token", None)),
+                    getattr(self, "sea_lion_base_url", "unknown"),
+                )
             return "ขออภัยค่ะ เกิดปัญหาในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งค่ะ (Sorry, there was a problem connecting. Please try again later.)"
         except KeyError as e:
             self.logger.error(f"Unexpected response format from SEA-Lion API: {str(e)}")
