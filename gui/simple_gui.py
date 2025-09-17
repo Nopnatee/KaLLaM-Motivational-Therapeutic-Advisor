@@ -4,7 +4,7 @@ from datetime import datetime
 # Your existing manager
 from kallam.app.chatbot_manager import ChatbotManager
 
-mgr = ChatbotManager(log_level="INFO")
+mgr = ChatbotManager(api_provider="gemini", log_level="INFO")
 
 # -----------------------
 # Core handlers

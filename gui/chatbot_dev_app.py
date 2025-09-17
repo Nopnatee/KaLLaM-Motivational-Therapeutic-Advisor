@@ -10,7 +10,7 @@ from kallam.infra.db import sqlite_conn  # use the shared helper
 # -----------------------
 # Init
 # -----------------------
-chatbot_manager = ChatbotManager(log_level="DEBUG")
+chatbot_manager = ChatbotManager(api_provider="gemini", log_level="DEBUG")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

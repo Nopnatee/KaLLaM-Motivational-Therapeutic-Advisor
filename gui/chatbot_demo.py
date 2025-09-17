@@ -8,7 +8,7 @@ import socket
 
 from kallam.app.chatbot_manager import ChatbotManager
 
-mgr = ChatbotManager(log_level="INFO")
+mgr = ChatbotManager(api_provider="gemini", log_level="INFO")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
