@@ -1,166 +1,128 @@
+# KaLLaM - Motivational-Therapeutic Advisor
 
-# KaLLaM – Motivational‑Therapeutic Advisor
+KaLLaM is a bilingual (Thai/English) multi-agent assistant designed for physical and mental-health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists state in SQLite, and exposes Gradio front-ends alongside data and evaluation tooling.
 
-KaLLaM is a bilingual (Thai/English) multi‑agent assistant for health and mental‑health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists sessions in SQLite, and offers Gradio UIs plus evaluation utilities for MISC‑style conversation coding.
-
-
-## Key Features
-
-- Multi‑agent orchestration: Supervisor routes messages to domain experts.
-- Bilingual support: Thai/English with SEA‑Lion powered translation.
-- Persistence: SQLite session/message/summary stores with JSON export.
-- UIs: Gradio demo and developer apps for quick experimentation.
-- Evaluation: Scripts for SEA‑Lion based MISC silver coding (EN/TH).
-- Pragmatic tooling: Logging, request tracing, token counting cache.
-
+## Highlights
+- Multi-agent orchestration that routes requests to domain specialists.
+- Thai/English support backed by SEA-Lion translation services.
+- Conversation persistence with export utilities for downstream analysis.
+- Ready-to-run Gradio demo and developer interfaces.
+- Evaluation scripts for MISC/BiMISC-style coding pipelines.
 
 ## Requirements
+- Python 3.10 or newer (3.11+ recommended; Docker/App Runner images use 3.11).
+- pip, virtualenv (or equivalent), and Git for local development.
+- Access tokens for the external models you plan to call (SEA-Lion, Google Gemini, optional OpenAI or AWS Bedrock).
 
-- Recommend Python 3.11+ as it might not work as we intended
-- API access where used:
-  - SEA‑Lion: `SEA_LION_API_KEY` (required for translation/summarization/flagging)
-  - Google Gemini: `GEMINI_API_KEY` (required for Doctor/Psychologist agents)
-  - Optional: OpenAI (`OPENAI_API_KEY`) if using OpenAI via `strands-agents`
-  - Optional: AWS Bedrock (`AWS_DEFAULT_REGION`, `AWS_ROLE_ARN`) for `supervisor_bedrock.py`
+## Quick Start (Local)
+1. Clone the repository and switch into it.
+2. Create and activate a virtual environment:
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+   ```
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+3. Install dependencies (editable mode keeps imports pointing at `src/`):
+   ```bash
+   python -m pip install --upgrade pip setuptools wheel
+   pip install -e .[dev]
+   ```
+4. Create a `.env` file at the project root (see the next section) and populate the keys you have access to.
+5. Launch one of the Gradio apps:
+   ```bash
+   python gui/chatbot_demo.py      # bilingual demo UI
+   python gui/chatbot_dev_app.py   # Thai-first developer UI
+   ```
 
+The Gradio server binds to http://127.0.0.1:7860 by default; override via `GRADIO_SERVER_NAME` and `GRADIO_SERVER_PORT`.
 
-## Installation
+## Environment Configuration
+Configuration is loaded with `python-dotenv`, so any variables in `.env` are available at runtime. Define only the secrets relevant to the agents you intend to use.
 
-1) Create and activate a virtualenv
+**Core**
+- `SEA_LION_API_KEY` *or* (`SEA_LION_GATEWAY_URL` + `SEA_LION_GATEWAY_TOKEN`) for SEA-Lion access.
+- `SEA_LION_BASE_URL` (optional; defaults to `https://api.sea-lion.ai/v1`).
+- `SEA_LION_MODEL_ID` to override the default SEA-Lion model.
+- `GEMINI_API_KEY` for Doctor/Psychologist English responses.
 
-Windows (PowerShell):
+**Optional integrations**
+- `OPENAI_API_KEY` if you enable any OpenAI-backed tooling via `strands-agents`.
+- `AWS_REGION` (and optionally `AWS_DEFAULT_REGION`) plus temporary credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) when running Bedrock-backed flows.
+- `AWS_ROLE_ARN` if you assume roles for Bedrock access.
+- `NGROK_AUTHTOKEN` when tunnelling Gradio externally.
+- `TAVILY_API_KEY` if you wire in search or retrieval plugins.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+Example scaffold:
+```env
+SEA_LION_API_KEY=your-sea-lion-token
+SEA_LION_MODEL_ID=aisingapore/Gemma-SEA-LION-v4-27B-IT
+GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=sk-your-openai-key
+AWS_REGION=ap-southeast-2
+# AWS_ACCESS_KEY_ID=...
+# AWS_SECRET_ACCESS_KEY=...
+# AWS_SESSION_TOKEN=...
 ```
+Keep `.env` out of version control and rotate credentials regularly. You can validate temporary AWS credentials with `python test_credentials.py`.
 
-Linux/macOS:
+## Running and Persistence
+- Conversations, summaries, and metadata persist to `chatbot_data.db` (SQLite). The schema is created automatically on first run.
+- Export session transcripts with `ChatbotManager.export_session_json()`; JSON files land in `exported_sessions/`.
+- Logs are emitted per agent into `logs/` (daily files) and to stdout.
 
+## Docker
+Build and run the containerised Gradio app:
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+docker build -t kallam .
+docker run --rm -p 8080:8080 --env-file .env kallam
 ```
+Environment variables are read at runtime; use `--env-file` or `-e` flags to provide the required keys. Override the entry script with `APP_FILE`, for example `-e APP_FILE=gui/chatbot_dev_app.py`.
 
-2) Upgrade pip and install
+## AWS App Runner
+The repo ships with `apprunner.yaml` for AWS App Runner's managed Python 3.11 runtime.
+1. Push the code to a connected repository (GitHub or CodeCommit) or supply an archive.
+2. In the App Runner console choose **Source code** -> **Managed runtime** and upload/select `apprunner.yaml`.
+3. Configure AWS Secrets Manager references for the environment variables listed under `run.env` (SEA-Lion, Gemini, OpenAI, Ngrok, etc.).
+4. Deploy. App Runner exposes the Gradio UI on the service URL and honours the `$PORT` variable (defaults to 8080).
 
-```bash
-python -m pip install -U pip
-pip install -e .            # runtime
-pip install -e .[dev]       # + pytest, ruff, mypy
-```
-
-3) Run tests
-
-```bash
-pytest -q
-```
-
-
-## Environment Variables
-
-Create a `.env` at the project root. Load happens via `python-dotenv`.
-
-```
-# Core
-SEA_LION_API_KEY=...
-SEA_LION_BASE_URL=https://api.sea-lion.ai/v1   # optional (default)
-SEA_LION_MODEL=aisingapore/Gemma-SEA-LION-v4-27B-IT   # optional for scripts
-GEMINI_API_KEY=...
-
-# Optional integrations
-OPENAI_API_KEY=sk-...
-AWS_DEFAULT_REGION=ap-southeast-2
-AWS_ROLE_ARN=...
-TAVILY_API_KEY=...  # if you wire search tooling
-```
-
-
-## Usage
-
-Run a demo UI (recommended):
-
-```bash
-python gui/chatbot_demo.py
-# or the Thai‑first developer app
-python gui/chatbot_dev_app.py
-```
-
-Simple programmatic session workflow:
-
-```python
-from kallam.app.chatbot_manager import ChatbotManager
-
-mgr = ChatbotManager()
-sid = mgr.start_session(saved_memories="diabetes type‑2 | on metformin")
-
-# … integrate your own routing or UI; see Gradio apps for examples …
-
-# Export a session to JSON
-path = mgr.export_session_json(sid)
-print("Exported:", path)
-```
+For fully containerised deployments on App Runner, ECS, or EKS, build the Docker image and supply the same environment variables.
 
 ## Project Layout
-
 ```
 project-root/
-├─ pyproject.toml            # deps and tool config
-├─ src/kallam/
-│  ├─ app/                   # ChatbotManager facade
-│  ├─ domain/agents/         # supervisor, doctor, psychologist, translator, summarizer, orchestrator
-│  └─ infra/                 # sqlite stores, exporter, token counter, config
-├─ gui/                      # gradio apps (demo, dev, and simple example)
-├─ scripts/                  # data tools: MISC coding, preprocessing, notebooks
-├─ tests/                    # pytest and storage smoke UI
-├─ exported_sessions/        # will be generated through export sessions as JSON
-└─ Data/                     # datasets holder (in json jsonl and csv)
-   ├─ orchestrated/
-   ├─ human/
-   └─ single-agent/
+|-- src/kallam/
+|   |-- app/                # ChatbotManager facade
+|   |-- domain/agents/      # Supervisor, Doctor, Psychologist, Translator, Summarizer, Orchestrator
+|   |-- infra/              # SQLite stores, exporter, token counter
+|   `-- infrastructure/     # Shared SEA-Lion configuration helpers
+|-- gui/                    # Gradio demo and developer apps
+|-- scripts/                # Data prep and evaluation utilities
+|-- data/                   # Sample datasets (gemini, human, orchestrated, SEA-Lion)
+|-- exported_sessions/      # JSON exports created at runtime
+|-- logs/                   # Runtime logs (generated)
+|-- Dockerfile
+|-- apprunner.yaml
+|-- test_credentials.py
+`-- README.md
 ```
 
+## Development Tooling
+- Run tests: `pytest -q`
+- Lint: `ruff check src`
+- Type-check: `mypy src`
+- Token usage: see `src/kallam/infra/token_counter.py`
+- Supervisor/translator fallbacks log warnings if credentials are missing.
 
-## Agents at a Glance
-
-- Supervisor: routes, produces flags and final response scaffolding (SEA-Lion).
-- Translator: SEA‑Lion backed Thai/English translation.
-- Summarizer: SEA‑Lion backed conversation/health summaries.
-- Doctor: Gemini backed medical guidance with safety guardrails.
-- Psychologist: Thai via SEA‑Lion, English via Gemini; MI‑oriented.
-
-Orchestrator configuration lives in `src/kallam/domain/agents/orchestrator.py` (models, language, thresholds).
-
-
-## Data Persistence
-
-- SQLite schema is created automatically in your chosen DB file (default `chatbot_data.db`).
-- Stores: `SessionStore`, `MessageStore`, `SummaryStore` in `src/kallam/infra/`.
-- Export: `JsonExporter` writes per‑session or all sessions to `exported_sessions/`.
-
-
-## Development
-
-- Lint: `ruff check src tests`
-- Type check: `mypy src`
-- Logs: written under `logs/` by each agent and manager; request tracing is enabled for key paths.
-- Tips:
-  - Use editable install (`pip install -e .[dev]`) to enable imports.
-  - If SQLite locks up locally, stop processes using the DB or remove stale `*.db` files.
-  - Run pytest from repo root so tests see `src/` via editable install.
-
-
-## Evaluation and Scripts
-
-- `scripts/eng_silver_misc_coder.py` and `scripts/thai_silver_misc_coder.py` implement SEA‑Lion based BiMISC/MISC silver coding with JSON‑only enforcement and metrics. See file headers for dataset and output formats.
-- `scripts/model_evaluator.py`, preprocessing utilities, and `scripts/visualizer.ipynb` support dataset prep and analysis.
-
+## Scripts and Evaluation
+The `scripts/` directory includes:
+- `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered coding pipelines.
+- `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
 ## Citation
-
-References and datasets used by this project are listed in `Citation.md`.
-
+See `Citation.md` for references and datasets.
 
 ## License
-
-Apache License 2.0. See `LICENSE` for details.
+Apache License 2.0. Refer to `LICENSE` for full terms.
