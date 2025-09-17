@@ -34,8 +34,8 @@ from collections import Counter
 from typing import Dict, Any, List, Iterable
 
 
-DEFAULT_IN_PATH = "data/orchestrated/post_annotate.jsonl"
-DEFAULT_OUT_PATH = "data/orchestrated/report.json"
+DEFAULT_IN_PATH = "data/gemini/post_annotate.jsonl"
+DEFAULT_OUT_PATH = "data/gemini/report.json"
 
 # ---------- Helper / config ----------
 
