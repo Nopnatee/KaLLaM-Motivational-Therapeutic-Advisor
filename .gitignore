@@ -8,6 +8,7 @@ data
 exported_sessions
 *.csv
 *.jsonl
+radar_outputs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
