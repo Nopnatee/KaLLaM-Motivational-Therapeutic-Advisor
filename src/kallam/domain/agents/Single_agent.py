@@ -335,7 +335,7 @@ class UniversalExpertAgent:
         try:
             # Prepare the request payload
             payload = {
-                "model": "aisingapore/Gemma-SEA-LION-v3-9B-IT",
+                "model": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
                 "messages": [
                     {"role": "system", "content": config.system_prompt},
                     {"role": "user", "content": context}
