@@ -1,6 +1,6 @@
 # KaLLaM - Motivational-Therapeutic Advisor
 
-KaLLaM is a bilingual (Thai/English) multi-agent assistant designed for physical and mental-health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists state in SQLite, and exposes Gradio front-ends alongside data and evaluation tooling.
+KaLLaM is a bilingual (Thai/English) multi-agent assistant designed for physical and mental-health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists state in SQLite, and exposes Gradio front-ends alongside data and can use evaluation tooling for model psychological skill benchmark.
 Finalist in PAN-SEA AI DEVELOPER CHALLENGE 2025 Round 2: Develop Deployable Solutions & Pitch
 
 ## Highlights
