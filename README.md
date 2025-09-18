@@ -3,6 +3,12 @@
 KaLLaM is a bilingual (Thai/English) multi-agent assistant designed for physical and mental-health conversations. It orchestrates specialized agents (Supervisor, Doctor, Psychologist, Translator, Summarizer), persists state in SQLite, and exposes Gradio front-ends alongside data and can use evaluation tooling for model psychological skill benchmark.
 Finalist in PAN-SEA AI DEVELOPER CHALLENGE 2025 Round 2: Develop Deployable Solutions & Pitch
 
+## Documentation:
+- 📄 [Full Project Report (PDF)](./docs/project_report.pdf)
+- 🔖 [References and Citations Used in This Project](./docs/citation.md)
+- ✍️ [This Project Citation](./CITATION.cff)
+- ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
+
 ## Highlights
 - Multi-agent orchestration that routes requests to domain specialists.
 - Thai/English support backed by SEA-Lion translation services.
@@ -115,18 +121,12 @@ The `scripts/` directory includes:
 - `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered MISC 2.5 coding pipelines.
 - `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
-## Notes:
-- 📄 [Full Project Report (PDF)](./docs/project_report.pdf)
-- 🔖 [References and Citations Used in This Project](./docs/citation.md)
-- ✍️ [This Project Citation](./CITATION.cff)
-- ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
-
-### How to Cite this Project
+## How to Cite this Project
 
 Please cite this work when using or building upon it. Proper attribution is required in all academic, research, and applied contexts.
 You can cite this project in the following formats:
 
-#### 1. BibTeX (for LaTeX users)
+### 1. BibTeX (for LaTeX users)
 ```bibtex
 @software{trivoravong2025kallam,
   author = {Nopnatee Trivoravong and Khamic Srisutrapon and Napas Siripala},
@@ -137,10 +137,10 @@ You can cite this project in the following formats:
 }
 ```
 
-#### 2. APA Style
+### 2. APA Style
 Trivoravong, N., Srisutrapon, K., & Siripala, N. (2025). *KaLLaM – Motivational Therapeutic Advisor* (Version 1.0.0) \[Computer software]. GitHub. [https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor](https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor)
 
-#### 3. Plain Text
+### 3. Plain Text
 KaLLaM – Motivational Therapeutic Advisor (v1.0.0), by
 Nopnatee Trivoravong, Khamic Srisutrapon, and Napas Siripala, 2025.
 Available at: [https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor](https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor)
