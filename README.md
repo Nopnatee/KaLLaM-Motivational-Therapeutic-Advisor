@@ -125,13 +125,18 @@ The `scripts/` directory includes:
 ## Notes
 - 📄 [Full Project Report (PDF)](./docs/project_report.pdf)
 - 🔖 [References and Citations Used in This Project](./docs/citation.md)
-- ✍️ [How to Cite This Project](./CITATION.cff)
+- ✍️ [This Project Citation](./CITATION.cff)
 - ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
 
+Here’s how you can turn that into a clear **mini tutorial** for readers who may not be used to citing software. It shows BibTeX, APA, and plain-text formats side by side:
 
+````markdown
 ### How to Cite
-If you use **KaLLaM – Motivational Therapeutic Advisor** in your work, please cite:
 
+Please cite this work when using or building upon it. Proper attribution is required in all academic, research, and applied contexts.
+You can cite this project in the following formats:
+
+#### 1. BibTeX (for LaTeX users)
 ```bibtex
 @software{trivoravong2025kallam,
   author = {Nopnatee Trivoravong and Khamic Srisutrapon and Napas Siripala},
@@ -141,3 +146,11 @@ If you use **KaLLaM – Motivational Therapeutic Advisor** in your work, please 
   version = {1.0.0}
 }
 ```
+
+#### 2. APA Style
+Trivoravong, N., Srisutrapon, K., & Siripala, N. (2025). *KaLLaM – Motivational Therapeutic Advisor* (Version 1.0.0) \[Computer software]. GitHub. [https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor](https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor)
+
+#### 3. Plain Text
+KaLLaM – Motivational Therapeutic Advisor (v1.0.0), by
+Nopnatee Trivoravong, Khamic Srisutrapon, and Napas Siripala, 2025.
+Available at: [https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor](https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor)
