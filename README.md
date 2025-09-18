@@ -122,8 +122,22 @@ The `scripts/` directory includes:
 - `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered coding pipelines.
 - `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
-## Note:
-- [Read the full project report (PDF)](./docs/project_report.pdf)
-- [Citation for the project](./docs/citation.md)
-- This project is under [Apache 2.0 license](./LICENSE)
+## Notes
+- 📄 [Full Project Report (PDF)](./docs/project_report.pdf)
+- 🔖 [References and Citations Used in This Project](./docs/citation.md)
+- ✍️ [How to Cite This Project](./CITATION.cff)
+- ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
 
+
+### How to Cite
+If you use **KaLLaM – Motivational Therapeutic Advisor** in your work, please cite:
+
+```bibtex
+@software{trivoravong2025kallam,
+  author = {Nopnatee Trivoravong and Khamic Srisutrapon and Napas Siripala},
+  title = {KaLLaM – Motivational Therapeutic Advisor},
+  year = {2025},
+  url = {https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor},
+  version = {1.0.0}
+}
+```

@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "Please cite this work when using or building upon it. Proper attribution is required in all academic, research, and applied contexts."
+authors:
+  - family-names: "Trivoravong"
+    given-names: "Nopnatee"
+  - family-names: "Srisutrapon"
+    given-names: "Khamic"
+  - family-names: "Siripala"
+    given-names: "Napas"
+title: "KaLLaM – Motivational Therapeutic Advisor"
+version: "1.0.0"
+date-released: "2025-09-18"
+url: "https://github.com/Nopnatee/KaLLaM-Motivational-Therapeutic-Advisor"
