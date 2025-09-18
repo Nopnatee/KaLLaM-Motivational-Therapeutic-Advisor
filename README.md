@@ -128,9 +128,6 @@ The `scripts/` directory includes:
 - ✍️ [This Project Citation](./CITATION.cff)
 - ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
 
-Here’s how you can turn that into a clear **mini tutorial** for readers who may not be used to citing software. It shows BibTeX, APA, and plain-text formats side by side:
-
-````markdown
 ### How to Cite
 
 Please cite this work when using or building upon it. Proper attribution is required in all academic, research, and applied contexts.
