@@ -110,25 +110,18 @@ project-root/
 `-- README.md
 ```
 
-## Development Tooling
-- Run tests: `pytest -q`
-- Lint: `ruff check src`
-- Type-check: `mypy src`
-- Token usage: see `src/kallam/infra/token_counter.py`
-- Supervisor/translator fallbacks log warnings if credentials are missing.
-
 ## Scripts and Evaluation
 The `scripts/` directory includes:
-- `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered coding pipelines.
+- `eng_silver_misc_coder.py` and `thai_silver_misc_coder.py` for SEA-Lion powered MISC 2.5 coding pipelines.
 - `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
-## Notes
+## Notes:
 - 📄 [Full Project Report (PDF)](./docs/project_report.pdf)
 - 🔖 [References and Citations Used in This Project](./docs/citation.md)
 - ✍️ [This Project Citation](./CITATION.cff)
 - ⚖️ Licensed under the [Apache 2.0 License](./LICENSE)
 
-### How to Cite
+### How to Cite this Project
 
 Please cite this work when using or building upon it. Proper attribution is required in all academic, research, and applied contexts.
 You can cite this project in the following formats:
