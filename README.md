@@ -123,10 +123,7 @@ The `scripts/` directory includes:
 - `model_evaluator.py` plus preprocessing and visualisation helpers (`ex_data_preprocessor.py`, `in_data_preprocessor.py`, `visualizer.ipynb`).
 
 ## Note:
-### Proporsal
-Refer to KaLLaM Proporsal.pdf for more information of the project
-### Citation
-See `Citation.md` for references and datasets.
-### License
-Apache License 2.0. Refer to `LICENSE` for full terms.
+- [Read the full project report (PDF)](./docs/project_report.pdf)
+- [Citation for the project](./docs/citation.md)
+- This project is under [Apache 2.0 license](./LICENSE)
 
